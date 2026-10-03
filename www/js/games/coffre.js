@@ -44,12 +44,13 @@
         tries: level <= 4 ? 10 : 9
       };
     }
+    // ensuite, une montée douce : 4 symboles jusqu'au niveau 22 (6 puis 7 couleurs), 5 seulement au-delà
     return {
       variant: 'classic',
-      len: level < 4 ? 3 : level < 12 ? 4 : 5,          // code de 3 symboles pour commencer
-      symbols: level < 4 ? 4 : Math.min(7, 5 + Math.floor(level / 8)),
-      repeats: level >= 6,
-      tries: level < 10 ? 8 : 9
+      len: level <= 22 ? 4 : 5,
+      symbols: level <= 16 ? 6 : 7,
+      repeats: level >= 14,
+      tries: level <= 22 ? 9 : 10
     };
   }
 

@@ -154,10 +154,12 @@
       const others = rng.shuffle(pool.slice());
       others.forEach((id) => { if (ids.length < count && !ids.includes(id)) ids.push(id); });
     }
-    // montée très progressive : +3 par monde, +1 tous les 2 niveaux ; le boss un cran au-dessus
-    const level = boss ? 1 + c * 3 + 6 + c : 1 + c * 3 + Math.floor(k * 0.5);
+    // montée très progressive sur tout le voyage (30 îles × 6 niveaux) : +1 de difficulté tous les 4 niveaux,
+    // jusqu'à 40 vers la fin ; l'épreuve d'une île a 2 crans de plus. Mêmes niveaux de générateur que les paliers
+    // (basique 1–12, difficile 12–25, expert 25–40) : on passe d'un palier à l'autre sans marche.
+    const level = Math.min(40, 1 + Math.floor(L / 4) + (boss ? 2 : 0));
     const vChance = boss ? Math.min(0.7, 0.25 + c * 0.1) : Math.min(0.55, 0.12 + c * 0.08);
-    const steps = ids.map((id, i) => ({ id, variant: pickVariant(id, vChance), level: level + (boss ? 0 : i) }));
+    const steps = ids.map((id) => ({ id, variant: pickVariant(id, vChance), level }));
     return { L, c, k, boss, id: steps[0].id, accent: ACCENT[steps[0].id], steps };
   }
 
@@ -655,9 +657,12 @@
       let seed = step.seed || (info.seed || 'odysseum:' + info.L) + ':' + stepIndex, genLevel = step.level, mark = null;
       // quête et liste des mini-jeux partagent la même progression : une grille de la quête
       // est le prochain niveau du palier en cours de ce jeu (même grille que dans la liste), et la réussir l'y coche
+      // (la difficulté suit la quête — step.level, qui monte doucement — et non le palier le plus avancé :
+      // sinon l'ouverture d'un palier faisait sauter brutalement la difficulté ; on coche le palier correspondant)
       if (!info.free && variant === 'classic') {
-        const nx = nextTier(g.id);
-        if (nx) { mark = nx; genLevel = tierLevel(nx.tier, nx.k); seed = 'palier:' + g.id + ':' + nx.tier.id + ':' + nx.k; }
+        const t = TIERS.filter((x) => genLevel >= x.from).pop() || TIERS[0];
+        const ti = TIERS.indexOf(t), d = tierDone(g.id, t.id);
+        if (tierOpen(g.id, ti) && d < TIER_SIZE) mark = { tier: t, k: d + 1 };
       }
       const prm = step.params || g.params(genLevel, variant); // (événement : paramètres « méga »)
       const puzzle = g.generate(C.makeRng(seed), prm);
