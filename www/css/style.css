@@ -966,7 +966,7 @@ svg .f { fill: currentColor; stroke: none; }
 /* succès : lueur douce du fond, plutôt qu'une notification */
 #play { isolation: isolate; }
 #play::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: -1; opacity: 0;
-  background: radial-gradient(ellipse 75% 55% at 50% 48%, color-mix(in srgb, var(--game) 30%, transparent), transparent 70%); }
+  background: radial-gradient(ellipse 75% 55% at 50% 48%, rgba(255, 236, 170, .55), rgba(255, 255, 255, .25) 45%, transparent 70%); } /* lueur dorée neutre, jamais teintée par le jeu */
 #play.glow::after { animation: success-glow 1.8s var(--slow); }
 @keyframes success-glow { 0% { opacity: 0; transform: scale(.85); } 35% { opacity: 1; } 100% { opacity: 0; transform: scale(1.12); } }
 :root.a11y-motion #play.glow::after { animation: none; }
