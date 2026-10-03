@@ -130,7 +130,7 @@
     if (!C.store.games[rulesKey]) { C.store.games[rulesKey] = 1; C.save(); openRules(g, variant); }
 
     setTimeout(() => {
-      const seed = 'odysseum:' + info.L + ':' + stepIndex;
+      const seed = (info.seed || 'odysseum:' + info.L) + ':' + stepIndex;
       const puzzle = g.generate(C.makeRng(seed), g.params(step.level, variant));
       host.innerHTML = '';
       let elapsed = 0, won = false, tool = 'fill';
@@ -196,6 +196,15 @@
   // Niveau réussi : la grille s'illumine, puis le niveau suivant s'enchaîne tout seul.
   // La carte rattrapera la progression au retour (Ulysse avancera jusqu'à la bonne pierre).
   function finishLevel(info) {
+    if (info.free) { // jeu libre : on enchaîne sur le niveau suivant du même jeu
+      const s = info.steps[0];
+      C.gameData(dataKey(game(s.id), s.variant)).level++;
+      C.save();
+      $('#play').classList.add('done');
+      clearTimeout(finishLevel.timer);
+      finishLevel.timer = setTimeout(() => { if (!screens.play.hidden) startFree(game(s.id), s.variant); }, 1600);
+      return;
+    }
     if (info.L === J.done) {
       J.done++;
       pendingProgress = true;
@@ -241,9 +250,149 @@
     }
     pendingProgress = false;
     renderPlay();
+    renderBadge();
   }
 
+  // ------------------------ Liste des mini-jeux ------------------------
+  let libMode = 'classic';
+  try { libMode = localStorage.getItem('odysseum.libmode') || 'classic'; } catch (e) { /* ignore */ }
+
+  function renderLibrary() {
+    document.querySelectorAll('.lib-mode button').forEach((b) => b.classList.toggle('on', b.dataset.mode === libMode));
+    const gl = $('#game-list');
+    gl.innerHTML = '';
+    C.games.forEach((g) => {
+      const v = libMode === 'variant' && g.variants && g.variants[1] ? g.variants[1].id : 'classic';
+      const b = document.createElement('button');
+      b.className = 'tile';
+      b.style.setProperty('--game', ACCENT[g.id]);
+      b.innerHTML = '<span class="tile-icon">' + icon(g.id) + '</span><span class="tile-name">' + g.name.toLowerCase() + '</span>' +
+        '<span class="tile-lvl">' + C.gameData(dataKey(g, v)).level + '</span>';
+      b.addEventListener('click', () => startFree(g, v));
+      gl.appendChild(b);
+    });
+  }
+
+  function startFree(g, variant) {
+    const d = C.gameData(dataKey(g, variant));
+    $('#library').hidden = true;
+    playStep({ L: -1, free: true, seed: 'libre:' + g.id + ':' + variant + ':' + d.level, steps: [{ id: g.id, variant, level: d.level }] }, 0);
+  }
+
+  // ------------------------ Carte du cerveau ------------------------
+  // Chaque faculté se nourrit de deux mini-jeux ; les grilles réussies allument ses neurones.
+  const SKILLS = [
+    { id: 'logique', name: 'Logique', games: ['reines', 'astres'], at: [108, 92] },
+    { id: 'espace', name: 'Espace', games: ['paves', 'pixels'], at: [196, 74] },
+    { id: 'anticipation', name: 'Anticipation', games: ['flux', 'serpent'], at: [132, 160] },
+    { id: 'raisonnement', name: 'Raisonnement', games: ['lumieres', 'coffre'], at: [240, 128] }
+  ];
+  const NODES = 10;
+  const solvedOf = (id) => { const g = game(id); return variantsOf(g).reduce((s, v) => s + C.gameData(dataKey(g, v.id)).solved, 0); };
+  const skillStats = (sk) => {
+    const solved = sk.games.reduce((s, id) => s + solvedOf(id), 0);
+    return { solved, level: 1 + Math.floor(solved / 5), frac: (solved % 5) / 5, lit: Math.min(NODES, Math.floor(solved / 2)) };
+  };
+  function playerStats() {
+    const total = C.games.reduce((s, g) => s + solvedOf(g.id), 0);
+    return { total, level: 1 + Math.floor(total / 8), frac: (total % 8) / 8 };
+  }
+
+  function renderBadge() {
+    const p = playerStats();
+    $('#level-num').textContent = p.level;
+    $('#level-ring').setAttribute('stroke-dashoffset', String(144.5 * (1 - p.frac)));
+  }
+
+  function renderBrain() {
+    const p = playerStats();
+    $('#brain-level').textContent = p.level;
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = $('#brain-svg');
+    svg.innerHTML =
+      // silhouette du cerveau (profil) et quelques circonvolutions
+      '<path class="outline" d="M62 150C40 112 60 62 110 52C132 26 190 26 212 46C252 40 286 72 280 112C300 142 280 182 246 186C236 206 200 212 186 196L170 206C150 216 130 206 124 190C94 200 62 186 62 150Z"/>' +
+      '<path class="outline" d="M186 196C190 214 194 228 200 240" />' +
+      '<path class="outline" opacity=".5" d="M150 40C140 70 160 90 150 120M210 60C190 80 215 100 200 130M95 120C120 128 130 110 160 125M180 150C200 140 220 160 245 150"/>';
+    SKILLS.forEach((sk) => {
+      const st = skillStats(sk);
+      const accent = ACCENT[sk.games[0]];
+      const rng = C.makeRng('cerveau:' + sk.id);
+      const pts = [];
+      while (pts.length < NODES) {
+        const a = rng() * Math.PI * 2, d = 8 + rng() * 30;
+        const x = sk.at[0] + Math.cos(a) * d * 1.2, y = sk.at[1] + Math.sin(a) * d * 0.85;
+        if (pts.every((q) => Math.hypot(q[0] - x, q[1] - y) > 11)) pts.push([x, y]);
+      }
+      // du centre vers l'extérieur : les premiers neurones s'allument d'abord
+      pts.sort((a, b) => Math.hypot(a[0] - sk.at[0], a[1] - sk.at[1]) - Math.hypot(b[0] - sk.at[0], b[1] - sk.at[1]));
+      const glow = document.createElementNS(ns, 'circle');
+      glow.setAttribute('cx', sk.at[0]); glow.setAttribute('cy', sk.at[1]); glow.setAttribute('r', 40);
+      glow.setAttribute('fill', accent);
+      glow.setAttribute('class', 'glow' + (st.lit ? ' on' : ''));
+      glow.style.opacity = st.lit ? String(0.08 + 0.3 * st.lit / NODES) : '0';
+      svg.appendChild(glow);
+      pts.forEach((p1, i) => {
+        // chaque neurone se relie à ses deux plus proches voisins
+        pts.map((p2, j) => [j, Math.hypot(p1[0] - p2[0], p1[1] - p2[1])]).filter(([j]) => j !== i)
+          .sort((a, b) => a[1] - b[1]).slice(0, 2).forEach(([j]) => {
+            if (j < i) return;
+            const l = document.createElementNS(ns, 'line');
+            l.setAttribute('x1', p1[0]); l.setAttribute('y1', p1[1]); l.setAttribute('x2', pts[j][0]); l.setAttribute('y2', pts[j][1]);
+            l.setAttribute('stroke', accent);
+            l.setAttribute('class', 'link' + (i < st.lit && j < st.lit ? ' on' : ''));
+            svg.appendChild(l);
+          });
+      });
+      pts.forEach((pt, i) => {
+        const c = document.createElementNS(ns, 'circle');
+        c.setAttribute('cx', pt[0]); c.setAttribute('cy', pt[1]); c.setAttribute('r', i < st.lit ? 3.4 : 2.4);
+        c.setAttribute('fill', i < st.lit ? accent : 'var(--faint)');
+        c.setAttribute('class', 'node' + (i < st.lit ? ' on' : ''));
+        svg.appendChild(c);
+      });
+    });
+    $('#skills').innerHTML = SKILLS.map((sk) => {
+      const st = skillStats(sk);
+      return '<div class="skill" style="--game:' + ACCENT[sk.games[0]] + '"><div class="skill-head"><span>' + sk.name +
+        '</span><small>' + st.level + '</small></div><div class="skill-bar"><i style="width:' + Math.round(st.frac * 100) + '%"></i></div></div>';
+    }).join('');
+  }
+
+  // ------------------------------ Thème ------------------------------
+  // « auto » suit l'heure : l'interface passe en sombre la nuit, comme l'archipel.
+  const hourNow = () => { const d = new Date(); return d.getHours() + d.getMinutes() / 60; };
+  const isNightHour = (h) => h < 6 || h >= 20.5;
+  function resolvedTheme() {
+    const s = C.store.settings.theme || 'auto';
+    return s === 'auto' ? (isNightHour(hourNow()) ? 'dark' : 'light') : s;
+  }
+  function applyTheme() {
+    const t = resolvedTheme();
+    document.documentElement.dataset.theme = t;
+    // la 3D suit l'heure réelle ; le mode sombre choisi force la nuit
+    if (worldReady && C.world.setTime) C.world.setTime(hourNow(), (C.store.settings.theme || 'auto') === 'dark');
+    if (session && session.inst.redraw) session.inst.redraw();
+    document.querySelectorAll('.theme-mode button').forEach((b) => b.classList.toggle('on', b.dataset.themeChoice === (C.store.settings.theme || 'auto')));
+  }
+  setInterval(applyTheme, 5 * 60 * 1000); // la lumière avance avec l'heure
+  applyTheme(); // avant le premier affichage, pour éviter un flash
+
   // --------------------------- Événements ---------------------------
+  $('#open-library').addEventListener('click', () => { renderLibrary(); $('#library').hidden = false; });
+  $('#library').addEventListener('click', (e) => { if (e.target.id === 'library') $('#library').hidden = true; });
+  document.querySelectorAll('.lib-mode button').forEach((b) => b.addEventListener('click', () => {
+    libMode = b.dataset.mode;
+    try { localStorage.setItem('odysseum.libmode', libMode); } catch (e) { /* ignore */ }
+    renderLibrary();
+  }));
+  $('#open-brain').addEventListener('click', () => { renderBrain(); $('#brain').hidden = false; });
+  $('#brain').addEventListener('click', (e) => { if (e.target.id === 'brain') $('#brain').hidden = true; });
+  document.querySelectorAll('.theme-mode button').forEach((b) => b.addEventListener('click', () => {
+    C.store.settings.theme = b.dataset.themeChoice;
+    C.save();
+    applyTheme();
+  }));
   $('#go').addEventListener('click', () => startLevel(selected));
   $('#back').addEventListener('click', goHome);
   $('#btn-undo').addEventListener('click', () => session && session.inst.undo());
@@ -275,7 +424,9 @@
   window.Odysseum = { levelInfo, journey: J };
 
   initWorld();
+  applyTheme();
   show('home');
   renderPlay();
+  renderBadge();
   if (worldReady) C.world.start();
 })();

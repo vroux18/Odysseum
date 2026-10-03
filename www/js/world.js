@@ -84,15 +84,96 @@
   // ------------------------------------------------------------------
   // Décor global : ciel, mer, nuages, oiseaux, voilier, poussières de lumière
   // ------------------------------------------------------------------
+  let dayBg, nightBg, hemi, cloudMat, moon, isDark = false;
+  const mountains = [];
   function makeSky() {
-    scene.background = canvasTexture(4, 256, (g, w, h) => {
+    const gradient = (stops) => canvasTexture(4, 256, (g, w, h) => {
       const grd = g.createLinearGradient(0, 0, 0, h);
-      grd.addColorStop(0, '#d3e1e7');
-      grd.addColorStop(0.5, '#eef2f1');
-      grd.addColorStop(1, FOG);
+      stops.forEach(([k, c]) => grd.addColorStop(k, c));
       g.fillStyle = grd; g.fillRect(0, 0, w, h);
     });
+    dayBg = gradient([[0, '#d3e1e7'], [0.5, '#eef2f1'], [1, FOG]]);
+    nightBg = gradient([[0, '#0e1418'], [0.55, '#18212a'], [1, '#1a2126']]);
+    scene.background = dayBg;
     scene.fog = new THREE.Fog(FOG, 22, 72);
+    // la lune, visible de nuit seulement
+    moon = new THREE.Mesh(new THREE.SphereGeometry(1.6, 24, 16), new THREE.MeshBasicMaterial({ color: '#eef1f4', fog: false }));
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: '#c9d6ff', transparent: true, opacity: 0.55, depthWrite: false, fog: false }));
+    halo.scale.set(12, 12, 1);
+    moon.add(halo);
+    moon.visible = false;
+    scene.add(moon);
+  }
+
+  // ------------------------------------------------------------------
+  // Lumière du jour : l'archipel suit l'heure réelle (aube, jour, crépuscule, nuit).
+  // Chaque moment est une palette ; entre deux moments, on interpole doucement.
+  // ------------------------------------------------------------------
+  const MOMENTS = {
+    nuit: { sky: ['#0e1418', '#18212a', '#1a2126'], fog: '#1a2126', sea: '#26323a', hemi: ['#8fa2b8', '#1c2328', 0.4],
+      sun: ['#b8c8ff', 0.45], cloud: ['#46515a', 0.55], mtn: '#222b31', motes: ['#ffe2a0', 1, 0.17], night: 1 },
+    aube: { sky: ['#c6cde0', '#f2d8cf', '#f4e2d6'], fog: '#f1e2d8', sea: '#c6ced6', hemi: ['#ffe9dc', '#b6b4c4', 0.46],
+      sun: ['#ffcfb0', 0.58], cloud: ['#fbe9e2', 0.9], mtn: '#e6dcdc', motes: ['#ffffff', 0.8, 0.12], night: 0 },
+    jour: { sky: ['#d3e1e7', '#eef2f1', FOG], fog: FOG, sea: '#cbdadd', hemi: ['#ffffff', '#b9c6ca', 0.52],
+      sun: ['#fff2e2', 0.64], cloud: ['#ffffff', 0.92], mtn: '#dfe6e6', motes: ['#ffffff', 0.8, 0.12], night: 0 },
+    crepuscule: { sky: ['#b6c1d8', '#f1ccb6', '#f3d8c3'], fog: '#efd9c9', sea: '#c1cbd2', hemi: ['#ffe1c6', '#a9afc0', 0.46],
+      sun: ['#ffc596', 0.62], cloud: ['#fae0cf', 0.9], mtn: '#e2d6d2', motes: ['#ffe9c4', 0.85, 0.13], night: 0 }
+  };
+  // heure → moment (les intervalles se fondent les uns dans les autres)
+  const TIMELINE = [[0, 'nuit'], [5, 'nuit'], [6.5, 'aube'], [8.5, 'jour'], [17, 'jour'], [19, 'crepuscule'], [20.5, 'nuit'], [24, 'nuit']];
+  let lightHour = 12, forceNight = false, skyKey = '', mtnColor = '#dfe6e6';
+
+  function mix(a, b, k) {
+    if (typeof a === 'number') return a + (b - a) * k;
+    if (Array.isArray(a)) return a.map((v, i) => mix(v, b[i], k));
+    return '#' + new THREE.Color(a).lerp(new THREE.Color(b), k).getHexString();
+  }
+  function paletteAt(hour) {
+    if (forceNight) return MOMENTS.nuit;
+    for (let i = 0; i + 1 < TIMELINE.length; i++) {
+      const [h0, m0] = TIMELINE[i], [h1, m1] = TIMELINE[i + 1];
+      if (hour >= h0 && hour <= h1) {
+        const k = h1 === h0 ? 0 : (hour - h0) / (h1 - h0);
+        const A = MOMENTS[m0], B = MOMENTS[m1], out = {};
+        Object.keys(A).forEach((key) => { out[key] = mix(A[key], B[key], k); });
+        return out;
+      }
+    }
+    return MOMENTS.jour;
+  }
+
+  function applyLight() {
+    const p = paletteAt(lightHour);
+    const key = p.sky.join();
+    if (key !== skyKey) { // le dégradé du ciel n'est redessiné que s'il change
+      skyKey = key;
+      if (scene.background && scene.background.dispose && scene.background !== dayBg) scene.background.dispose();
+      scene.background = canvasTexture(4, 256, (g, w, h) => {
+        const grd = g.createLinearGradient(0, 0, 0, h);
+        grd.addColorStop(0, p.sky[0]); grd.addColorStop(0.5, p.sky[1]); grd.addColorStop(1, p.sky[2]);
+        g.fillStyle = grd; g.fillRect(0, 0, w, h);
+      });
+    }
+    scene.fog.color.set(p.fog);
+    sea.material.color.set(p.sea);
+    hemi.color.set(p.hemi[0]); hemi.groundColor.set(p.hemi[1]); hemi.intensity = p.hemi[2];
+    sun.color.set(p.sun[0]); sun.intensity = p.sun[1];
+    cloudMat.color.set(p.cloud[0]); cloudMat.opacity = p.cloud[1];
+    mtnColor = p.mtn;
+    mountains.forEach((m) => m.material.color.set(p.mtn));
+    motes.material.color.set(p.motes[0]); motes.material.opacity = p.motes[1]; motes.material.size = p.motes[2];
+    isDark = p.night > 0.5;
+    moon.visible = p.night > 0.3;
+    moon.children[0].material.opacity = 0.55 * p.night;
+  }
+
+  // position du soleil selon l'heure : bas à l'aube et au crépuscule, ombres longues
+  function sunOffset() {
+    if (forceNight || lightHour < 6 || lightHour > 20.5) return new THREE.Vector3(-8, 16, -10); // la lune
+    const k = (lightHour - 6) / 14.5;               // 0 au lever, 1 au coucher
+    const az = Math.PI * (0.15 + k * 0.7);
+    const elev = 5 + Math.sin(Math.PI * k) * 15;
+    return new THREE.Vector3(Math.cos(az) * 14, elev, Math.sin(az) * 10 + 4);
   }
 
   const SEA_SIZE = 130, SEA_SEG = 48;
@@ -107,7 +188,7 @@
   }
 
   function makeClouds() {
-    const mat = lambert('#ffffff', { transparent: true, opacity: 0.92 });
+    const mat = cloudMat = lambert('#ffffff', { transparent: true, opacity: 0.92 });
     for (let i = 0; i < 7; i++) {
       const g = new THREE.Group();
       const puffs = 3 + (i % 3);
@@ -659,7 +740,8 @@
     // montagnes lointaines, de part et d'autre de la route
     [-1, 1].forEach((side) => {
       const h = 6 + rng() * 6;
-      const mtn = new THREE.Mesh(new THREE.ConeGeometry(7 + rng() * 5, h, 6), lambert('#dfe6e6'));
+      const mtn = new THREE.Mesh(new THREE.ConeGeometry(7 + rng() * 5, h, 6), lambert(mtnColor));
+      mountains.push(mtn);
       mtn.position.set(ctr.x + (rng() - 0.5) * 8, h / 2 - 0.6, ctr.z + side * (30 + rng() * 10));
       mtn.rotation.y = rng() * 3;
       scene.add(mtn);
@@ -1092,7 +1174,9 @@
       cam.tz + Math.sin(cam.theta) * ce * cam.radius
     );
     camera.lookAt(cam.tx, cam.ty, cam.tz);
-    sun.position.set(cam.tx + 10, 18, cam.tz + 8);
+    moon.position.set(cam.tx - 22, 26, cam.tz - 30);
+    const so = sunOffset();
+    sun.position.set(cam.tx + so.x, so.y, cam.tz + so.z);
     sun.target.position.set(cam.tx, 0, cam.tz);
     renderer.render(scene, camera);
   }
@@ -1187,7 +1271,8 @@
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
     makeSky();
-    scene.add(new THREE.HemisphereLight('#ffffff', '#b9c6ca', 0.52));
+    hemi = new THREE.HemisphereLight('#ffffff', '#b9c6ca', 0.52);
+    scene.add(hemi);
     sun = new THREE.DirectionalLight('#fff2e2', 0.64);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
@@ -1241,6 +1326,9 @@
     setMarker();
   };
   World.select = function (L) { travelTo(Math.min(L, done)); };
+  // heure réelle (ex. 18.5 pour 18 h 30) ; night = forcer la nuit (mode sombre choisi)
+  World.setTime = (hour, night) => { if (!World.ok) return; lightHour = hour; forceNight = !!night; applyLight(); };
+  World.isNight = (hour) => hour < 6 || hour >= 20.5;
   World.selected = () => selected;
   World.start = function () {
     if (!World.ok || running) return;

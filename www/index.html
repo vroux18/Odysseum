@@ -17,8 +17,19 @@
     <div id="world" class="world" aria-label="Archipel"></div>
     <h1 class="title" aria-label="Odysseum">odysseum</h1>
 
-    <button id="open-settings" class="ghost-icon corner" aria-label="Son">
+    <!-- niveau du joueur : ouvre la carte du cerveau -->
+    <button id="open-brain" class="ghost-icon corner corner-left level-badge" aria-label="Niveau du joueur">
+      <svg viewBox="0 0 52 52" aria-hidden="true">
+        <circle cx="26" cy="26" r="23" stroke="var(--line)" stroke-width="2"/>
+        <circle id="level-ring" cx="26" cy="26" r="23" stroke="var(--p2)" stroke-width="2" stroke-dasharray="144.5" stroke-dashoffset="144.5"/>
+      </svg>
+      <span id="level-num">1</span>
+    </button>
+    <button id="open-settings" class="ghost-icon corner" aria-label="Réglages">
       <svg viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg>
+    </button>
+    <button id="open-library" class="ghost-icon corner corner-2" aria-label="Liste des mini-jeux">
+      <svg viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></svg>
     </button>
 
     <!-- un seul bouton : le mini-jeu qui attend sur la pierre choisie -->
@@ -80,8 +91,36 @@
     </div>
   </div>
 
+  <!-- liste des mini-jeux, en jeu libre -->
+  <div id="library" class="overlay library" hidden>
+    <div class="sheet">
+      <div class="switch-mode lib-mode" role="tablist" aria-label="Règles">
+        <button class="on" data-mode="classic" role="tab">classique</button>
+        <button data-mode="variant" role="tab">variante</button>
+      </div>
+      <div id="game-list" class="game-grid"></div>
+    </div>
+  </div>
+
+  <!-- carte du cerveau : les facultés qui se développent -->
+  <div id="brain" class="overlay" hidden>
+    <div class="sheet brain-sheet">
+      <p class="brain-level">niveau<b id="brain-level">1</b></p>
+      <svg id="brain-svg" class="brain" viewBox="0 0 320 250" aria-hidden="true"></svg>
+      <div id="skills" class="skills"></div>
+    </div>
+  </div>
+
   <div id="settings" class="overlay" hidden>
     <div class="sheet">
+      <div class="theme-row">
+        <span>Thème</span>
+        <div class="switch-mode theme-mode" role="tablist" aria-label="Thème">
+          <button data-theme-choice="auto" role="tab">auto</button>
+          <button data-theme-choice="light" role="tab">clair</button>
+          <button data-theme-choice="dark" role="tab">sombre</button>
+        </div>
+      </div>
       <label class="toggle"><span>Sons</span><input type="checkbox" id="opt-sound"><i></i></label>
       <label class="toggle"><span>Musique</span><input type="checkbox" id="opt-music"><i></i></label>
       <div class="mix">
