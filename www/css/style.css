@@ -1581,3 +1581,51 @@ svg.ic.ic-solid { --duo-o: 1; }
 #home #open-brain .brain-art svg { width: 40px !important; height: 35px !important; stroke: none !important; fill: initial; filter: drop-shadow(0 1px 1.5px rgba(120, 40, 70, .3)); }
 #home #open-brain .brain-art svg path:first-child { fill: url(#bg-l); }
 #home #open-brain .brain-xp { left: 64px !important; }
+
+/* =====================================================================
+   Garde-robe d'Ulysse : feuille basse translucide, on voit le héros changer en direct
+   ===================================================================== */
+#home #open-wardrobe { position: fixed; z-index: 5; top: calc(18px + env(safe-area-inset-top, 0px)); right: 72px; left: auto; bottom: auto; width: 48px; height: 48px; padding: 0;
+  display: grid; place-items: center; border-radius: 50%; background: var(--glass); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: var(--ink);
+  box-shadow: 0 6px 18px -8px rgba(0, 0, 0, .45), inset 0 0 0 1px color-mix(in srgb, var(--ink) 10%, transparent); }
+#home #open-wardrobe svg { width: 24px; height: 24px; }
+#home #open-wardrobe:active { transform: scale(.92); }
+.wardrobe { align-items: flex-end; background: linear-gradient(to top, rgba(10, 14, 20, .45), transparent 60%) !important; backdrop-filter: none !important; }
+.wardrobe-sheet { width: 100%; max-width: 480px; gap: 14px; border-radius: 28px 28px 0 0; padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); max-height: 52vh; animation: rise .45s var(--spring); }
+.wd-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 2px; }
+.wd-tabs::-webkit-scrollbar { display: none; }
+.wd-tabs button { flex: none; padding: 8px 14px; border-radius: 999px; font-size: 14px; color: var(--muted); background: var(--tile); transition: background .3s var(--slow), color .3s; }
+.wd-tabs button.on { background: var(--ink); color: var(--surface); }
+.wd-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 12px 8px; padding: 4px 2px; }
+.wd-swatch, .wd-chip { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); animation: lv-in .4s var(--spring) both; animation-delay: calc(var(--k, 0) * 35ms); }
+.wd-swatch i { width: 48px; height: 48px; border-radius: 50%; background: var(--c); box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .18), inset 0 3px 0 rgba(255, 255, 255, .25), 0 0 0 2px var(--surface), 0 0 0 3px transparent;
+  transition: box-shadow .3s var(--slow), transform .35s var(--spring); }
+.wd-swatch.on i { box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .18), inset 0 3px 0 rgba(255, 255, 255, .25), 0 0 0 3px var(--surface), 0 0 0 5px #d4a640; transform: scale(1.06); }
+.wd-swatch.on span, .wd-chip.on { color: var(--ink); }
+.wd-chip { justify-content: center; height: 48px; padding: 0 10px; border-radius: 16px; background: var(--tile); font-size: 14px; }
+.wd-chip.on { background: color-mix(in srgb, #d4a640 25%, var(--tile)); box-shadow: inset 0 0 0 2px #d4a640; }
+.wd-done { padding: 13px; border-radius: 16px; background: var(--ink); color: var(--surface); font-size: 15px; }
+
+/* garde-robe : onglets visibles, grille de choix sur toute la largeur */
+.wardrobe-sheet { align-items: stretch !important; }
+.wardrobe-sheet .sheet-head { justify-content: center; }
+.wd-tabs { width: 100%; min-height: 40px; }
+.wd-tabs button { height: 36px !important; width: auto !important; min-width: 0 !important; border: 0 !important; background: var(--tile) !important; color: var(--ink) !important; opacity: .7; font-size: 14px !important; }
+.wd-tabs button.on { background: var(--ink) !important; color: var(--surface) !important; opacity: 1; }
+.wd-choices { width: 100%; grid-template-columns: repeat(4, 1fr) !important; overflow-y: auto; }
+.wd-swatch, .wd-chip { width: auto !important; height: auto !important; background: none; border: 0; }
+.wd-chip { min-height: 48px; background: var(--tile) !important; }
+
+/* navigation d'île en île, en bas au centre */
+.island-nav { position: fixed; z-index: 5; left: 50%; transform: translateX(-50%); bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+  display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 999px; background: var(--glass); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 6px 18px -8px rgba(0, 0, 0, .45), inset 0 0 0 1px color-mix(in srgb, var(--ink) 10%, transparent); }
+.island-nav button { height: 38px; border-radius: 999px; color: var(--ink); display: grid; place-items: center; }
+#island-prev, #island-next { width: 38px; }
+#island-prev svg, #island-next svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#island-prev:disabled, #island-next:disabled { opacity: .3; }
+.island-name { padding: 0 10px; min-width: 120px; font-family: 'Marcellus', serif; font-size: 15px; line-height: 1.05; display: flex !important; flex-direction: column; }
+.island-name small { font-family: 'Jost', sans-serif; font-size: 10px; color: var(--muted); letter-spacing: .04em; }
+.island-name .lock { opacity: .6; }
+/* le libellé du niveau remonte un peu pour laisser la place */
+#home .go-label { bottom: calc(19vh - 34px + env(safe-area-inset-bottom, 0px)); }

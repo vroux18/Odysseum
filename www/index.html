@@ -75,6 +75,10 @@
       <span class="brain-txt"><small>niveau</small><span id="level-num">1</span></span>
       <i class="brain-xp"><b id="brain-xp-mini"></b></i>
     </button>
+    <!-- garde-robe : apparence d'Ulysse -->
+    <button id="open-wardrobe" class="ghost-icon corner" aria-label="Apparence du personnage">
+      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3.5 4 6l1.6 4.2L7.5 9.4V20.5h9V9.4l1.9.8L20 6l-5-2.5c-.5 1.4-1.6 2.2-3 2.2S9.5 4.9 9 3.5z" fill="currentColor" opacity=".22"/><path d="M9 3.5 4 6l1.6 4.2L7.5 9.4V20.5h9V9.4l1.9.8L20 6l-5-2.5c-.5 1.4-1.6 2.2-3 2.2S9.5 4.9 9 3.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+    </button>
     <button id="open-settings" class="ghost-icon corner" aria-label="Réglages">
       <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-gear-six"/></svg>
     </button>
@@ -93,6 +97,12 @@
     <button id="go" class="go" aria-label="Jouer"></button>
     <button id="next-level" class="ghost-icon level-arrow next" aria-label="Niveau suivant"><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-caret-right"/></svg></button>
     <span id="go-label" class="go-label"></span>
+    <!-- voyager d'île en île : la caméra survole l'île choisie, Ulysse reste où il est -->
+    <div id="island-nav" class="island-nav" hidden>
+      <button id="island-prev" aria-label="Île précédente"><svg viewBox="0 0 24 24"><path d="M14.5 6 8.5 12l6 6"/></svg></button>
+      <button id="island-name" class="island-name"></button>
+      <button id="island-next" aria-label="Île suivante"><svg viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></svg></button>
+    </div>
   </main>
 
   <!-- Partie -->
@@ -203,6 +213,16 @@
       <div id="lv-grid" class="lv-grid"></div>
       <!-- enchaîner les mini-jeux de la même capacité -->
       <button id="lv-focus" class="lv-focus" hidden></button>
+    </div>
+  </div>
+
+  <!-- garde-robe : tenue, cape, cheveux, peau, accessoire, arme ; Ulysse change en direct sur la carte -->
+  <div id="wardrobe" class="overlay wardrobe" hidden>
+    <div class="sheet wardrobe-sheet">
+      <header class="sheet-head"><h2>Garde-robe</h2></header>
+      <div id="wd-tabs" class="wd-tabs" role="tablist"></div>
+      <div id="wd-choices" class="wd-choices"></div>
+      <button id="wd-done" class="wd-done">C'est parfait</button>
     </div>
   </div>
 

@@ -997,6 +997,85 @@
   $('#ld-next').addEventListener('click', () => { $('#level-done').hidden = true; goHome(); });
 
   $('#open-settings').addEventListener('click', () => { $('#settings').hidden = false; });
+
+  // ------------------------------ Voyage d'île en île ------------------------------
+  // Bouton en bas : survoler les îles déjà atteintes (et apercevoir la suivante), puis revenir à Ulysse.
+  let islandView = -1;
+  function renderIslandNav() {
+    const nav = $('#island-nav');
+    const list = worldReady && C.world.islands ? C.world.islands() : null;
+    nav.hidden = !list || list.length < 2;
+    if (nav.hidden) return;
+    const cur = list.findIndex((i) => i.current);
+    const at = islandView < 0 ? cur : islandView;
+    const isl = list[at] || list[0];
+    $('#island-name').innerHTML = (isl.unlocked ? isl.name : '<span class="lock">?</span> Île inconnue') + (islandView >= 0 && at !== cur ? '<small>revenir à Ulysse</small>' : '');
+    $('#island-prev').disabled = at <= 0;
+    $('#island-next').disabled = at >= list.length - 1 || !list[at].unlocked;
+  }
+  function goIsland(d) {
+    const list = C.world.islands();
+    const cur = list.findIndex((i) => i.current);
+    const at = Math.max(0, Math.min(list.length - 1, (islandView < 0 ? cur : islandView) + d));
+    islandView = at === cur ? -1 : at;
+    if (islandView < 0) { if (C.world.viewHero) C.world.viewHero(); else C.world.setCameraMode('follow'); }
+    else C.world.viewIsland(at);
+    C.sfx.tap();
+    renderIslandNav();
+  }
+  $('#island-prev').addEventListener('click', () => goIsland(-1));
+  $('#island-next').addEventListener('click', () => goIsland(1));
+  $('#island-name').addEventListener('click', () => {
+    if (islandView < 0) return;
+    islandView = -1;
+    if (C.world.viewHero) C.world.viewHero(); else C.world.setCameraMode('follow');
+    renderIslandNav();
+  });
+  renderIslandNav();
+  setInterval(() => { if (!screens.home.hidden) renderIslandNav(); }, 1500); // Ulysse a pu changer d'île
+
+  // ------------------------------ Garde-robe ------------------------------
+  // Les choix viennent du monde 3D (World.skinOptions) ; à défaut, une palette grecque de base.
+  const SKIN_PARTS = [
+    { id: 'tunic', name: 'Tunique' }, { id: 'cape', name: 'Cape' }, { id: 'hair', name: 'Cheveux' },
+    { id: 'skin', name: 'Peau' }, { id: 'accessory', name: 'Coiffe' }, { id: 'weapon', name: 'Arme' }
+  ];
+  const SKIN_FALLBACK = {
+    tunic: [{ id: 'egee', name: 'Égée', color: '#2f5f8a' }, { id: 'terre', name: 'Terre cuite', color: '#c0643a' }, { id: 'olive', name: 'Olive', color: '#7d8a3c' }, { id: 'tyr', name: 'Pourpre', color: '#6d2f5f' }, { id: 'lin', name: 'Lin', color: '#efe6d2' }, { id: 'nuit', name: 'Nuit', color: '#23262e' }],
+    cape: [{ id: 'blanc', name: 'Blanc', color: '#f4efe4' }, { id: 'or', name: 'Or', color: '#d4a640' }, { id: 'rouge', name: 'Rouge', color: '#a8392f' }, { id: 'egee', name: 'Égée', color: '#3d74a8' }],
+    hair: [{ id: 'brun', name: 'Brun', color: '#4a2f22' }, { id: 'noir', name: 'Noir', color: '#1c1a1a' }, { id: 'blond', name: 'Blond', color: '#c9a25a' }, { id: 'roux', name: 'Roux', color: '#9a4a24' }, { id: 'gris', name: 'Gris', color: '#9a9a96' }],
+    skin: [{ id: 's1', name: 'Clair', color: '#f2d3bd' }, { id: 's2', name: 'Doré', color: '#d9a982' }, { id: 's3', name: 'Mat', color: '#b98060' }, { id: 's4', name: 'Brun', color: '#8a5a3c' }, { id: 's5', name: 'Ébène', color: '#5a3a28' }],
+    accessory: [{ id: 'none', name: 'Aucune' }, { id: 'laurel', name: 'Laurier' }, { id: 'helmet', name: 'Casque' }, { id: 'band', name: 'Bandeau' }],
+    weapon: [{ id: 'spear', name: 'Lance' }, { id: 'staff', name: 'Bâton' }, { id: 'bow', name: 'Arc' }, { id: 'none', name: 'Aucune' }]
+  };
+  let wdPart = 'tunic';
+  const skinOptions = () => (worldReady && C.world.skinOptions && C.world.skinOptions()) || SKIN_FALLBACK;
+  const skinState = () => (C.store.settings.skin = C.store.settings.skin || {});
+  function applySkin() { if (worldReady && C.world.setSkin) C.world.setSkin(Object.assign({}, skinState())); }
+  applySkin(); // la tenue choisie est remise au lancement
+  function renderWardrobe() {
+    const opts = skinOptions(), st = skinState();
+    $('#wd-tabs').innerHTML = SKIN_PARTS.filter((p) => opts[p.id] && opts[p.id].length)
+      .map((p) => '<button role="tab" data-part="' + p.id + '" class="' + (p.id === wdPart ? 'on' : '') + '">' + p.name + '</button>').join('');
+    const list = opts[wdPart] || [];
+    const cur = st[wdPart] || (list[0] && list[0].id);
+    $('#wd-choices').innerHTML = list.map((o, k) => o.color
+      ? '<button class="wd-swatch' + (o.id === cur ? ' on' : '') + '" data-id="' + o.id + '" style="--c:' + o.color + ';--k:' + k + '" aria-label="' + o.name + '"><i></i><span>' + o.name + '</span></button>'
+      : '<button class="wd-chip' + (o.id === cur ? ' on' : '') + '" data-id="' + o.id + '" style="--k:' + k + '">' + o.name + '</button>').join('');
+  }
+  $('#open-wardrobe').addEventListener('click', () => {
+    if (worldReady && C.world.setCameraMode) C.world.setCameraMode('follow'); // on voit Ulysse pendant l'essayage
+    renderWardrobe();
+    $('#wardrobe').hidden = false;
+    C.sfx.tap();
+  });
+  $('#wardrobe').addEventListener('click', (e) => {
+    if (e.target.id === 'wardrobe' || e.target.id === 'wd-done') { $('#wardrobe').hidden = true; return; }
+    const tab = e.target.closest('#wd-tabs button');
+    if (tab) { wdPart = tab.dataset.part; renderWardrobe(); C.sfx.tap(); return; }
+    const pick = e.target.closest('.wd-swatch, .wd-chip');
+    if (pick) { skinState()[wdPart] = pick.dataset.id; C.save(); applySkin(); renderWardrobe(); C.sfx.place(); }
+  });
   $('#settings').addEventListener('click', (e) => { if (e.target.id === 'settings') $('#settings').hidden = true; });
   $('#opt-sound').addEventListener('change', (e) => { C.audio.setSound(e.target.checked); C.sfx.tap(); });
   $('#opt-music').addEventListener('change', (e) => C.audio.setMusic(e.target.checked));
