@@ -154,14 +154,48 @@
     $('#btn-hint').classList.toggle('empty', left <= 0);
   }
 
-  // bulle d'explication d'une astuce : discrète, elle s'efface d'elle-même ou au toucher
-  function showTip(text) {
-    const tip = $('#hint-tip');
-    tip.textContent = text;
-    tip.hidden = false;
-    tip.classList.remove('in'); void tip.offsetWidth; tip.classList.add('in');
+  // bulle d'explication d'une astuce. L'astuce d'un jeu est soit un texte, soit
+  // { text, where: [éléments du coup joué], why: [éléments qui le justifient], clear() } :
+  // « where » reçoit un anneau doré qui pulse, « why » un surlignage doux ; tout s'efface
+  // au prochain geste sur la grille (ou après quelques secondes).
+  function clearHintFx() {
+    const fx = clearHintFx.cur;
+    clearHintFx.cur = null;
+    if (!fx) return;
+    fx.els.forEach(([el, cls]) => el.classList.remove(cls));
+    if (fx.clear) try { fx.clear(); } catch (e) { /* jeu déjà fermé */ }
+  }
+  function hideTip() {
     clearTimeout(showTip.timer);
-    showTip.timer = setTimeout(() => { tip.hidden = true; }, 6000);
+    $('#hint-tip').hidden = true;
+    clearHintFx();
+  }
+  function showTip(res) {
+    const r = typeof res === 'string' ? { text: res } : res;
+    const tip = $('#hint-tip');
+    if (!showTip.bound) {
+      // le prochain geste du joueur referme l'explication et éteint les surlignages
+      showTip.bound = true;
+      const later = () => setTimeout(hideTip, 0);
+      $('#board').addEventListener('pointerdown', later, true);
+      ['#btn-undo', '#btn-reset', '#back'].forEach((s) => { const b = $(s); if (b) b.addEventListener('click', later); });
+    }
+    clearHintFx();
+    tip.textContent = r.text || '';
+    tip.hidden = !r.text;
+    tip.classList.remove('in'); void tip.offsetWidth; tip.classList.add('in');
+    const els = [];
+    const mark = (list, cls) => (list || []).forEach((el) => {
+      if (!el || !el.classList) return;
+      el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
+      els.push([el, cls]);
+    });
+    mark(r.why, 'hint-why');
+    mark(r.where, 'hint-where');
+    clearHintFx.cur = { els, clear: r.clear };
+    clearTimeout(showTip.timer);
+    // le temps de lire : plus long pour une explication plus longue
+    showTip.timer = setTimeout(hideTip, Math.max(7000, Math.min(12000, (r.text || '').length * 70)));
   }
 
   function playStep(info, stepIndex) {
@@ -286,7 +320,7 @@
           if (res) {
             hints++;
             renderHints(MAX_HINTS - hints);
-            if (typeof res === 'string') showTip(res); // l'astuce explique le coup, pas seulement le résultat
+            if (typeof res === 'string' || (res && typeof res === 'object')) showTip(res); // l'astuce montre où, explique pourquoi
             if (info.t0) info.penalty += 10; // compet : chaque indice coûte 10 secondes
           }
         },
@@ -398,10 +432,13 @@
       const was = levelFrom(before[sk.id] || 0, 40), now = skillStats(sk);
       const gain = (C.store.xp[sk.id] || 0) - (before[sk.id] || 0);
       const startW = now.level > was.level ? 0 : Math.round(was.frac * 100);
-      return '<div class="ld-row" style="--game:' + ACCENT[sk.games[0]] + ';--d:' + (0.35 + i * 0.45) + 's">' +
-        '<div class="ld-head"><span>' + sk.name + '</span><b class="ld-gain" data-gain="' + gain + '">+0</b></div>' +
-        '<div class="skill-bar"><i style="width:' + startW + '%" data-to="' + Math.round(now.frac * 100) + '"></i></div>' +
-        (now.level > was.level ? '<small class="ld-up">niveau ' + now.level + '</small>' : '<small>niv. ' + now.level + '</small>') + '</div>';
+      // une ligne de registre : emblème de la capacité, nom et niveau, jauge à crans, gain en pièce d'or
+      return '<div class="ld-row ld2" style="--game:' + ACCENT[sk.games[0]] + ';--d:' + (0.35 + i * 0.45) + 's">' +
+        '<span class="ld-medal"><svg viewBox="0 0 24 24">' + (SKILL_ICON[sk.id] || '') + '</svg></span>' +
+        '<div class="ld-mid"><div class="ld-head"><span>' + sk.name + '</span>' +
+        (now.level > was.level ? '<small class="ld-up">niveau ' + now.level + '</small>' : '<small>niv. ' + now.level + '</small>') + '</div>' +
+        '<div class="skill-bar"><i style="width:' + startW + '%" data-to="' + Math.round(now.frac * 100) + '"></i></div></div>' +
+        '<b class="ld-gain" data-gain="' + gain + '">+0</b></div>';
     }).join('') || '<p class="ld-none">Sans XP cette fois : les grilles résolues automatiquement n\'en donnent pas.</p>';
     const ov = $('#level-done');
     ov.hidden = false;
@@ -415,7 +452,7 @@
         const el = row.querySelector('.ld-gain'), total = +el.dataset.gain, t0 = performance.now();
         const count = (now) => {
           const k = Math.min(1, (now - t0) / 900);
-          el.textContent = '+' + Math.round(total * (1 - Math.pow(1 - k, 3))) + ' xp';
+          el.innerHTML = '+' + Math.round(total * (1 - Math.pow(1 - k, 3))) + '<small>xp</small>';
           if (k < 1) requestAnimationFrame(count);
         };
         requestAnimationFrame(count);
@@ -672,6 +709,14 @@
   ];
   SKILLS.forEach((sk) => { sk.games = sk.games.filter((id) => C.games.some((g) => g.id === id)); });
   const NODES = 10;
+  // emblèmes des capacités (trait 24×24) : loupe, compas, sablier, balance, lyre
+  const SKILL_ICON = {
+    logique: '<circle cx="10.5" cy="10.5" r="5.5"/><path d="M14.6 14.6 20 20"/><path d="M8.5 10.5h4M10.5 8.5v4" opacity=".6"/>',
+    espace: '<path d="M12 3v3M12 6l-6 14M12 6l6 14M7.6 16h8.8"/><circle cx="12" cy="6" r="1.6"/>',
+    anticipation: '<path d="M7 3h10M7 21h10M8 3c0 5 8 5 8 9s-8 4-8 9M16 3c0 5-8 5-8 9s8 4 8 9"/>',
+    raisonnement: '<path d="M12 4v16M8 20h8M5 7h14M5 7l-2.5 6h5zM19 7l-2.5 6h5z"/>',
+    memoire: '<path d="M7 4c-2 4-2 10 1 15M17 4c2 4 2 10-1 15M7 4c3 1 7 1 10 0M8 19h8M10 7v10M12 7v11M14 7v10"/>'
+  };
   const solvedOf = (id) => { const g = game(id); return variantsOf(g).reduce((s, v) => s + C.gameData(dataKey(g, v.id)).solved, 0); };
   // première ouverture avec le système d'XP : on convertit les grilles déjà réussies
   if (!C.store.xp) {
