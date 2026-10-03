@@ -1,25 +1,24 @@
-// Odysseum — l'archipel en 3D (Three.js r128).
-// Huit îlots dans une mer de brume, un par jeu. Chaque grille résolue ajoute une
-// pièce au monument de l'île et fait pousser des arbres ; les îles émergent du
-// brouillard au fil du jeu. Un petit voyageur vit sur l'archipel et saute de
-// pierre en pierre pour rejoindre l'île choisie.
+// Odysseum — le monde en 3D (Three.js r128).
+// Un sentier de pierres traverse une chaîne d'îles sans fin. Chaque pierre est un
+// niveau (un mini-jeu) ; chaque île compte PER niveaux dont le dernier est un boss.
+// Battre le boss ouvre la porte de l'île et fait remonter les pierres de gué vers
+// l'île suivante. Le voyageur avance de pierre en pierre.
 (function () {
   'use strict';
   const C = window.Carnet;
 
-  // nombre total de grilles résolues pour débloquer chaque île (dans l'ordre)
-  const UNLOCK = [0, 0, 0, 2, 4, 7, 10, 14];
-  const MAX_PIECES = 14;
+  const PER = 10;          // niveaux par île (le dernier est le boss)
   const FOG = '#e9eeee';
-  const TOP = 0.63; // hauteur du sol des îles
+  const TOP = 0.63;        // hauteur du sol des îles
+  const SPACING = 11;      // distance entre deux îles
 
-  const World = { ok: false };
-  let THREE, renderer, scene, camera, host, raf = 0, running = false, last = 0, simTime = 0;
-  let sea, seaPos, seaBase, motes, islands = [], stones = [], links = {}, ripples = [], clouds = [], birds = [];
-  let opts = null, focused = -1, overview = 30;
-  // caméra en coordonnées orbitales, lissées vers une cible
-  const cam = { theta: 0.6, elev: 1.25, radius: 90, tx: 0, ty: 0, tz: 0 };
-  const goal = { theta: 0.6, elev: 0.8, radius: 30, tx: 0, ty: 0, tz: 0 };
+  const World = { ok: false, PER };
+  let THREE, renderer, scene, camera, host, sun, raf = 0, running = false, last = 0, simTime = 0;
+  let sea, seaPos, seaBase, motes, clouds = [], birds = [], pulse, marker;
+  const chapters = [];
+  let opts = null, done = 0, selected = 0, userTheta = 0, holdTheta = 0;
+  const cam = { theta: Math.PI + 0.5, elev: 1.1, radius: 70, tx: 0, ty: 0, tz: 0 };
+  const goal = { theta: Math.PI + 0.5, elev: 0.6, radius: 12, tx: 0, ty: 0.6, tz: 0 };
 
   function supported() {
     if (!window.THREE) return false;
@@ -31,6 +30,7 @@
 
   const tint = (hex, amount) => new THREE.Color('#fbfaf7').lerp(new THREE.Color(hex), amount);
   const lambert = (color, extra) => new THREE.MeshLambertMaterial(Object.assign({ color, flatShading: true }, extra || {}));
+  const chapterOf = (L) => Math.floor(L / PER);
 
   function canvasTexture(w, h, paint) {
     const c = document.createElement('canvas');
@@ -53,6 +53,35 @@
     g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
   }));
 
+  // Icône du mini-jeu dessinée dans une pastille, pour flotter au-dessus du sentier.
+  const iconCache = {};
+  function iconTexture(id, accent, boss) {
+    const key = id + (boss ? ':boss' : '');
+    if (iconCache[key]) return iconCache[key];
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d');
+    const tex = new THREE.CanvasTexture(c);
+    const paintDisc = () => {
+      g.clearRect(0, 0, 128, 128);
+      g.fillStyle = 'rgba(255,255,255,.92)';
+      g.beginPath(); g.arc(64, 64, 52, 0, Math.PI * 2); g.fill();
+      if (boss) {
+        g.strokeStyle = accent; g.lineWidth = 3;
+        g.beginPath(); g.arc(64, 64, 58, 0, Math.PI * 2); g.stroke();
+      }
+    };
+    paintDisc();
+    const inner = (opts.iconSvg(id) || '').replace(/class="f"/g, 'fill="' + accent + '" stroke="none"');
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="128" height="128" fill="none" stroke="' + accent +
+      '" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+    const img = new Image();
+    img.onload = () => { paintDisc(); g.drawImage(img, 34, 34, 60, 60); tex.needsUpdate = true; };
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    iconCache[key] = tex;
+    return tex;
+  }
+
   // ------------------------------------------------------------------
   // Décor : ciel, mer, nuages, oiseaux, poussières de lumière
   // ------------------------------------------------------------------
@@ -64,11 +93,12 @@
       grd.addColorStop(1, FOG);
       g.fillStyle = grd; g.fillRect(0, 0, w, h);
     });
-    scene.fog = new THREE.Fog(FOG, 30, 82);
+    scene.fog = new THREE.Fog(FOG, 18, 60);
   }
 
+  const SEA_SIZE = 110, SEA_SEG = 44;
   function makeSea() {
-    const geo = new THREE.PlaneGeometry(130, 130, 48, 48);
+    const geo = new THREE.PlaneGeometry(SEA_SIZE, SEA_SIZE, SEA_SEG, SEA_SEG);
     geo.rotateX(-Math.PI / 2);
     seaPos = geo.attributes.position;
     seaBase = Float32Array.from(seaPos.array);
@@ -79,7 +109,7 @@
 
   function makeClouds() {
     const mat = lambert('#ffffff', { transparent: true, opacity: 0.9 });
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 6; i++) {
       const g = new THREE.Group();
       const puffs = 3 + (i % 3);
       for (let k = 0; k < puffs; k++) {
@@ -89,7 +119,7 @@
         m.scale.y = 0.55;
         g.add(m);
       }
-      g.userData = { a: (i / 7) * Math.PI * 2, r: 16 + Math.random() * 14, y: 8 + Math.random() * 4, speed: 0.008 + Math.random() * 0.01 };
+      g.userData = { a: (i / 6) * Math.PI * 2, r: 14 + Math.random() * 12, y: 8 + Math.random() * 4, speed: 0.01 + Math.random() * 0.01 };
       scene.add(g);
       clouds.push(g);
     }
@@ -99,26 +129,26 @@
     const shape = new THREE.Shape();
     shape.moveTo(0, 0); shape.lineTo(0.5, 0.12); shape.lineTo(0.08, 0.16); shape.lineTo(0, 0);
     const wingGeo = new THREE.ShapeGeometry(shape);
-    const mat = new THREE.MeshBasicMaterial({ color: '#8a9399', side: THREE.DoubleSide, fog: true });
+    const mat = new THREE.MeshBasicMaterial({ color: '#8a9399', side: THREE.DoubleSide });
     for (let i = 0; i < 3; i++) {
       const b = new THREE.Group();
       const l = new THREE.Mesh(wingGeo, mat), r = new THREE.Mesh(wingGeo, mat);
       r.scale.x = -1;
       b.add(l, r);
-      b.userData = { l, r, a: i * 2.1, rad: 13 + i * 3, y: 5.5 + i * 0.8, speed: 0.12 + i * 0.03, phase: i };
+      b.userData = { l, r, a: i * 2.1, rad: 9 + i * 3, y: 5 + i * 0.8, speed: 0.15 + i * 0.03, phase: i };
       scene.add(b);
       birds.push(b);
     }
   }
 
   function makeMotes() {
-    const count = 140;
+    const count = 120;
     const geo = new THREE.BufferGeometry();
     const p = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
-      p[i * 3] = (Math.random() - 0.5) * 50;
-      p[i * 3 + 1] = Math.random() * 9 + 0.5;
-      p[i * 3 + 2] = (Math.random() - 0.5) * 50;
+      p[i * 3] = (Math.random() - 0.5) * 40;
+      p[i * 3 + 1] = Math.random() * 8 + 0.5;
+      p[i * 3 + 2] = (Math.random() - 0.5) * 40;
     }
     geo.setAttribute('position', new THREE.BufferAttribute(p, 3));
     motes = new THREE.Points(geo, new THREE.PointsMaterial({
@@ -128,8 +158,21 @@
   }
 
   // ------------------------------------------------------------------
-  // Îles
+  // Géographie : la chaîne d'îles
   // ------------------------------------------------------------------
+  function centerOf(c) { return new THREE.Vector3(c * SPACING, 0, Math.sin(c * 1.15) * 5.5); }
+  function radiusOf(c) { return 3.3 + C.makeRng('rayon:' + c)() * 0.5; }
+  function flat(v) { v.y = 0; return v.normalize(); }
+  function entryOf(c) {
+    const ctr = centerOf(c);
+    const prev = c > 0 ? centerOf(c - 1) : ctr.clone().add(new THREE.Vector3(-SPACING, 0, 0));
+    return ctr.clone().add(flat(prev.sub(ctr)).multiplyScalar(radiusOf(c) * 0.8));
+  }
+  function exitOf(c) {
+    const ctr = centerOf(c);
+    return ctr.clone().add(flat(centerOf(c + 1).sub(ctr)).multiplyScalar(radiusOf(c) * 0.8));
+  }
+
   function jitterGeometry(geo, rng, amount) {
     const p = geo.attributes.position;
     for (let i = 0; i < p.count; i++) {
@@ -140,187 +183,200 @@
     return geo;
   }
 
-  function makeIsland(game, i, n) {
-    const rng = C.makeRng('ile:' + game.id);
-    const angle = (i / n) * Math.PI * 2 + 0.25;
-    const dist = i % 2 ? 11.5 : 8.2;
-    const r = 1.9 + rng() * 0.6;
+  function buildChapter(c) {
+    const rng = C.makeRng('ile:' + c);
+    const r = radiusOf(c);
+    const ctr = centerOf(c);
+    const accent = opts.levelInfo(c * PER).accent;
     const group = new THREE.Group();
-    group.position.set(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
+    group.position.copy(ctr);
     const fadeMats = [];
 
-    const rock = new THREE.Mesh(jitterGeometry(new THREE.CylinderGeometry(r, r * 0.62, 3, 9, 2), rng, 0.35),
+    const rock = new THREE.Mesh(jitterGeometry(new THREE.CylinderGeometry(r, r * 0.62, 3, 12, 2), rng, 0.4),
       lambert('#f2efe8', { transparent: true }));
     rock.position.y = -1.0;
     rock.castShadow = rock.receiveShadow = true;
-    group.add(rock);
-    fadeMats.push(rock.material);
-
-    const meadow = new THREE.Mesh(jitterGeometry(new THREE.CylinderGeometry(r * 0.9, r * 0.95, 0.16, 9), rng, 0.15),
-      lambert(tint(game.accent, 0.25), { transparent: true }));
+    const meadow = new THREE.Mesh(jitterGeometry(new THREE.CylinderGeometry(r * 0.92, r * 0.96, 0.16, 12), rng, 0.18),
+      lambert(tint(accent, 0.3), { transparent: true }));
     meadow.position.y = 0.55;
     meadow.receiveShadow = true;
-    group.add(meadow);
-    fadeMats.push(meadow.material);
+    group.add(rock, meadow);
+    fadeMats.push(rock.material, meadow.material);
 
-    // galets autour du rivage
     const pebbleMat = lambert('#f3f2ee', { transparent: true });
     fadeMats.push(pebbleMat);
-    for (let k = 0; k < 6; k++) {
+    for (let k = 0; k < 9; k++) {
       const a = rng() * Math.PI * 2;
-      const pebble = new THREE.Mesh(new THREE.IcosahedronGeometry(0.16 + rng() * 0.22, 0), pebbleMat);
+      const pebble = new THREE.Mesh(new THREE.IcosahedronGeometry(0.16 + rng() * 0.25, 0), pebbleMat);
       pebble.position.set(Math.cos(a) * (r + 0.25), 0.02, Math.sin(a) * (r + 0.25));
       pebble.scale.y = 0.6;
       pebble.castShadow = true;
       group.add(pebble);
     }
 
-    const monument = new THREE.Group();
-    monument.position.y = TOP;
-    group.add(monument);
+    // le sentier : une courbe en S de l'entrée vers la sortie de l'île
+    const entry = entryOf(c).sub(ctr), exit = exitOf(c).sub(ctr);
+    const perp = new THREE.Vector3(-(exit.z - entry.z), 0, exit.x - entry.x).normalize();
+    const flip = c % 2 ? -1 : 1;
+    const nodes = [];
+    const dotMat = lambert('#e7e3da', { transparent: true });
+    fadeMats.push(dotMat);
+    for (let k = 0; k < PER; k++) {
+      const t = 0.03 + (k / (PER - 1)) * 0.86;
+      const local = entry.clone().lerp(exit, t).add(perp.clone().multiplyScalar(Math.sin(t * Math.PI * 2) * r * 0.3 * flip));
+      const boss = k === PER - 1;
+      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(boss ? 0.42 : 0.27, boss ? 0.46 : 0.3, 0.1, boss ? 10 : 8),
+        lambert('#f4f2ed', { transparent: true }));
+      mesh.position.set(local.x, TOP + 0.03, local.z);
+      mesh.receiveShadow = mesh.castShadow = true;
+      mesh.userData.level = c * PER + k;
+      group.add(mesh);
+      nodes.push({ mesh, local });
+    }
+    // petits points de sentier entre les pierres
+    for (let k = 0; k + 1 < PER; k++) {
+      for (let j = 1; j <= 2; j++) {
+        const p = nodes[k].local.clone().lerp(nodes[k + 1].local, j / 3);
+        const dot = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.03, 6), dotMat);
+        dot.position.set(p.x, TOP + 0.01, p.z);
+        group.add(dot);
+      }
+    }
+
+    // la porte du boss, au bout du sentier
+    const gate = new THREE.Group();
+    gate.position.set(exit.x, TOP, exit.z);
+    gate.lookAt(new THREE.Vector3(centerOf(c + 1).x, TOP, centerOf(c + 1).z).sub(ctr));
+    const pillarMat = lambert('#f7f5f0');
+    const lintelMat = lambert('#f7f5f0');
+    [-0.62, 0.62].forEach((x) => {
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.7, 0.2), pillarMat);
+      p.position.set(x, 0.85, 0);
+      p.castShadow = true;
+      gate.add(p);
+    });
+    const lintel = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.18, 0.3), lintelMat);
+    lintel.position.y = 1.78;
+    lintel.castShadow = true;
+    const veil = new THREE.Mesh(new THREE.PlaneGeometry(1.04, 1.6),
+      new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false }));
+    veil.position.y = 0.85;
+    gate.add(lintel, veil);
+    group.add(gate);
+
+    // pierres de gué vers l'île suivante (immergées tant que le boss n'est pas battu)
+    const stones = [];
+    const from = exitOf(c), to = entryOf(c + 1);
+    const d = from.distanceTo(to);
+    const count = Math.max(3, Math.floor(d / 1.0));
+    for (let k = 1; k <= count; k++) {
+      const s = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.36, 0.22, 7), lambert('#f7f6f2'));
+      s.position.lerpVectors(from, to, k / (count + 1));
+      s.userData = { phase: k + c, dip: 0, raise: 0 };
+      s.castShadow = s.receiveShadow = true;
+      scene.add(s);
+      stones.push(s);
+    }
+
+    // ondes autour de l'île
+    const ripples = [];
+    for (let k = 0; k < 2; k++) {
+      const ring = new THREE.Mesh(new THREE.RingGeometry(1, 1.04, 48),
+        new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false }));
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(ctr.x, 0.06, ctr.z);
+      ring.userData = { base: r * 1.02, offset: k * 2.5 + rng() * 2 };
+      scene.add(ring);
+      ripples.push(ring);
+    }
+
     const grove = new THREE.Group();
     grove.position.y = TOP;
     group.add(grove);
 
-    // la lumière du jour : un orbe qui flotte tant que la grille du jour n'est pas faite
-    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 12), new THREE.MeshBasicMaterial({ color: game.accent }));
-    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: game.accent, transparent: true, depthWrite: false, opacity: 0.9 }));
-    halo.scale.set(1.3, 1.3, 1);
-    orb.add(halo);
-    orb.position.set(-r * 0.45, 2.4, r * 0.2);
-    group.add(orb);
-
-    // ondes qui s'éloignent doucement du rivage
-    for (let k = 0; k < 2; k++) {
-      const ring = new THREE.Mesh(new THREE.RingGeometry(1, 1.05, 48),
-        new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false }));
-      ring.rotation.x = -Math.PI / 2;
-      ring.position.set(group.position.x, 0.06, group.position.z);
-      ring.userData = { base: r * 1.02, offset: k * 2.5 + rng() * 2 };
-      scene.add(ring);
-      ripples.push({ ring, island: i });
-    }
-
-    group.traverse((o) => { o.userData.island = i; });
     scene.add(group);
-    return {
-      game, group, rock, meadow, monument, grove, orb, angle, r, rng, fadeMats,
-      pieces: 0, trees: 0, unlocked: true, fade: 1, phase: rng() * 6.28, drops: [], sprouts: []
+    const ch = {
+      c, group, r, rng, accent, nodes, gate, veil, lintel, lintelMat, stones, ripples, grove, fadeMats,
+      fade: 0.2, phase: rng() * 6.28, trees: 0, sprouts: [], open: 0
     };
+    chapters[c] = ch;
+    return ch;
   }
 
-  // Forme et position de la k-ième pièce du monument, propre à chaque jeu.
-  function piece(id, k, accent) {
-    const mat = k % 3 === 2 ? lambert(tint(accent, 0.55)) : lambert('#fbfaf7');
-    let geo;
-    const pos = new THREE.Vector3(), rot = new THREE.Euler();
-    switch (id) {
-      case 'reines': { // tour de blocs qui tourne sur elle-même
-        const s = 0.62 - k * 0.025;
-        geo = new THREE.BoxGeometry(s, 0.26, s);
-        pos.set(0, 0.13 + k * 0.27, 0); rot.set(0, k * 0.22, 0);
-        break;
-      }
-      case 'astres': { // cairn de galets ronds
-        const s = 0.36 - k * 0.016;
-        geo = new THREE.IcosahedronGeometry(s, 1);
-        let y = 0;
-        for (let j = 0; j < k; j++) y += (0.36 - j * 0.016) * 1.45;
-        pos.set(Math.sin(k * 1.7) * 0.05, s * 0.8 + y, Math.cos(k * 1.3) * 0.05);
-        break;
-      }
-      case 'paves': { // dalles empilées en quinconce
-        geo = new THREE.BoxGeometry(0.95 - k * 0.03, 0.12, 0.5);
-        pos.set(0, 0.06 + k * 0.13, 0); rot.set(0, (k % 2) * Math.PI / 2 + k * 0.05, 0);
-        break;
-      }
-      case 'pixels': { // pyramide de voxels
-        const layer = [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 4][k];
-        const slot = [[-1, -1], [1, -1], [-1, 1], [1, 1]][k % 4];
-        const sp = 0.3 - layer * 0.04;
-        geo = new THREE.BoxGeometry(0.28, 0.28, 0.28);
-        pos.set(layer >= 3 ? 0 : slot[0] * sp * 0.5, 0.14 + layer * 0.28, layer >= 3 ? 0 : slot[1] * sp * 0.5);
-        break;
-      }
-      case 'serpent': { // hélice de perles
-        geo = new THREE.SphereGeometry(0.15, 12, 10);
-        const a = k * 0.85;
-        pos.set(Math.cos(a) * 0.45, 0.15 + k * 0.16, Math.sin(a) * 0.45);
-        break;
-      }
-      case 'lumieres': { // colonne de lanternes
-        geo = new THREE.CylinderGeometry(0.2, 0.24, 0.3, 8);
-        pos.set(0, 0.15 + k * 0.31, 0);
-        break;
-      }
-      case 'coffre': { // anneaux de plus en plus fins
-        geo = new THREE.TorusGeometry(0.5 - k * 0.025, 0.06, 6, 24);
-        pos.set(0, 0.06 + k * 0.13, 0); rot.set(Math.PI / 2, 0, 0);
-        break;
-      }
-      default: { // flux : arches croisées
-        geo = new THREE.TorusGeometry(0.5 - k * 0.02, 0.07, 6, 20, Math.PI);
-        pos.set(0, k * 0.16, 0); rot.set(0, k * (Math.PI / 3), 0);
-      }
-    }
-    const m = new THREE.Mesh(geo, mat);
-    m.position.copy(pos);
-    m.rotation.copy(rot);
-    m.castShadow = m.receiveShadow = true;
-    return m;
-  }
-
-  // Un arbre stylisé : cône pastel sur un petit tronc.
-  function tree(isl, k) {
+  function tree(ch) {
     const g = new THREE.Group();
-    const h = 0.55 + isl.rng() * 0.35;
-    const crown = new THREE.Mesh(new THREE.ConeGeometry(0.22 + isl.rng() * 0.08, h, 7), lambert(tint(isl.game.accent, 0.45)));
+    const h = 0.55 + ch.rng() * 0.4;
+    const crown = new THREE.Mesh(new THREE.ConeGeometry(0.22 + ch.rng() * 0.1, h, 7), lambert(tint(ch.accent, 0.45)));
     crown.position.y = 0.12 + h / 2;
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 0.14, 5), lambert('#c9b8a3'));
     trunk.position.y = 0.07;
     crown.castShadow = trunk.castShadow = true;
     g.add(crown, trunk);
-    // autour du monument, en évitant l'endroit où se tient le voyageur
-    const a = isl.angle + 2.2 + k * 1.15 + isl.rng() * 0.4;
-    const d = isl.r * (0.5 + isl.rng() * 0.25);
-    g.position.set(Math.cos(a) * d, 0, Math.sin(a) * d);
+    // loin du sentier
+    for (let tries = 0; tries < 30; tries++) {
+      const a = ch.rng() * Math.PI * 2, d = ch.r * (0.35 + ch.rng() * 0.45);
+      const x = Math.cos(a) * d, z = Math.sin(a) * d;
+      if (ch.nodes.every((n) => Math.hypot(n.local.x - x, n.local.z - z) > 0.75)) { g.position.set(x, 0, z); break; }
+    }
     return g;
   }
 
-  // pierres de gué entre îles voisines débloquées (l'anneau est fermé)
-  function makeStones() {
-    stones.forEach((s) => scene.remove(s));
-    stones = [];
-    links = {};
-    const n = islands.length;
-    for (let i = 0; i < n; i++) {
-      const j = (i + 1) % n;
-      const a = islands[i], b = islands[j];
-      if (!a.unlocked || !b.unlocked) continue;
-      const pa = a.group.position, pb = b.group.position;
-      const d = pa.distanceTo(pb);
-      const count = Math.max(2, Math.floor((d - a.r - b.r) / 1.05));
-      const list = [];
-      for (let k = 1; k <= count; k++) {
-        const t = (a.r + (k / (count + 1)) * (d - a.r - b.r)) / d;
-        const s = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 0.2, 7), lambert('#f7f6f2'));
-        s.position.lerpVectors(pa, pb, t);
-        s.position.y = 0.02;
-        s.userData = { phase: k + i, dip: 0 };
-        s.castShadow = s.receiveShadow = true;
-        scene.add(s);
-        stones.push(s);
-        list.push(s);
+  // ------------------------------------------------------------------
+  // États : niveaux faits / en cours / à venir, portes, pierres de gué
+  // ------------------------------------------------------------------
+  function ensureChapters() {
+    const need = chapterOf(done) + 1; // l'île suivante attend dans la brume
+    for (let c = 0; c <= need; c++) if (!chapters[c]) buildChapter(c);
+  }
+
+  function refresh(animate) {
+    ensureChapters();
+    chapters.forEach((ch) => {
+      if (!ch) return;
+      ch.nodes.forEach((n, k) => {
+        const L = ch.c * PER + k;
+        const info = opts.levelInfo(L);
+        const m = n.mesh.material;
+        if (L < done) { m.color.copy(tint(info.accent, 0.65)); n.mesh.userData.alpha = 1; }
+        else if (L === done) { m.color.set('#ffffff'); n.mesh.userData.alpha = 1; }
+        else { m.color.set('#f1efe9'); n.mesh.userData.alpha = 0.55; }
+      });
+      const beaten = done > ch.c * PER + PER - 1;
+      if (beaten && !ch.opened) {
+        ch.opened = true;
+        ch.lintelMat.color.copy(tint(ch.accent, 0.6));
+        ch.stones.forEach((s, i) => { s.userData.delay = animate ? 0.9 + i * 0.18 : 0; if (!animate) s.userData.raise = 1; });
       }
-      links[i + '-' + j] = list;
-      links[j + '-' + i] = list.slice().reverse();
-    }
+      const wantTrees = Math.min(4, Math.floor(Math.max(0, Math.min(PER, done - ch.c * PER)) / 3));
+      while (ch.trees < wantTrees) {
+        const tr = tree(ch);
+        ch.grove.add(tr);
+        if (animate) { tr.scale.setScalar(0.01); ch.sprouts.push(tr); }
+        ch.trees++;
+      }
+    });
+  }
+
+  function nodePos(L) {
+    const ch = chapters[chapterOf(L)];
+    const n = ch.nodes[L % PER];
+    return new THREE.Vector3(ch.group.position.x + n.local.x, ch.group.position.y + TOP + 0.08, ch.group.position.z + n.local.z);
+  }
+  function groundPos(c, worldVec) {
+    return new THREE.Vector3(worldVec.x, chapters[c].group.position.y + TOP, worldVec.z);
+  }
+  // direction du sentier au niveau L (pour placer la caméra derrière le voyageur)
+  function pathDir(L) {
+    const a = nodePos(Math.max(0, L - 1)), b = nodePos(L + 1 < (chapters.length) * PER && chapters[chapterOf(L + 1)] ? L + 1 : L);
+    const d = b.sub(a); d.y = 0;
+    return d.lengthSq() > 0.001 ? d.normalize() : new THREE.Vector3(1, 0, 0);
   }
 
   // ------------------------------------------------------------------
   // Le voyageur
   // ------------------------------------------------------------------
-  const hero = { group: null, body: null, scarf: null, island: 0, route: null, seg: 0, segT: 0, facing: 0, hop: 0, celebrate: 0 };
+  // free : endroit où il se promène hors du sentier ({ c, at }), sinon il est sur la pierre `selected`
+  const hero = { group: null, body: null, scarf: null, route: null, seg: 0, segT: 0, facing: 0, celebrate: 0, wait: 0, free: null };
 
   function makeHero() {
     const g = new THREE.Group();
@@ -348,98 +404,133 @@
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = 0.012;
     g.add(shadow);
-    g.scale.setScalar(1.3);
+    g.scale.setScalar(1.15);
     scene.add(g);
     Object.assign(hero, { group: g, body, scarf: scarfMat, shadow, tail });
   }
 
-  // point où le voyageur se tient sur une île (côté caméra, à côté du monument)
-  function spot(i) {
-    const isl = islands[i];
-    const a = isl.angle + 0.55;
-    const p = isl.group.position;
-    return { x: p.x + Math.cos(a) * isl.r * 0.55, z: p.z + Math.sin(a) * isl.r * 0.55, island: i };
-  }
-  function edge(i, toward) {
-    const a = islands[i].group.position, b = islands[toward].group.position;
-    const dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz);
-    const k = islands[i].r * 0.8 / d;
-    return { x: a.x + dx * k, z: a.z + dz * k, island: i };
-  }
-  // hauteur et position vivantes d'un point de passage (les îles et pierres bougent)
+  // point de passage → position vivante (les îles tanguent, les pierres flottent)
   function wpPos(wp) {
-    if (wp.stone) return new THREE.Vector3(wp.stone.position.x, wp.stone.position.y + 0.1, wp.stone.position.z);
-    return new THREE.Vector3(wp.x, islands[wp.island].group.position.y + TOP, wp.z);
+    if (wp.level != null) return nodePos(wp.level);
+    if (wp.stone) return new THREE.Vector3(wp.stone.position.x, wp.stone.position.y + 0.11, wp.stone.position.z);
+    return groundPos(wp.c, wp.at);
   }
 
-  function placeHero(i) {
-    hero.island = i;
-    hero.route = null;
-    const s = spot(i);
-    hero.group.position.copy(wpPos(s));
-    hero.scarf.color.copy(new THREE.Color(islands[i].game.accent));
-  }
-
-  // itinéraire d'île en île par les pierres, dans le sens le plus court praticable
-  function travelTo(dest) {
-    const n = islands.length;
-    if (dest === hero.island && !hero.route) return;
-    const from = hero.route ? hero.route[hero.route.length - 1].island : hero.island;
-    if (hero.route) placeHero(from); // on termine instantanément l'ancien trajet
-    const tryDir = (dir) => {
-      const hops = [];
-      let i = from;
-      while (i !== dest) {
-        const j = (i + dir + n) % n;
-        if (!links[i + '-' + j]) return null;
-        hops.push([i, j]);
-        i = j;
+  // itinéraire de pierre en pierre ; entre deux îles on passe la porte puis le gué
+  function routeBetween(a, b) {
+    const route = [{ level: a }];
+    const dir = b > a ? 1 : -1;
+    for (let L = a; L !== b; L += dir) {
+      const n = L + dir;
+      if (chapterOf(n) !== chapterOf(L)) {
+        const c = Math.min(chapterOf(n), chapterOf(L));
+        const leg = [{ c, at: exitOf(c) }]
+          .concat(chapters[c].stones.map((s) => ({ stone: s })))
+          .concat([{ c: c + 1, at: entryOf(c + 1) }]);
+        route.push(...(dir > 0 ? leg : leg.reverse()));
       }
-      return hops;
-    };
-    const fwd = tryDir(1), back = tryDir(-1);
-    const hops = !fwd ? back : !back ? fwd : (fwd.length <= back.length ? fwd : back);
-    if (!hops) { placeHero(dest); return; }
-    const route = [Object.assign({}, spot(from), { x: hero.group.position.x, z: hero.group.position.z })];
-    hops.forEach(([i, j]) => {
-      route.push(edge(i, j));
-      links[i + '-' + j].forEach((s) => route.push({ stone: s, island: -1 }));
-      route.push(edge(j, i));
-    });
-    route.push(spot(dest));
+      route.push({ level: n });
+    }
+    return route;
+  }
+
+  // pierre la plus proche d'un point, parmi les niveaux accessibles d'une île
+  function nearestNode(c, at) {
+    let best = c * PER, bd = Infinity;
+    for (let L = c * PER; L < c * PER + PER && L <= done; L++) {
+      const p = nodePos(L);
+      const d = Math.hypot(p.x - at.x, p.z - at.z);
+      if (d < bd) { bd = d; best = L; }
+    }
+    return best;
+  }
+
+  // point de départ d'un trajet : la pierre où l'on se tient, ou l'endroit où l'on se promène
+  function startLeg() {
+    if (hero.route) { // un trajet en cours : on repart de là où il mène
+      const end = hero.route[hero.route.length - 1];
+      hero.route = null;
+      if (end.level != null) { selected = end.level; hero.free = null; } else hero.free = { c: end.c, at: end.at };
+    }
+    if (!hero.free) return { route: [{ level: selected }], node: selected };
+    const n = nearestNode(hero.free.c, hero.free.at);
+    return { route: [{ c: hero.free.c, at: hero.free.at.clone() }, { level: n }], node: n };
+  }
+
+  function go(route, delay) {
+    // on retire les doublons consécutifs (même pierre)
+    route = route.filter((wp, i) => i === 0 || wp.level == null || route[i - 1].level !== wp.level);
+    if (route.length < 2) { hero.route = null; return; }
     hero.route = route;
     hero.seg = 0;
     hero.segT = 0;
-    hero.dest = dest;
+    hero.wait = delay || 0;
+  }
+
+  // aller jusqu'à la pierre d'un niveau
+  function travelTo(L, delay) {
+    const s = startLeg();
+    if (Math.abs(L - s.node) > 14 || !chapters[chapterOf(L)]) { // trop loin : on y va directement
+      hero.route = null; hero.free = null; selected = L;
+      setMarker();
+      if (opts.onSelect) opts.onSelect(L);
+      return;
+    }
+    go(s.route.concat(routeBetween(s.node, L).slice(1)), delay);
+  }
+
+  // se promener librement jusqu'à un point du sol d'une île
+  function wanderTo(c, at) {
+    const s = startLeg();
+    const here = hero.free ? hero.free.c : chapterOf(s.node);
+    if (c === here) {
+      go([s.route[0], { c, at }]); // même île : on y va tout droit
+    } else {
+      const target = nearestNode(c, at);
+      const first = hero.free ? s.route : [{ level: s.node }];
+      go(first.concat(routeBetween(s.node, target).slice(1)).concat([{ c, at }]));
+    }
+    if (opts.onSelect) opts.onSelect(null);
   }
 
   function updateHero(dt, t) {
     const g = hero.group;
     let moving = false, lift = 0;
-    if (hero.route) {
+    if (hero.wait > 0) hero.wait -= dt;
+    else if (hero.route) {
       const a = hero.route[hero.seg], b = hero.route[hero.seg + 1];
       const pa = wpPos(a), pb = wpPos(b);
-      const isHop = !!(a.stone || b.stone);
+      // on marche sur le sol ; on saute de pierre en pierre
+      const isWalk = !(a.stone || b.stone) && !(a.level != null && b.level != null);
       const dist = Math.hypot(pb.x - pa.x, pb.z - pa.z);
-      const dur = isHop ? 0.36 : Math.max(0.12, dist / 2.2);
+      const dur = isWalk ? Math.max(0.15, dist / 2.2) : 0.3 + dist * 0.05;
       hero.segT += dt / dur;
       const k = Math.min(1, hero.segT);
       g.position.lerpVectors(pa, pb, k);
-      if (isHop) { lift = Math.sin(Math.PI * k) * 0.42; g.position.y += lift; }
+      if (!isWalk) { lift = Math.sin(Math.PI * k) * (0.28 + dist * 0.06); g.position.y += lift; }
       hero.facing = Math.atan2(pb.x - pa.x, pb.z - pa.z);
       moving = true;
       if (hero.segT >= 1) {
         if (b.stone) b.stone.userData.dip = 1;
+        if (b.level != null) C.sfx.tap();
         hero.seg++;
         hero.segT = 0;
         if (hero.seg >= hero.route.length - 1) {
-          hero.island = hero.dest;
+          const end = hero.route[hero.route.length - 1];
           hero.route = null;
+          if (end.level != null) {
+            hero.free = null;
+            selected = end.level;
+            setMarker();
+            if (opts.onSelect) opts.onSelect(selected);
+          } else {
+            hero.free = { c: end.c, at: end.at };
+          }
         }
       }
-    } else {
-      // au repos : il suit le léger tangage de son île et regarde la caméra
-      g.position.copy(wpPos(spot(hero.island)));
+    }
+    if (!moving) {
+      g.position.copy(hero.free ? groundPos(hero.free.c, hero.free.at) : nodePos(selected));
       hero.facing = Math.atan2(camera.position.x - g.position.x, camera.position.z - g.position.z);
     }
     if (hero.celebrate > 0) {
@@ -448,62 +539,17 @@
       g.position.y += jump;
       lift += jump;
     }
-    // l'ombre reste au sol et rétrécit pendant les sauts
     hero.shadow.position.y = 0.012 - lift / g.scale.y;
     hero.shadow.scale.setScalar(1 - Math.min(0.5, lift));
-    // rotation douce vers la direction voulue
     let d = hero.facing - g.rotation.y;
     d = Math.atan2(Math.sin(d), Math.cos(d));
     g.rotation.y += d * (1 - Math.exp(-dt * 8));
-    // respiration / pas
-    const step = moving ? Math.abs(Math.sin(t * 11)) * 0.05 : 0;
+    const step = moving ? Math.abs(Math.sin(t * 11)) * 0.04 : 0;
     hero.body.position.y = step;
     hero.body.scale.y = 1 + (moving ? 0 : Math.sin(t * 2.2) * 0.025);
     hero.body.rotation.z = moving ? Math.sin(t * 11) * 0.06 : 0;
     hero.tail.rotation.x = 0.5 + (moving ? 0.5 + Math.sin(t * 14) * 0.25 : Math.sin(t * 1.5) * 0.1);
-    // l'écharpe prend la teinte de l'île où il se trouve
-    const isl = islands[hero.route ? hero.dest : hero.island];
-    hero.scarf.color.lerp(new THREE.Color(isl.game.accent), 1 - Math.exp(-dt * 2));
-  }
-
-  // ------------------------------------------------------------------
-  // Progression : pièces, arbres, îles débloquées, orbes du jour
-  // ------------------------------------------------------------------
-  function update(progress, animate) {
-    const total = progress.reduce((s, p) => s + p.solved, 0);
-    let unlockedChanged = false;
-    islands.forEach((isl, i) => {
-      const p = progress[i];
-      const wasUnlocked = isl.unlocked;
-      isl.unlocked = total >= UNLOCK[i];
-      if (isl.unlocked !== wasUnlocked) unlockedChanged = true;
-      if (isl.unlocked && !wasUnlocked && animate) isl.fade = 0.15; // émerge doucement
-      isl.orb.visible = isl.unlocked && !p.daily;
-      isl.meadow.material.color.copy(tint(isl.game.accent, 0.22 + Math.min(1, p.solved / 12) * 0.45));
-
-      const want = Math.min(MAX_PIECES, p.solved);
-      while (isl.pieces < want) {
-        const m = piece(isl.game.id, isl.pieces, isl.game.accent);
-        isl.monument.add(m);
-        if (animate) {
-          m.userData.targetY = m.position.y;
-          m.position.y += 5 + isl.drops.length * 1.2;
-          m.userData.delay = 0.9 + isl.drops.length * 0.45;
-          isl.drops.push(m);
-        }
-        isl.pieces++;
-      }
-      // un arbre toutes les trois grilles, quatre au plus
-      const wantTrees = Math.min(4, Math.floor(p.solved / 3));
-      while (isl.trees < wantTrees) {
-        const tr = tree(isl, isl.trees);
-        isl.grove.add(tr);
-        if (animate) { tr.scale.setScalar(0.01); isl.sprouts.push(tr); }
-        isl.trees++;
-      }
-    });
-    if (unlockedChanged || !stones.length) makeStones();
-    if (!islands[hero.island].unlocked) placeHero(0);
+    hero.scarf.color.lerp(new THREE.Color(opts.levelInfo(selected).accent), 1 - Math.exp(-dt * 2));
   }
 
   // ------------------------------------------------------------------
@@ -519,82 +565,100 @@
 
   function tick(dt, t) {
     simTime = t;
-    // houle
+    const focus = hero.group.position;
+
+    // la mer suit la caméra par pas de maille (sans faire glisser la houle)
+    const cell = SEA_SIZE / SEA_SEG;
+    sea.position.set(Math.round(cam.tx / cell) * cell, 0, Math.round(cam.tz / cell) * cell);
     for (let i = 0; i < seaPos.count; i++) {
-      const x = seaBase[i * 3], z = seaBase[i * 3 + 2];
+      const x = seaBase[i * 3] + sea.position.x, z = seaBase[i * 3 + 2] + sea.position.z;
       seaPos.setY(i, Math.sin(x * 0.25 + t * 0.6) * 0.09 + Math.cos(z * 0.3 + t * 0.45) * 0.08 - 0.05);
     }
     seaPos.needsUpdate = true;
     sea.geometry.computeVertexNormals();
 
-    islands.forEach((isl) => {
-      isl.group.position.y = Math.sin(t * 0.5 + isl.phase) * 0.04;
-      // brume : les îles verrouillées restent des silhouettes
-      const target = isl.unlocked ? 1 : 0.16;
-      isl.fade += (target - isl.fade) * (1 - Math.exp(-dt * 0.8));
-      isl.fadeMats.forEach((m) => { m.opacity = isl.fade; });
-      isl.monument.visible = isl.grove.visible = isl.unlocked;
-      isl.orb.position.y = 2.4 + Math.sin(t * 1.3 + isl.phase) * 0.18;
-      // chute des nouvelles pièces
-      isl.drops = isl.drops.filter((m) => {
-        if (m.userData.delay > 0) { m.userData.delay -= dt; return true; }
-        m.userData.v = (m.userData.v || 0) + dt * 14;
-        m.position.y -= m.userData.v * dt;
-        if (m.position.y <= m.userData.targetY) {
-          m.position.y = m.userData.targetY;
-          C.sfx.place();
-          if (hero.island === islands.indexOf(isl) && !hero.route) hero.celebrate = 1;
-          return false;
-        }
-        return true;
+    chapters.forEach((ch) => {
+      if (!ch) return;
+      ch.group.position.y = Math.sin(t * 0.5 + ch.phase) * 0.04;
+      const reached = done >= ch.c * PER;
+      ch.fade += ((reached ? 1 : 0.22) - ch.fade) * (1 - Math.exp(-dt * 0.8));
+      ch.fadeMats.forEach((m) => { m.opacity = ch.fade; });
+      ch.nodes.forEach((n) => {
+        n.mesh.material.opacity = Math.min(ch.fade, n.mesh.userData.alpha == null ? 1 : n.mesh.userData.alpha);
       });
-      // les jeunes arbres poussent
-      isl.sprouts = isl.sprouts.filter((tr) => {
+      ch.grove.visible = reached;
+      ch.gate.visible = ch.fade > 0.3;
+      // la porte s'ouvre : le voile se dissipe
+      if (ch.opened) ch.open = Math.min(1, ch.open + dt * 0.6);
+      ch.veil.material.opacity = 0.32 * (1 - ch.open) * (0.85 + Math.sin(t * 2) * 0.15);
+      ch.veil.visible = ch.open < 1;
+      ch.stones.forEach((s) => {
+        const u = s.userData;
+        if (ch.opened) {
+          if (u.delay > 0) u.delay -= dt;
+          else u.raise = Math.min(1, u.raise + dt * 1.4);
+        }
+        u.dip = Math.max(0, u.dip - dt * 3);
+        const ease = 1 - Math.pow(1 - u.raise, 3);
+        s.position.y = -1.3 + ease * 1.32 + Math.sin(t * 0.7 + u.phase) * 0.03 * ease - Math.sin(u.dip * Math.PI) * 0.06;
+        s.visible = u.raise > 0;
+      });
+      ch.ripples.forEach((ring) => {
+        const k = ((t * 0.25 + ring.userData.offset) % 2.5) / 2.5;
+        const s = ring.userData.base + k * 1.8;
+        ring.scale.set(s, s, 1);
+        ring.material.opacity = reached ? (1 - k) * 0.45 * Math.min(1, k * 6) : 0;
+      });
+      ch.sprouts = ch.sprouts.filter((tr) => {
         const s = Math.min(1, tr.scale.x + dt * 0.8);
         tr.scale.setScalar(s);
         return s < 1;
       });
     });
-    ripples.forEach(({ ring, island }) => {
-      const isl = islands[island];
-      const k = ((t * 0.25 + ring.userData.offset) % 2.5) / 2.5;
-      const s = ring.userData.base + k * 1.8;
-      ring.scale.set(s, s, 1);
-      ring.material.opacity = isl.unlocked ? (1 - k) * 0.45 * Math.min(1, k * 6) : 0;
-    });
-    stones.forEach((s) => {
-      s.userData.dip = Math.max(0, s.userData.dip - dt * 3);
-      s.position.y = 0.02 + Math.sin(t * 0.7 + s.userData.phase) * 0.03 - Math.sin(s.userData.dip * Math.PI) * 0.06;
-    });
+
+    // la pierre du prochain niveau respire ; l'icône du mini-jeu flotte au-dessus de la pierre choisie
+    const cur = chapters[chapterOf(done)] && nodePos(done);
+    pulse.visible = !!cur;
+    if (cur) {
+      const k = (t * 0.6) % 1;
+      pulse.position.set(cur.x, cur.y - 0.02, cur.z);
+      pulse.scale.setScalar(0.4 + k * 0.7);
+      pulse.material.opacity = (1 - k) * 0.7;
+      pulse.material.color.set(opts.levelInfo(done).accent);
+    }
+    const sel = nodePos(selected);
+    marker.position.set(sel.x, sel.y + 1.55 + Math.sin(t * 1.6) * 0.08, sel.z);
+    marker.material.opacity += ((hero.route || hero.free ? 0 : 1) - marker.material.opacity) * (1 - Math.exp(-dt * 5));
+
     clouds.forEach((c) => {
       const u = c.userData;
       u.a += dt * u.speed;
-      c.position.set(Math.cos(u.a) * u.r, u.y, Math.sin(u.a) * u.r);
+      c.position.set(focus.x + Math.cos(u.a) * u.r, u.y, focus.z + Math.sin(u.a) * u.r);
       c.rotation.y = -u.a;
     });
     birds.forEach((b) => {
       const u = b.userData;
       u.a += dt * u.speed;
-      b.position.set(Math.cos(u.a) * u.rad, u.y + Math.sin(t * 0.7 + u.phase) * 0.4, Math.sin(u.a) * u.rad);
+      b.position.set(focus.x + Math.cos(u.a) * u.rad, u.y + Math.sin(t * 0.7 + u.phase) * 0.4, focus.z + Math.sin(u.a) * u.rad);
       b.rotation.y = -u.a;
       const flap = Math.sin(t * 6 + u.phase) * 0.5;
       u.l.rotation.z = flap; u.r.rotation.z = -flap;
     });
+    motes.position.set(focus.x, Math.sin(t * 0.2) * 0.3, focus.z);
     motes.rotation.y = t * 0.01;
-    motes.position.y = Math.sin(t * 0.2) * 0.3;
 
     updateHero(dt, t);
 
-    // caméra : dérive lente au repos ; en voyage elle accompagne le voyageur
-    if (focused < 0 && !drag) goal.theta += dt * 0.025;
-    if (focused >= 0 && hero.route) {
-      goal.tx = hero.group.position.x; goal.ty = 0.9; goal.tz = hero.group.position.z;
-    } else if (focused >= 0) {
-      const p = islands[focused].group.position;
-      goal.tx = p.x; goal.ty = 0.9; goal.tz = p.z;
-    }
-    const k = 1 - Math.exp(-dt * 2.2);
-    Object.keys(cam).forEach((key) => { cam[key] += (goal[key] - cam[key]) * k; });
+    // caméra : derrière le voyageur, dans le sens du sentier
+    const dir = pathDir(selected);
+    if (holdTheta > 0) holdTheta -= dt; else userTheta *= 1 - Math.min(1, dt * 0.4);
+    goal.theta = Math.atan2(-dir.z, -dir.x) + 0.55 + userTheta;
+    goal.tx = focus.x + dir.x * 1.6; goal.ty = 0.7; goal.tz = focus.z + dir.z * 1.6;
+    const k = 1 - Math.exp(-dt * 2);
+    let dth = goal.theta - cam.theta;
+    dth = Math.atan2(Math.sin(dth), Math.cos(dth));
+    cam.theta += dth * k;
+    ['elev', 'radius', 'tx', 'ty', 'tz'].forEach((key) => { cam[key] += (goal[key] - cam[key]) * k; });
     const ce = Math.cos(cam.elev);
     camera.position.set(
       cam.tx + Math.cos(cam.theta) * ce * cam.radius,
@@ -602,11 +666,13 @@
       cam.tz + Math.sin(cam.theta) * ce * cam.radius
     );
     camera.lookAt(cam.tx, cam.ty, cam.tz);
+    sun.position.set(cam.tx + 10, 18, cam.tz + 8);
+    sun.target.position.set(cam.tx, 0, cam.tz);
     renderer.render(scene, camera);
   }
 
   // ------------------------------------------------------------------
-  // Interaction : glisser pour tourner, toucher une île pour y aller
+  // Interaction : glisser pour tourner / zoomer, toucher une pierre franchie
   // ------------------------------------------------------------------
   let drag = null;
 
@@ -615,16 +681,26 @@
     const v = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
     const rc = new THREE.Raycaster();
     rc.setFromCamera(v, camera);
-    const hits = rc.intersectObjects(islands.map((i) => i.group), true);
-    for (const h of hits) {
-      const i = h.object.userData.island;
-      if (i != null && islands[i].unlocked) return i;
-    }
-    return -1;
+    const meshes = [];
+    chapters.forEach((ch) => ch && ch.nodes.forEach((n) => meshes.push(n.mesh)));
+    const hit = rc.intersectObjects(meshes, false)[0];
+    if (hit) return hit.object.userData.level;
+    // tolérance : la pierre la plus proche du point touché sur le sol
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -TOP);
+    const p = new THREE.Vector3();
+    if (!rc.ray.intersectPlane(plane, p)) return -1;
+    let best = -1, bd = 0.55;
+    meshes.forEach((m) => {
+      const w = new THREE.Vector3();
+      m.getWorldPosition(w);
+      const d = Math.hypot(w.x - p.x, w.z - p.z);
+      if (d < bd) { bd = d; best = m.userData.level; }
+    });
+    return best;
   }
 
   function onDown(e) {
-    drag = { x: e.clientX, y: e.clientY, t: performance.now(), moved: 0, theta: goal.theta, elev: goal.elev };
+    drag = { x: e.clientX, y: e.clientY, t: performance.now(), moved: 0, theta: userTheta, radius: goal.radius };
     renderer.domElement.setPointerCapture(e.pointerId);
   }
   function onMove(e) {
@@ -632,8 +708,10 @@
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
     drag.moved = Math.max(drag.moved, Math.abs(dx) + Math.abs(dy));
     if (drag.moved > 8) {
-      goal.theta = drag.theta + dx * 0.006;
-      if (focused < 0) goal.elev = Math.max(0.35, Math.min(1.25, drag.elev + dy * 0.004));
+      userTheta = drag.theta + dx * 0.006;
+      holdTheta = 3;
+      goal.radius = Math.max(7, Math.min(34, drag.radius + dy * 0.04));
+      goal.elev = 0.45 + (goal.radius - 7) / 27 * 0.6;
     }
   }
   function onUp(e) {
@@ -641,27 +719,25 @@
     const tap = drag.moved < 8 && performance.now() - drag.t < 400;
     drag = null;
     if (!tap) return;
-    const i = pick(e);
-    if (i >= 0) focusIsland(i, true, true); else unfocus(true);
+    const L = pick(e);
+    if (L >= 0 && L <= done) { travelTo(L); C.sfx.tap(); return; }
+    // sinon : promenade libre sur le sol d'une île déjà atteinte
+    const p = groundPoint(e);
+    if (!p) return;
+    chapters.forEach((ch) => {
+      if (!ch || done < ch.c * PER) return;
+      const d = Math.hypot(p.x - ch.group.position.x, p.z - ch.group.position.z);
+      if (d < ch.r * 0.85) wanderTo(ch.c, new THREE.Vector3(p.x, 0, p.z));
+    });
   }
 
-  function focusIsland(i, notify, walk) {
-    focused = i;
-    goal.radius = 9.5;
-    goal.elev = 0.42;
-    goal.theta = islands[i].angle; // la caméra se place côté large, regard vers le centre
-    if (walk) travelTo(i); else placeHero(i);
-    C.sfx.tap();
-    try { localStorage.setItem('odysseum.here', String(i)); } catch (e) { /* ignore */ }
-    if (notify && opts.onFocus) opts.onFocus(islands[i].game.id);
-  }
-  function unfocus(notify) {
-    if (focused < 0) return;
-    focused = -1;
-    goal.tx = goal.ty = goal.tz = 0;
-    goal.radius = overview;
-    goal.elev = 0.8;
-    if (notify && opts.onFocus) opts.onFocus(null);
+  function groundPoint(e) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    const v = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+    const rc = new THREE.Raycaster();
+    rc.setFromCamera(v, camera);
+    const p = new THREE.Vector3();
+    return rc.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -TOP), p) ? p : null;
   }
 
   function resize() {
@@ -669,10 +745,8 @@
     const w = host.clientWidth, h = host.clientHeight;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
-    camera.fov = w < h ? 50 : 40;
+    camera.fov = w < h ? 55 : 42;
     camera.updateProjectionMatrix();
-    overview = w < h ? 44 : 30; // en portrait on recule pour voir tout l'archipel
-    if (focused < 0) goal.radius = overview;
   }
 
   // ------------------------------------------------------------------
@@ -694,22 +768,30 @@
     camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
     makeSky();
     scene.add(new THREE.HemisphereLight('#ffffff', '#b9c6ca', 0.5));
-    const sun = new THREE.DirectionalLight('#fff4e6', 0.62);
-    sun.position.set(10, 18, 8);
+    sun = new THREE.DirectionalLight('#fff4e6', 0.62);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
-    Object.assign(sun.shadow.camera, { left: -18, right: 18, top: 18, bottom: -18, near: 1, far: 60 });
-    scene.add(sun);
+    Object.assign(sun.shadow.camera, { left: -14, right: 14, top: 14, bottom: -14, near: 1, far: 60 });
+    scene.add(sun, sun.target);
 
     makeSea();
     makeClouds();
     makeBirds();
     makeMotes();
-    islands = options.games.map((g, i) => makeIsland(g, i, options.games.length));
+
+    pulse = new THREE.Mesh(new THREE.RingGeometry(0.36, 0.42, 40),
+      new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, depthWrite: false }));
+    pulse.rotation.x = -Math.PI / 2;
+    scene.add(pulse);
+    marker = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, opacity: 0 }));
+    marker.scale.set(0.75, 0.75, 1);
+    scene.add(marker);
+
+    done = options.done || 0;
+    selected = Math.min(options.selected != null ? options.selected : done, done);
+    refresh(false);
     makeHero();
-    let here = 0;
-    try { here = +(localStorage.getItem('odysseum.here') || 0) || 0; } catch (e) { /* ignore */ }
-    placeHero(Math.min(here, islands.length - 1));
+    setMarker();
 
     const el = renderer.domElement;
     el.addEventListener('pointerdown', onDown);
@@ -722,14 +804,29 @@
     return true;
   };
 
-  World.update = update;
-  World.focus = (id) => { const i = islands.findIndex((x) => x.game.id === id); if (i >= 0) focusIsland(i, false, false); };
-  World.unfocus = () => unfocus(false);
-  World.go = (id) => { const i = islands.findIndex((x) => x.game.id === id); if (i >= 0) focusIsland(i, false, true); };
-  World.debug = () => ({
-    island: hero.island, route: hero.route ? hero.route.length : 0, seg: hero.seg,
-    pos: hero.group.position.toArray().map((v) => +v.toFixed(2)), stones: stones.length
-  });
+  function setMarker() {
+    const info = opts.levelInfo(selected);
+    marker.material.map = iconTexture(info.id, info.accent, info.boss);
+    marker.material.needsUpdate = true;
+    marker.scale.setScalar(info.boss ? 0.95 : 0.75);
+  }
+
+  // Le joueur a progressé : la porte s'ouvre si besoin, puis le voyageur avance.
+  World.progress = function (newDone, animate) {
+    const crossed = chapterOf(newDone) > chapterOf(done);
+    const prevDone = done;
+    done = newDone;
+    refresh(animate);
+    if (animate && newDone > prevDone) {
+      hero.celebrate = 1;
+      travelTo(newDone, crossed ? 2.4 : 0.9);
+    } else {
+      selected = Math.min(selected, done);
+    }
+    setMarker();
+  };
+  World.select = function (L) { travelTo(Math.min(L, done)); setMarker(); };
+  World.selected = () => selected;
   World.start = function () {
     if (!World.ok || running) return;
     running = true;
@@ -738,10 +835,12 @@
     raf = requestAnimationFrame(frame);
   };
   World.stop = function () { running = false; cancelAnimationFrame(raf); };
-  // outil de test : avance l'animation de `sec` secondes sans attendre l'écran
-  World.advance = function (sec) {
-    for (let i = 0; i < sec * 30; i++) tick(1 / 30, simTime + 1 / 30);
-  };
+  World.refreshMarker = setMarker;
+  // outils de test
+  World.advance = function (sec) { for (let i = 0; i < sec * 30; i++) tick(1 / 30, simTime + 1 / 30); };
+  World.wander = (c, dx, dz) => { const p = centerOf(c); wanderTo(c, new THREE.Vector3(p.x + dx, 0, p.z + dz)); };
+  World.debug = () => ({ done, selected, free: !!hero.free, route: hero.route ? hero.route.length : 0, seg: hero.seg, chapters: chapters.length,
+    pos: hero.group.position.toArray().map((v) => +v.toFixed(2)) });
 
   document.addEventListener('visibilitychange', () => {
     if (!World.ok) return;

@@ -1,4 +1,4 @@
-// Coquille de l'application : accueil, rituel du jour, variantes, réglages, partie.
+// Odysseum — coquille de l'application : le sentier, les niveaux, les boss, la partie.
 // Volontairement silencieuse : pas de chrono, pas de compteur affiché.
 (function () {
   'use strict';
@@ -22,111 +22,116 @@
     coffre: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.4"/><path d="M12 4v3M4 12h1.5M18.5 12H20"/>'
   };
   const icon = (id) => '<svg viewBox="0 0 24 24">' + ICON[id] + '</svg>';
-
   const TOOL_ICON = {
     fill: '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" class="f"/></svg>',
     cross: '<svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></svg>'
   };
 
-  const DAILY_LEVEL = { flux: 20, reines: 25, astres: 24, paves: 22, pixels: 18, serpent: 18, lumieres: 16, coffre: 12 };
-  const MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
-
+  const game = (id) => C.games.find((g) => g.id === id);
   const variantsOf = (g) => g.variants || [{ id: 'classic', name: 'Classique' }];
-  const variantFor = (g, mode) => (mode === 'variant' && variantsOf(g)[1] ? variantsOf(g)[1].id : 'classic');
   const rulesOf = (g, v) => (Array.isArray(g.rules) ? g.rules : g.rules[v] || g.rules.classic);
   const dataKey = (g, v) => (v === 'classic' ? g.id : g.id + ':' + v);
 
-  // Le rituel du jour alterne les règles d'un jour à l'autre.
-  function dailyVariant(g) {
-    const vs = variantsOf(g);
-    const dayNum = Math.floor(new Date(C.todayKey() + 'T12:00:00').getTime() / 86400000);
-    return vs[(dayNum + C.hashString(g.id)) % vs.length].id;
+  // ------------------------------------------------------------------
+  // Le parcours : chaque île introduit un mini-jeu, puis mélange ceux découverts.
+  // Le dernier niveau de chaque île est un boss : trois grilles d'affilée.
+  // ------------------------------------------------------------------
+  const PER = 10;
+  const ORDER = ['flux', 'reines', 'astres', 'paves', 'pixels', 'serpent', 'lumieres', 'coffre'];
+
+  function levelInfo(L) {
+    const c = Math.floor(L / PER), k = L % PER;
+    const rng = C.makeRng('sentier:' + L);
+    const featured = ORDER[c % ORDER.length];
+    const known = ORDER.slice(0, Math.min(ORDER.length, c + 1));
+    const boss = k === PER - 1;
+    const base = 1 + Math.floor(L * 0.5);
+    const pickVariant = (id, chance) => {
+      const g = game(id);
+      // une variante seulement pour un jeu déjà connu depuis au moins une île
+      const ok = g.variants && g.variants[1] && (ORDER.indexOf(id) < c || c >= ORDER.length);
+      return ok && rng() < chance ? g.variants[1].id : 'classic';
+    };
+    const vChance = c >= 2 ? 0.3 : 0;
+    let steps;
+    if (boss) {
+      const others = known.filter((id) => id !== featured);
+      const ids = [featured, others.length ? rng.pick(others) : featured, featured];
+      steps = ids.map((id) => ({ id, variant: pickVariant(id, c >= 2 ? 0.5 : 0), level: base + 6 }));
+    } else {
+      const id = k === 0 || rng() < 0.45 ? featured : rng.pick(known);
+      steps = [{ id, variant: pickVariant(id, vChance), level: base }];
+    }
+    return { L, c, k, boss, id: steps[0].id, accent: ACCENT[boss ? featured : steps[0].id], steps };
   }
 
-  let mode = 'classic';
-  try { mode = localStorage.getItem('carnet.mode') || 'classic'; } catch (e) { /* ignore */ }
-
-  const screens = { home: $('#home'), play: $('#play') };
-  function show(name) {
-    Object.entries(screens).forEach(([k, el]) => { el.hidden = k !== name; });
-    window.scrollTo(0, 0);
-  }
-
-  // ------------------------------ Accueil ------------------------------
-  const solvedCount = (g) => variantsOf(g).reduce((s, v) => s + C.gameData(dataKey(g, v.id)).solved, 0);
-  const dailyDone = (g) => (C.store.daily[C.todayKey()] || {})[g.id] != null;
-  let focusedGame = null;
+  const J = (C.store.journey = C.store.journey || { done: 0, selected: 0 });
+  let selected = Math.min(J.selected || 0, J.done);
+  let standing = true; // le voyageur est sur une pierre (sinon il se promène)
   let worldReady = false;
 
   function initWorld() {
     worldReady = !!(C.world && C.world.init($('#world'), {
-      games: C.games.map((g) => ({ id: g.id, name: g.name, accent: ACCENT[g.id] })),
-      onFocus: (id) => setFocus(id ? C.games.find((g) => g.id === id) : null)
+      done: J.done,
+      selected,
+      levelInfo,
+      iconSvg: (id) => ICON[id],
+      onSelect: (L) => {
+        standing = L != null;
+        if (standing) { selected = L; J.selected = L; C.save(); }
+        renderPlay();
+      }
     }));
-    $('#fallback').hidden = worldReady;
   }
 
-  function setFocus(game) {
-    focusedGame = game;
-    const f = $('#focus');
-    if (!game) { f.hidden = true; return; }
-    f.style.setProperty('--game', ACCENT[game.id]);
-    $('#focus-icon').innerHTML = icon(game.id);
-    $('#focus-daily').hidden = dailyDone(game);
-    f.hidden = false;
-    f.classList.remove('in'); void f.offsetWidth; f.classList.add('in');
-  }
-
-  function renderHome(animate) {
-    document.querySelectorAll('.switch-mode button').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
-    if (worldReady) {
-      C.world.update(C.games.map((g) => ({ solved: solvedCount(g), daily: dailyDone(g) })), !!animate);
-      if (focusedGame) setFocus(focusedGame);
-    }
-
-    const gl = $('#game-list');
-    gl.innerHTML = '';
-    C.games.forEach((g) => {
-      const b = document.createElement('button');
-      b.className = 'tile';
-      b.style.setProperty('--game', ACCENT[g.id]);
-      b.innerHTML = '<span class="tile-icon">' + icon(g.id) + '</span><span class="tile-name">' + g.name.toLowerCase() + '</span>';
-      b.addEventListener('click', () => startGame(g, { daily: false, variant: variantFor(g, mode) }));
-      gl.appendChild(b);
-    });
-
-    $('#opt-sound').checked = !!C.store.settings.sound;
-    $('#opt-music').checked = !!C.store.settings.music;
-    $('#opt-vibrate').checked = !!C.store.settings.vibrate;
-    $('#opt-mix').value = C.store.settings.mix;
+  // Le bouton unique de l'accueil montre le mini-jeu qui attend sur la pierre choisie.
+  function renderPlay() {
+    const b = $('#go');
+    const info = levelInfo(selected);
+    b.hidden = worldReady && !standing;
+    b.style.setProperty('--game', info.accent);
+    b.classList.toggle('boss', info.boss);
+    b.classList.toggle('replay', selected < J.done);
+    b.innerHTML = icon(info.id);
+    b.setAttribute('aria-label', 'Jouer');
+    b.classList.remove('in'); void b.offsetWidth; b.classList.add('in');
   }
 
   // ----------------------------- Partie -----------------------------
   let session = null;
 
-  function startGame(game, opts) {
+  function startLevel(L) {
+    const info = levelInfo(L);
+    playStep(info, 0);
+  }
+
+  function playStep(info, stepIndex) {
     if (session) session.stop();
-    const variant = opts.variant || 'classic';
-    const data = C.gameData(dataKey(game, variant));
-    const level = opts.daily ? DAILY_LEVEL[game.id] : data.level;
-    const seed = opts.daily ? 'day:' + C.todayKey() + ':' + game.id : 'lvl:' + game.id + ':' + variant + ':' + level;
+    const step = info.steps[stepIndex];
+    const g = game(step.id);
+    const variant = step.variant;
 
     if (worldReady) C.world.stop();
     show('play');
-    $('#play').style.setProperty('--game', ACCENT[game.id]);
-    $('#play-icon').innerHTML = icon(game.id);
+    $('#play').style.setProperty('--game', ACCENT[g.id]);
+    $('#play').classList.remove('done');
+    $('#play-icon').innerHTML = icon(g.id);
     $('#tools').hidden = true;
     $('#win').hidden = true;
-    $('#play').classList.remove('done');
+    // boss : trois petits points indiquent l'épreuve en cours
+    const steps = $('#steps');
+    steps.hidden = info.steps.length < 2;
+    steps.innerHTML = info.steps.map((s, i) => '<i class="' + (i < stepIndex ? 'past' : i === stepIndex ? 'now' : '') + '"></i>').join('');
     const host = $('#board');
     host.classList.remove('solved');
     host.innerHTML = '<div class="loading"><span></span></div>';
 
-    const rulesKey = dataKey(game, variant) + ':rules';
-    if (!C.store.games[rulesKey]) { C.store.games[rulesKey] = 1; C.save(); openRules(game, variant); }
+    const rulesKey = dataKey(g, variant) + ':rules';
+    if (!C.store.games[rulesKey]) { C.store.games[rulesKey] = 1; C.save(); openRules(g, variant); }
 
     setTimeout(() => {
-      const puzzle = game.generate(C.makeRng(seed), game.params(level, variant));
+      const seed = 'odysseum:' + info.L + ':' + stepIndex;
+      const puzzle = g.generate(C.makeRng(seed), g.params(step.level, variant));
       host.innerHTML = '';
       let elapsed = 0, won = false, tool = 'fill';
       const tick = setInterval(() => {
@@ -140,10 +145,20 @@
           if (won) return;
           won = true;
           C.sfx.win();
-          finish(game, opts, variant, level, elapsed);
+          const d = C.gameData(dataKey(g, variant));
+          d.solved++;
+          d.totalTime += elapsed;
+          C.save();
+          host.classList.add('solved');
+          if (stepIndex + 1 < info.steps.length) {
+            // boss : la grille suivante arrive après une respiration
+            setTimeout(() => playStep(info, stepIndex + 1), 1500);
+          } else {
+            finishLevel(info);
+          }
         }
       };
-      const inst = game.create(host, puzzle, api);
+      const inst = g.create(host, puzzle, api);
 
       const tools = $('#tools');
       if (inst.tools) {
@@ -163,75 +178,63 @@
         tools.hidden = false;
       }
 
-      session = {
-        game, opts, variant, inst,
-        hint() { if (!won) inst.hint(); },
-        stop() { clearInterval(tick); inst.destroy(); }
-      };
+      session = { g, variant, inst, info, hint() { if (!won) inst.hint(); }, stop() { clearInterval(tick); inst.destroy(); } };
     }, 60);
   }
 
-  function finish(game, opts, variant, level, elapsed) {
-    const data = C.gameData(dataKey(game, variant));
-    data.solved++;
-    data.totalTime += elapsed;
-    if (data.best == null || elapsed < data.best) data.best = elapsed;
-    if (opts.daily) {
-      const t = C.todayKey();
-      C.store.daily[t] = C.store.daily[t] || {};
-      if (C.store.daily[t][game.id] == null) C.store.daily[t][game.id] = elapsed;
-    } else if (level === data.level) {
-      data.level++;
+  let pendingProgress = false;
+  function finishLevel(info) {
+    if (info.L === J.done) {
+      J.done++;
+      pendingProgress = true;
     }
     C.save();
-    $('#board').classList.add('solved');
     $('#play').classList.add('done');
-    setTimeout(() => {
-      $('#win-next').hidden = !!opts.daily;
-      $('#win').hidden = false;
-    }, 900);
+    setTimeout(() => { $('#win').hidden = false; }, 900);
   }
 
-  function openRules(game, variant) {
-    $('#rules-icon').innerHTML = icon(game.id);
-    $('#rules-icon').style.setProperty('--game', ACCENT[game.id]);
-    $('#rules-list').innerHTML = rulesOf(game, variant).map((r) => '<li>' + r + '</li>').join('');
+  function openRules(g, variant) {
+    $('#rules-icon').innerHTML = icon(g.id);
+    $('#rules-icon').style.setProperty('--game', ACCENT[g.id]);
+    $('#rules-list').innerHTML = rulesOf(g, variant).map((r) => '<li>' + r + '</li>').join('');
     $('#rules').hidden = false;
   }
 
-  // Retour à l'archipel : la caméra revient sur l'île, les nouvelles pièces tombent.
+  const screens = { home: $('#home'), play: $('#play') };
+  function show(name) {
+    Object.entries(screens).forEach(([k, el]) => { el.hidden = k !== name; });
+    window.scrollTo(0, 0);
+  }
+
+  // Retour au sentier : si un niveau vient d'être franchi, le voyageur avance.
   function goHome() {
-    const game = session && session.game;
     if (session) session.stop();
     session = null;
     show('home');
     if (worldReady) {
       C.world.start();
-      if (game) { C.world.focus(game.id); setFocus(game); }
+      if (pendingProgress) {
+        C.world.progress(J.done, true);
+        standing = false; // le bouton réapparaît à l'arrivée sur la nouvelle pierre
+      }
+    } else if (pendingProgress) {
+      selected = J.done;
     }
-    renderHome(true);
+    pendingProgress = false;
+    renderPlay();
   }
 
   // --------------------------- Événements ---------------------------
-  document.querySelectorAll('.switch-mode button').forEach((b) => {
-    b.addEventListener('click', () => {
-      mode = b.dataset.mode;
-      try { localStorage.setItem('carnet.mode', mode); } catch (e) { /* ignore */ }
-      renderHome();
-    });
-  });
+  $('#go').addEventListener('click', () => startLevel(selected));
   $('#back').addEventListener('click', goHome);
   $('#btn-undo').addEventListener('click', () => session && session.inst.undo());
   $('#btn-reset').addEventListener('click', () => session && session.inst.reset());
   $('#btn-hint').addEventListener('click', () => session && session.hint());
-  $('#btn-rules').addEventListener('click', () => session && openRules(session.game, session.variant));
+  $('#btn-rules').addEventListener('click', () => session && openRules(session.g, session.variant));
   $('#rules-close').addEventListener('click', () => { $('#rules').hidden = true; });
   $('#rules').addEventListener('click', (e) => { if (e.target.id === 'rules') $('#rules').hidden = true; });
-  $('#win-home').addEventListener('click', goHome);
-  $('#win-next').addEventListener('click', () => startGame(session.game, { daily: false, variant: session.variant }));
+  $('#win-next').addEventListener('click', goHome);
 
-  $('#focus-play').addEventListener('click', () => focusedGame && startGame(focusedGame, { daily: false, variant: variantFor(focusedGame, mode) }));
-  $('#focus-daily').addEventListener('click', () => focusedGame && startGame(focusedGame, { daily: true, variant: dailyVariant(focusedGame) }));
   $('#open-settings').addEventListener('click', () => { $('#settings').hidden = false; });
   $('#settings').addEventListener('click', (e) => { if (e.target.id === 'settings') $('#settings').hidden = true; });
   $('#opt-sound').addEventListener('change', (e) => { C.audio.setSound(e.target.checked); C.sfx.tap(); });
@@ -239,13 +242,20 @@
   $('#opt-vibrate').addEventListener('change', (e) => { C.store.settings.vibrate = e.target.checked; C.save(); });
   $('#opt-mix').addEventListener('input', (e) => C.audio.setMix(+e.target.value));
   $('#opt-mix').addEventListener('change', () => C.sfx.tap());
+  $('#opt-sound').checked = !!C.store.settings.sound;
+  $('#opt-music').checked = !!C.store.settings.music;
+  $('#opt-vibrate').checked = !!C.store.settings.vibrate;
+  $('#opt-mix').value = C.store.settings.mix;
 
   // Les navigateurs n'autorisent le son qu'après un premier geste.
   document.addEventListener('pointerdown', () => C.audio.unlock(), { once: true });
   document.addEventListener('backbutton', () => { if (!screens.play.hidden) goHome(); });
 
+  // exposé pour les tests
+  window.Odysseum = { levelInfo, journey: J };
+
   initWorld();
-  renderHome(false);
   show('home');
+  renderPlay();
   if (worldReady) C.world.start();
 })();
