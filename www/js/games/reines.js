@@ -10,12 +10,6 @@
   const REGION_COLORS = ['#e08a62', '#7fa8cf', '#e3b65a', '#a8b46a', '#6cb8ae',
     '#c97b85', '#ece6d6', '#a39dcb', '#d4b48a', '#9cc4d8'];
   const EXTRA_COLORS = ['#c58fd0', '#8fc79a']; // pourpre clair, vert d'eau (grandes grilles)
-  // noms des teintes, pour que l'astuce parle de « la région bleue »
-  const COLOR_NAME = { '#e08a62': 'orange', '#7fa8cf': 'bleue', '#e3b65a': 'jaune', '#a8b46a': 'verte', '#6cb8ae': 'turquoise',
-    '#c97b85': 'rose', '#ece6d6': 'blanche', '#a39dcb': 'mauve', '#d4b48a': 'beige', '#9cc4d8': 'bleu ciel',
-    '#c58fd0': 'pourpre', '#8fc79a': "vert d'eau" };
-  const ord = (k) => k + (k === 1 ? 're' : 'e');
-  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
   // couronne pleine, bien lisible sur toutes les couleurs
   const CROWN = '<svg class="crown" viewBox="0 0 24 24"><path d="M3 8.5 7.2 12 12 5l4.8 7L21 8.5 19.2 18H4.8z" fill="#15191e" stroke="#15191e" stroke-width="1.2" stroke-linejoin="round"/></svg>';
 
@@ -244,12 +238,14 @@
         const N = n * n;
         const rowOf = (i) => Math.floor(i / n), colOf = (i) => i % n;
         const isSol = (i) => puzzle.solution[rowOf(i)] === colOf(i);
-        const regName = (g) => 'la région ' + (COLOR_NAME[palette[g % palette.length]] || 'surlignée');
+        // (pas de nom de couleur : les teintes changent selon le thème ; la zone citée est toujours surlignée)
+        const regName = () => 'la région surlignée';
         const units = [];
         for (let g = 0; g < n; g++) units.push({ kind: 'reg', id: g, cells: [...Array(N).keys()].filter((i) => puzzle.region[i] === g) });
         for (let r = 0; r < n; r++) units.push({ kind: 'row', id: r, cells: [...Array(n)].map((_, c) => r * n + c) });
         for (let c = 0; c < n; c++) units.push({ kind: 'col', id: c, cells: [...Array(n)].map((_, r) => r * n + c) });
-        const uName = (u) => u.kind === 'reg' ? regName(u.id) : u.kind === 'row' ? 'la ' + ord(u.id + 1) + ' ligne' : 'la ' + ord(u.id + 1) + ' colonne';
+        const uName = (u) => u.kind === 'reg' ? regName(u.id) : u.kind === 'row' ? 'la ligne surlignée' : 'la colonne surlignée';
+        const touch = puzzle.variant === 'cavaliers' ? 'à un saut de cavalier' : 'collées';
         const crownsOn = () => { const q = []; state.forEach((v, i) => { if (v === 2) q.push(i); }); return q; };
         const done = () => { render(); api.onChange(); const { bad, queens } = conflicts(); if (queens === n && bad.size === 0) api.onWin(); };
 
@@ -261,12 +257,12 @@
           let why = [], text;
           if (bad.has(i)) {
             why = crownsOn().filter((j) => j !== i && bad.has(j));
-            text = 'Cette couronne en gêne une autre (même ligne, colonne, région, ou elles se touchent) : je la retire.';
+            text = 'Cette couronne en gêne une autre (surlignée) : même ligne, colonne ou région, ou ' + touch + '. Je la retire.';
           } else {
             const blk = blocked();
             const dead = units.find((u) => !u.cells.some((j) => state[j] === 2) && u.cells.every((j) => blk[j]));
-            if (dead) { why = dead.cells; text = 'Avec cette couronne, ' + uName(dead) + ' (surlignée) n\'a plus aucune case libre : je la retire.'; }
-            else text = 'Cette couronne mène à une impasse un peu plus loin : je la retire.';
+            if (dead) { why = dead.cells; text = 'Avec cette couronne, ' + uName(dead) + ' n\'a plus aucune case libre pour la sienne. Je la retire.'; }
+            else text = 'Cette couronne n\'est pas à sa place : elle mène à une impasse un peu plus loin. Je la retire.';
           }
           state[i] = 0; cleared[i] = 1;
           done();
@@ -290,9 +286,7 @@
             history.push(state.slice());
             state[i] = 2;
             done();
-            const text = u.kind === 'reg'
-              ? cap(uName(u)) + ' n\'a plus qu\'une case possible : les autres touchent une couronne ou partagent sa ligne ou sa colonne. La couronne va là.'
-              : 'Sur ' + uName(u) + ', une seule case reste possible : les autres sont barrées par les couronnes déjà posées. La couronne va là.';
+            const text = 'Dans ' + uName(u) + ', toutes les autres cases sont écartées : sa couronne va forcément sur la case dorée.';
             return { text, where: [cells[i]], why: u.cells.filter((j) => j !== i).map((j) => cells[j]) };
           }
         }
@@ -314,7 +308,7 @@
             const line = units.find((v) => v.kind === axis && v.id === k);
             const out = line.cells.filter((j) => free(j) && !u.cells.includes(j) && state[j] !== 1);
             if (u.kind === 'reg' && out.length) {
-              return mark(out, cap(regName(u.id)) + ' ne peut avoir sa couronne que sur la ' + ord(k + 1) + ' ' + word + ' : les autres cases de cette ' + word + ' sont donc barrées.', f);
+              return mark(out, 'Les cases libres de la région surlignée sont toutes sur une même ' + word + ' : sa couronne y sera. Le reste de cette ' + word + ' (cases dorées) est écarté.', f);
             }
           }
           // une ligne dont toutes les cases possibles sont dans une seule région : le reste de la région est barré
@@ -322,7 +316,7 @@
             const g = puzzle.region[f[0]];
             if (f.every((j) => puzzle.region[j] === g)) {
               const out = units[g].cells.filter((j) => free(j) && !u.cells.includes(j) && state[j] !== 1);
-              if (out.length) return mark(out, 'Sur ' + uName(u) + ', la couronne tombera forcément dans ' + regName(g) + ' : le reste de cette région est donc barré.', f);
+              if (out.length) return mark(out, 'Les cases libres de cette ' + (u.kind === 'row' ? 'ligne' : 'colonne') + ' (surlignées) sont toutes dans une même région : sa couronne sera là. Le reste de la région (cases dorées) est écarté.', f);
             }
           }
         }
@@ -334,7 +328,7 @@
           const hits = (j) => j === i || rowOf(j) === ri || colOf(j) === ci || puzzle.region[j] === puzzle.region[i] || forbidden(puzzle.variant, Math.abs(rowOf(j) - ri), colOf(j) - ci);
           const dead = open.find((u) => !u.cells.includes(i) && freeIn(u).length && freeIn(u).every(hits));
           if (dead && !isSol(i)) {
-            return mark([i], 'Une couronne ici barrerait toutes les cases possibles de ' + uName(dead) + ' (surlignée) : cette case est donc exclue.', freeIn(dead));
+            return mark([i], 'Une couronne sur la case dorée écarterait toutes les cases libres de ' + uName(dead) + ' : la case dorée est donc exclue.', freeIn(dead));
           }
         }
 
@@ -345,7 +339,7 @@
           history.push(state.slice());
           state[i] = 2;
           done();
-          return { text: 'Coup de pouce : la couronne de la ' + ord(r + 1) + ' ligne va ici. Regarde les cases qu\'elle barre autour d\'elle.', where: [cells[i]], why: [] };
+          return { text: 'Coup de pouce : rien n\'est forcé pour l\'instant, alors je pose une couronne sur la case dorée. Regarde les cases qu\'elle écarte.', where: [cells[i]], why: [] };
         }
         return false;
       },
@@ -366,13 +360,15 @@
     rules: {
       classic: [
         'Place une <b>couronne</b> dans chaque ligne, chaque colonne et chaque zone de couleur.',
-        'Deux couronnes ne peuvent pas se toucher, même en diagonale.',
-        'Touche une case : une fois pour un repère, deux fois pour une reine. Glisse le doigt pour poser plusieurs repères.'
+        'Deux couronnes ne se touchent jamais, <b>même en diagonale</b>.',
+        'Touche une case : une fois pour un <b>point</b>, deux fois pour une couronne. Les cases qu\'une couronne interdit se pointent toutes seules.',
+        'Glisse le doigt pour pointer plusieurs cases ; pars d\'un point pour les effacer.'
       ],
       cavaliers: [
         'Place une <b>couronne</b> dans chaque ligne, chaque colonne et chaque zone de couleur.',
-        'Deux couronnes peuvent se toucher en diagonale, mais <b>jamais à un saut de cavalier</b> (2 cases d\'un côté, 1 de l\'autre).',
-        'Touche une case : une fois pour un repère, deux fois pour une reine.'
+        'Deux couronnes peuvent se toucher, mais <b>jamais à un saut de cavalier</b> (2 cases d\'un côté, 1 de l\'autre).',
+        'Touche une case : une fois pour un <b>point</b>, deux fois pour une couronne. Les cases interdites se pointent toutes seules.',
+        'Glisse le doigt pour pointer plusieurs cases ; pars d\'un point pour les effacer.'
       ]
     },
     params,

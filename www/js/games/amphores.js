@@ -247,7 +247,9 @@
         [a, b].forEach((k) => { tiles[k]._peek = true; });
         render();
         later(() => { [a, b].forEach((k) => { tiles[k]._peek = false; }); render(); }, 1400);
-        return { text: 'Ces deux amphores cachent le même motif.', where: [tiles[a], tiles[b]], why: [] };
+        return { text: open.length === 1
+          ? 'L\'amphore que tu viens de retourner a sa jumelle : les deux, entourées d\'or, se montrent un instant.'
+          : 'Ces deux amphores, entourées d\'or, cachent le même motif : elles se montrent un instant, retiens-les !', where: [tiles[a], tiles[b]], why: [] };
       },
       redraw() { fit(); },
       destroy() {
@@ -286,16 +288,16 @@
     rules: {
       classic: [
         'Touche deux amphores pour voir leurs <b>motifs</b>.',
-        'Deux motifs <b>identiques</b> (même dessin, même couleur) restent visibles.',
-        'Sinon elles se referment : retiens où était chaque motif.',
-        'Trouve <b>toutes les paires</b> pour gagner.'
+        'Deux motifs <b>identiques</b> (même dessin, même couleur) restent visibles ; sinon, elles se referment.',
+        'Souvent, au début, tous les motifs se montrent un instant : retiens où est chacun.',
+        'Attention aux <b>cousins</b> (même dessin, autre couleur). Trouve <b>toutes les paires</b> pour gagner !'
       ]
     },
     tutorial: [
       { art: tArt(tutoGrid([null, owl, null, null, null, owl]) + tFinger(60, 50) + tFinger(95, 87)),
-        text: 'Touche <b>deux amphores</b> pour voir leurs motifs.' },
+        text: 'Touche <b>deux amphores</b> pour voir leurs motifs. Au début, ils se montrent souvent un instant : retiens-les !' },
       { art: tArt(tutoGrid([sun, null, null, null, sun, null]) + '<path d="M52 12l5 5 10-10" fill="none" stroke="#43a82a" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>'),
-        text: 'Deux motifs <b>identiques</b> restent visibles.' },
+        text: 'Deux motifs <b>identiques</b> restent visibles. Sinon, ils se referment : retiens où ils sont.' },
       { art: tArt(tutoGrid([sun, null, sunB, null, null, null]) + '<path d="M45 18l4-4M49 18l-4-4" stroke="var(--bad-ink)" stroke-width="2.6" stroke-linecap="round"/>'),
         text: 'Attention aux <b>cousins</b> : même dessin, autre couleur.' }
     ],

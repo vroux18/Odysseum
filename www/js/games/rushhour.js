@@ -541,7 +541,9 @@
     resize();
 
     // --- explications de l'indice ---
-    const nameOf = (i) => (i === 0 ? 'le navire d\'Ulysse' : 'la ' + (boats[i].len === 3 ? 'grande ' : '') + 'barque ' + COLORS[boats[i].color % COLORS.length].n);
+    // la barque à bouger est entourée d'or, celle qu'elle gêne est surlignée (pas de nom de couleur : plusieurs se ressemblent)
+    const nameOf = (i) => (i === 0 ? 'le navire d\'Ulysse' : 'la ' + (boats[i].len === 3 ? 'grande ' : '') + 'barque dorée');
+    const otherOf = (j) => (j === 0 ? 'le navire d\'Ulysse' : 'la barque surlignée');
     const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
     const diff = (a, b) => { for (let i = 0; i < B; i++) if (a[i] !== b[i]) return i; return -1; };
     function cellsOf(i, from, to) { // cases balayées par le bateau i entre deux positions
@@ -556,27 +558,27 @@
       if (boats[i].hor) return 'fais-la glisser ' + k + (d < 0 ? ' vers la gauche' : ' vers la droite');
       return (d < 0 ? 'fais-la monter ' : 'fais-la descendre ') + k;
     }
+    // renvoie la phrase et ce qu'elle désigne comme « surligné » : la passe, ou le bateau à qui l'on fait de la place
     function explain(path) {
       const a = path[0], b = path[1];
       const i = diff(a, b), d = b[i] - a[i];
+      const j = path[2] ? diff(path[1], path[2]) : -1;
+      const next = j >= 0 && j !== i ? [els[j]] : [];
       if (i === 0) {
-        if (b[0] === GOAL) return 'La voie est libre : glisse le navire d\'Ulysse jusqu\'à la passe pour prendre la mer.';
-        if (d > 0) return 'Avance le navire d\'Ulysse ' + DIST[d] + ' vers la sortie : il laisse de la place derrière lui.';
-        return 'Recule le navire d\'Ulysse ' + DIST[-d] + ' : il dégage la rangée pour laisser passer un autre bateau.';
+        if (b[0] === GOAL) return { text: 'La voie est libre : glisse le navire d\'Ulysse jusqu\'à la passe (surlignée), et il prend la mer !', why: [gap] };
+        if (d > 0) return { text: 'Avance le navire d\'Ulysse ' + DIST[d] + ' vers la passe : il libère de la place derrière lui.', why: [] };
+        return { text: 'Recule le navire d\'Ulysse ' + DIST[-d] + ' : il dégage sa rangée pour laisser passer un autre bateau.', why: [] };
       }
-      if (blocks(a, i) && !blocks(b, i)) return cap(nameOf(i)) + ' bloque la sortie : ' + verb(i, d) + ' pour libérer le passage.';
-      if (path[2]) {
-        const j = diff(path[1], path[2]);
-        if (j !== i && j >= 0) {
-          const before = cellsOf(i, a[i], a[i]), after = cellsOf(i, b[i], b[i]);
-          const swept = cellsOf(j, path[1][j], path[2][j]);
-          let frees = false;
-          before.forEach((c) => { if (!after.has(c) && swept.has(c)) frees = true; });
-          if (frees) return cap(nameOf(i)) + ' gêne ' + nameOf(j) + ' : ' + verb(i, d) + ' pour lui faire de la place.';
-        }
+      if (blocks(a, i) && !blocks(b, i)) return { text: cap(nameOf(i)) + ' barre la route vers la passe (surlignée) : ' + verb(i, d) + ' pour ouvrir le passage.', why: [gap] };
+      if (next.length) {
+        const before = cellsOf(i, a[i], a[i]), after = cellsOf(i, b[i], b[i]);
+        const swept = cellsOf(j, path[1][j], path[2][j]);
+        let frees = false;
+        before.forEach((c) => { if (!after.has(c) && swept.has(c)) frees = true; });
+        if (frees) return { text: cap(nameOf(i)) + ' gêne ' + otherOf(j) + ' : ' + verb(i, d) + ' pour lui faire de la place.', why: next };
       }
-      if (blocks(b, i)) return cap(nameOf(i)) + ' barre la passe : ' + verb(i, d) + ' pour préparer la suite des manœuvres.';
-      return 'Commence par ' + nameOf(i) + ' : ' + verb(i, d) + '. C\'est le premier pas du chemin le plus court.';
+      if (blocks(b, i)) return { text: cap(nameOf(i)) + ' barre la route vers la passe (surlignée) : ' + verb(i, d) + ', c\'est un premier pas pour dégager la route.', why: [gap] };
+      return { text: 'Commence par ' + nameOf(i) + ' : ' + verb(i, d) + '. C\'est le début du chemin le plus court.', why: [] };
     }
 
     return {
@@ -598,11 +600,9 @@
         if (won || drag) return false;
         const path = shortest(boats, cur);
         if (!path || path.length < 2) return false;
-        const text = explain(path);
+        // pourquoi : la passe, ou le bateau à qui l'on fait de la place (coup suivant), selon la phrase
+        const { text, why } = explain(path);
         const i = diff(path[0], path[1]);
-        // pourquoi : le bateau qu'il fallait dégager (coup suivant), ou la passe
-        const j = path[2] ? diff(path[1], path[2]) : -1;
-        const why = i === 0 || blocks(path[0], i) ? [gap] : j >= 0 && j !== i ? [els[j]] : [];
         commit(i, path[1][i]);
         return { text, where: [els[i]], why };
       },
@@ -648,7 +648,7 @@
   const TUTORIAL = [
     { art: tPort(tBoat(EXIT, 1, 2, true, HERO, 1, true) + tBoat(1, 4, 2, false, G1, 1) + tBoat(0, 1, 2, true, G3, 1) +
         tArrow('M104 ' + (T0 + EXIT * TC + 7) + 'h10m-3 -3l3 3l-3 3')),
-      text: 'Fais sortir le <b>navire d\'Ulysse</b>, rouge et or, par la <b>passe</b> à droite du port.' },
+      text: 'Fais sortir le <b>navire d\'Ulysse</b>, rouge à voile blanche, par la <b>passe</b> à droite du port.' },
     // la barque verte descend (sa position de départ reste en transparence) : la passe se dégage
     { art: tPort(tBoat(EXIT, 1, 2, true, HERO, 1, true) + tBoat(1, 4, 2, false, G1, 1, false, 0.28) + tBoat(3, 4, 2, false, G1, 1) +
         tBoat(0, 1, 2, true, G3, 1) + tArrow('M' + (T0 + 5.5 * TC) + ' ' + (T0 + 1.4 * TC) + 'v' + (TC * 1.8) + 'm-3 -3l3 3l3 -3') +
@@ -671,7 +671,7 @@
     ],
     rules: {
       classic: [
-        'Fais sortir le <b>navire d\'Ulysse</b> (rouge et or) par la <b>passe</b>, sur le bord droit.',
+        'Fais sortir le <b>navire d\'Ulysse</b>, rouge à voile blanche, par la <b>passe</b> du bord droit.',
         'Glisse un bateau du doigt : il ne bouge que <b>dans son axe</b>, en avant ou en arrière.',
         'Les bateaux ne se chevauchent pas : trouve l\'ordre des manœuvres qui libère le passage.'
       ]

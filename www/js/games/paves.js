@@ -288,10 +288,11 @@
           render(); api.onChange();
           const nums = puzzle.clues.filter((k) => inside(wrong, k.cell));
           let text;
-          if (!nums.length) text = 'Ce rectangle ne contient aucun nombre : chaque rectangle doit en contenir un. Je l\'enlève.';
-          else if (nums.length > 1) text = 'Ce rectangle contient ' + nums.length + ' nombres : un seul par rectangle. Je l\'enlève.';
-          else if (!nums[0].hidden && nums[0].value !== wrong.w * wrong.h) text = 'Ce rectangle fait ' + (wrong.w * wrong.h) + ' cases, mais son nombre dit ' + nums[0].value + '. Je l\'enlève.';
-          else text = 'Bonne taille, mais pas la bonne forme : elle prend la place d\'un autre nombre. Je l\'enlève.';
+          if (!nums.length) text = 'Ce rectangle ne contient aucun nombre : il en faut un, et un seul, par rectangle. Je l\'enlève.';
+          else if (nums.length > 1) text = 'Ce rectangle contient ' + nums.length + ' nombres (surlignés) : un seul par rectangle. Je l\'enlève.';
+          else if (!nums[0].hidden && nums[0].value !== wrong.w * wrong.h) text = 'Ce rectangle fait ' + (wrong.w * wrong.h) + ' cases, mais son nombre (surligné) dit ' + nums[0].value + '. Je l\'enlève.';
+          else if (nums[0].hidden) text = 'Ce rectangle n\'est pas celui du ? : il empêcherait de placer les autres. Je l\'enlève.';
+          else text = 'Bonne taille, mais pas la bonne forme ni la bonne place : il empêcherait de placer les autres. Je l\'enlève.';
           return { text, where: [area(wrong)], why: nums.map((k) => clueEl(k.cell)), clear };
         }
 
@@ -338,9 +339,8 @@
             }
           }
           const why = blockers.slice(0, 6).map(clueEl);
-          const shape = rc.w === rc.h ? 'un carré ' + rc.w + ' × ' + rc.h : 'un rectangle ' + rc.w + ' × ' + rc.h;
-          return place(k, rc, label(k) + ' n\'a qu\'une forme possible : ' + shape + ' (le cadre doré). Toute autre forme sortirait de la grille' +
-            (blockers.length ? ', engloberait un autre nombre (ceux qui brillent)' : '') + ' ou mordrait sur un rectangle déjà posé.', why);
+          return place(k, rc, label(k) + ' n\'a plus qu\'une forme possible, le cadre doré : les autres sortiraient de la grille' +
+            (blockers.length ? ', prendraient un autre nombre (surligné)' : '') + ' ou mordraient sur un rectangle posé.', why);
         }
         // 2b. une case vide qu'un seul nombre peut atteindre : ce nombre doit la couvrir
         for (let x = 0; x < n * n; x++) {
@@ -350,14 +350,15 @@
           const k = who[0];
           const list = cands.get(k).filter((rc) => inside(rc, x));
           if (list.length !== 1 || !same(list[0], solFor(k))) continue;
-          return place(k, list[0], 'La case surlignée ne peut être couverte que par ' + label(k).toLowerCase() + ' : aucun autre nombre ne l\'atteint. Une seule de ses formes passe par elle : le cadre doré.', [cellEl(x)]);
+          return place(k, list[0], 'Seul ' + label(k).toLowerCase() + ' peut atteindre la case surlignée, et une seule de ses formes passe par elle : le cadre doré.', [cellEl(x)]);
         }
 
         // 3. pas de déduction simple : coup de pouce sur le nombre le moins libre
         const k = open.slice().sort((a, b) => cands.get(a).length - cands.get(b).length)[0];
         if (!k) return false;
         const rc = solFor(k);
-        return place(k, rc, 'Coup de pouce : ' + label(k).toLowerCase() + ' prend cette forme (' + rc.w + ' × ' + rc.h + ', cadre doré). Il avait encore ' + cands.get(k).length + ' formes possibles ; cherche ensuite les nombres très serrés.', []);
+        const nb = cands.get(k).length;
+        return place(k, rc, 'Coup de pouce : rien n\'est forcé pour l\'instant. ' + label(k) + ' prend cette forme (cadre doré)' + (nb > 1 ? ', parmi ' + nb + ' possibles.' : '.'), []);
       },
       destroy() {}
     };
@@ -376,13 +377,13 @@
     rules: {
       classic: [
         'Découpe toute la grille en <b>rectangles</b>.',
-        'Chaque rectangle contient exactement <b>un nombre</b>, égal à son nombre de cases.',
-        'Fais glisser ton doigt pour tracer un rectangle. Touche un rectangle pour l\'effacer.'
+        'Chaque rectangle contient <b>un seul nombre</b>, égal à son nombre de cases.',
+        'Glisse le doigt d\'un coin à l\'autre pour tracer un rectangle. Touche-le pour l\'effacer.'
       ],
       mystere: [
-        'Découpe toute la grille en <b>rectangles</b>, chacun contenant exactement un indice.',
-        'Un nombre donne la taille du rectangle. Un <b>?</b> cache sa taille : à toi de la déduire.',
-        'Fais glisser ton doigt pour tracer un rectangle. Touche un rectangle pour l\'effacer.'
+        'Découpe toute la grille en <b>rectangles</b>, avec un seul nombre dans chacun.',
+        'Le nombre donne la taille du rectangle. Un <b>?</b> la cache : à toi de la déduire.',
+        'Glisse le doigt d\'un coin à l\'autre pour tracer un rectangle. Touche-le pour l\'effacer.'
       ]
     },
     params,

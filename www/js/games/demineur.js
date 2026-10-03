@@ -132,8 +132,6 @@
     return { n, mines: Math.round(n * n * d), subtle: level < 6 ? 0 : level < 20 ? 1 : 2 };
   }
 
-  const plural = (k, w) => k + ' ' + w + (k > 1 ? 's' : '');
-
   function create(host, puzzle, api) {
     const n = puzzle.n, N = n * n, nb = neighbors(n);
     const mine = puzzle.mines;
@@ -345,7 +343,7 @@
           if (state[i] === 1 && !mine[i]) {
             history.push(state.slice());
             state[i] = 0; render(); api.onChange();
-            return { text: 'Ce fanion est mal placé : aucun nombre n\'oblige à mettre un écueil ici. Je le retire.', where: [cells[i]], why: [] };
+            return { text: 'Ce fanion est mal placé : il n\'y a pas d\'écueil sous cette case. Je le retire.', where: [cells[i]], why: [] };
           }
         }
         const st = new Uint8Array(N);
@@ -357,21 +355,24 @@
         const ka = num[mv.src[0]], kb = mv.src[1] != null ? num[mv.src[1]] : 0;
         // les deux nombres d'une déduction croisée : celui qui « place » et celui qui conclut
         let why;
+        // déduction croisée : « L'écueil du 1 qui brille est aussi autour du 2… » (deux nombres égaux : « de l'autre 1 »)
+        const deB = ka === kb ? 'de l\'autre ' + kb : 'du ' + kb, theB = ka === kb ? 'l\'autre ' + kb : 'le ' + kb;
+        const last = mv.ra < ka; // une partie de ses écueils a déjà son fanion : on parle des « derniers »
+        const shared = mv.rule === 'subset' ? (mv.ra === 1 ? (last ? 'Le dernier écueil du ' : 'L\'écueil du ') + ka + ' qui brille est'
+          : 'Les ' + mv.ra + (last ? ' derniers' : '') + ' écueils du ' + ka + ' qui brille sont') + ' aussi autour ' + deB : '';
         if (mv.kind === 'safe') {
           open([target]);
           why = mv.rule === 'single'
-            ? (ka === 1 ? 'Le 1 qui brille touche déjà son écueil (fanion) : ses autres cases cachées sont sûres. J\'ouvre la case dorée.'
-              : 'Le ' + ka + ' qui brille touche déjà ses ' + ka + ' écueils : ses autres cases cachées sont sûres. J\'ouvre la case dorée.')
-            : 'Regarde les deux nombres qui brillent : le ' + ka + ' a ' + plural(mv.ra, 'écueil') + ' dans des cases que le ' + kb + ' touche aussi, et le ' + kb + ' n\'en attend pas d\'autre. ' +
-              (mv.cells.length > 1 ? 'Ses autres cases cachées, comme la case dorée, sont donc sûres.' : 'Sa dernière case cachée, la dorée, est donc sûre.');
+            ? (ka === 1 ? 'Le 1 qui brille a déjà son écueil : ses autres cases cachées sont sûres. J\'ouvre la case dorée.'
+              : 'Le ' + ka + ' qui brille a déjà ses ' + ka + ' écueils : ses autres cases cachées sont sûres. J\'ouvre la case dorée.')
+            : shared + ', qui n\'en attend pas d\'autre : ' + (mv.cells.length > 1 ? 'ses autres cases cachées, dont la dorée, sont sûres.' : 'sa dernière case cachée, la dorée, est sûre.');
         } else {
           state[target] = 1;
           render(); C.sfx.place();
           why = mv.rule === 'single'
-            ? (mv.cells.length === 1 ? 'Le ' + ka + ' qui brille n\'a plus qu\'une case cachée pour son dernier écueil : c\'est la case dorée. J\'y plante un fanion.'
-              : 'Le ' + ka + ' qui brille a autant de cases cachées que d\'écueils manquants : ce sont tous des écueils. Je marque la case dorée.')
-            : 'Regarde les deux nombres qui brillent : le ' + ka + ' a ' + plural(mv.ra, 'écueil') + ' dans des cases que le ' + kb + ' touche aussi ; il manque encore ' +
-              plural(mv.rd, 'écueil') + ' au ' + kb + ', forcément ' + (mv.cells.length > 1 ? 'dans ses autres cases cachées, dont la dorée.' : 'dans sa dernière case cachée, la dorée.');
+            ? (mv.cells.length === 1 ? 'Le ' + ka + ' qui brille n\'a plus qu\'une case cachée pour son écueil : la dorée. J\'y plante un fanion.'
+              : 'Le ' + ka + ' qui brille a juste autant de cases cachées que d\'écueils à trouver : ce sont tous des écueils, dont la dorée.')
+            : shared + ', mais ' + theB + ' en attend ' + mv.rd + ' de plus : ' + (mv.cells.length > 1 ? 'ses autres cases cachées, dont la dorée, sont des écueils.' : 'sa dernière case cachée, la dorée, est un écueil.');
         }
         api.onChange();
         check();
@@ -407,9 +408,9 @@
     { art: art(tg(3, (r, c) => T1[r][c])),
       text: 'Chaque nombre dit combien d\'<b>écueils</b> se cachent dans les 8 cases qui l\'entourent.' },
     { art: art(tg(3, (r, c) => T2[r][c]) + fingerAt(92, 28)),
-      text: 'Touche une case de mer pour la <b>sonder</b>. Ici, le 1 du bas ne voit qu\'une case cachée : c\'est l\'écueil, celle du haut est sûre.' },
+      text: 'Touche une case de mer pour la <b>sonder</b>. Ici, le 1 en bas à droite ne voit qu\'une case cachée : c\'est l\'écueil. Celle du haut est sûre.' },
     { art: art(tg(3, (r, c) => T3[r][c])),
-      text: 'Pour poser un <b>fanion</b> sur un écueil, appuie longuement ou choisis l\'outil <b>×</b>.' },
+      text: 'Pour planter un <b>fanion</b> sur un écueil, appuie longuement ou choisis l\'outil <b>×</b>. Un nombre qui a tous ses fanions ouvre ses autres cases d\'un toucher.' },
     { art: art(tg(3, (r, c) => (r === 1 && c === 1 ? 'x' : r === 0 ? 'h' : 1))),
       text: 'Ouvre toutes les cases sûres. <b>Tout se déduit</b>, sans deviner. Heurter un écueil fait chavirer : tu peux revenir avant le choc ou recommencer.' }
   ];
@@ -426,9 +427,10 @@
     ],
     rules: {
       classic: [
-        'Chaque nombre indique combien d\'<b>écueils</b> touchent sa case, diagonales comprises.',
-        'Touche une case pour la sonder ; appui long ou outil <b>×</b> pour poser un fanion.',
-        'Ouvre <b>toutes les cases sûres</b>. Tout se déduit : jamais besoin de deviner.'
+        'Chaque nombre dit combien d\'<b>écueils</b> touchent sa case, diagonales comprises.',
+        'Touche une case pour la <b>sonder</b>. Appui long, ou outil <b>×</b>, pour planter un fanion sur un écueil.',
+        'Touche un nombre qui a tous ses fanions : ses autres cases s\'ouvrent d\'un coup.',
+        'Ouvre <b>toutes les cases sûres</b>. Tout se déduit, sans deviner ; après un choc, tu peux revenir en arrière.'
       ]
     },
     tutorial: TUTORIAL,

@@ -272,7 +272,9 @@
         later(() => { peekOn = false; render(); }, Math.max(1400, Math.round(puzzle.show * 0.45)));
         // de préférence une tesselle déjà fausse, sinon la première vide
         const bad = wrong.size ? [...wrong][0] : firstBad;
-        return { text: 'Regarde bien le modèle : cette tesselle est à reprendre.', where: [cells[bad]], why: [] };
+        return { text: paint[bad] >= 0
+          ? 'Le modèle réapparaît un instant : la tesselle dorée n\'a pas la bonne couleur.'
+          : 'Le modèle réapparaît un instant : regarde bien la couleur de la tesselle dorée.', where: [cells[bad]], why: [] };
       },
       redraw() { fit(); },
       destroy() {
@@ -314,17 +316,17 @@
     ],
     rules: {
       classic: [
-        'Une <b>mosaïque</b> s\'affiche quelques secondes : retiens-la.',
-        'Choisis une <b>couleur</b> en bas, puis touche les cases pour les peindre.',
-        'Quand tout est peint, les tesselles <b>fausses</b> frémissent : corrige-les.',
-        'L\'astuce remontre le modèle un instant.'
+        'Une <b>mosaïque</b> s\'affiche quelques secondes : retiens-la (touche-la pour commencer plus tôt).',
+        'Choisis une <b>couleur</b> en bas, puis touche ou glisse sur les cases pour les peindre.',
+        'Retouche une case avec la même couleur pour l\'effacer.',
+        'Quand tout est peint, les tesselles <b>fausses</b> frémissent : corrige-les.'
       ]
     },
     tutorial: [
       { art: tMos(MODEL, '<rect x="30" y="104" width="60" height="5" rx="2.5" fill="var(--faint)"/><rect x="30" y="104" width="34" height="5" rx="2.5" fill="#ff94cb"/>'),
-        text: 'Retiens la <b>mosaïque</b> avant qu\'elle s\'efface.' },
+        text: 'Retiens la <b>mosaïque</b> avant qu\'elle s\'efface (touche-la pour commencer plus tôt).' },
       { art: tMos([0, 1, 0, -1, -1, -1, -1, -1, -1], tPal(1) + tFinger(48, 55)),
-        text: 'Choisis une <b>couleur</b>, puis touche les cases pour les peindre.' },
+        text: 'Choisis une <b>couleur</b>, puis touche ou glisse sur les cases pour les peindre. Retouche une case pour l\'effacer.' },
       { art: tMos([0, 1, 0, 1, -2, 1, 0, 1, 0]),
         text: 'Une tesselle <b>fausse</b> frémit : corrige-la.' }
     ],

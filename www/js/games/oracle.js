@@ -86,7 +86,7 @@
     for (let i = 0; i < clues.length; i++) {
       const q = clues[i], ca = q.a[0], xa = q.a[1], cb = q.b[0], xb = q.b[1];
       if (ca === cb || g(ca, xa, cb, xb) !== 0) continue;
-      if (emit({ a: ca, x: xa, b: cb, y: xb, v: q.t === 'eq' ? 1 : -1, clues: [i], cells: [] })) return true;
+      if (emit({ a: ca, x: xa, b: cb, y: xb, v: q.t === 'eq' ? 1 : -1, clues: [i], cells: [], kind: 'card', t: q.t })) return true;
     }
     // 2. une seule case ✓ par ligne et par colonne de chaque grille
     for (let a = 0; a < K; a++) for (let b = a + 1; b < K; b++) {
@@ -100,10 +100,10 @@
           }
           const cell = (q) => (line ? [a, q, b, p] : [a, p, b, q]);
           if (yes >= 0) {
-            for (const q of unk) { const c = cell(q); if (emit({ a: c[0], x: c[1], b: c[2], y: c[3], v: -1, clues: [], cells: [cell(yes)] })) return true; }
+            for (const q of unk) { const c = cell(q); if (emit({ a: c[0], x: c[1], b: c[2], y: c[3], v: -1, clues: [], cells: [cell(yes)], kind: 'yes', line })) return true; }
           } else if (unk.length === 1) {
             const c = cell(unk[0]);
-            if (emit({ a: c[0], x: c[1], b: c[2], y: c[3], v: 1, clues: [], cells: nos.map(cell) })) return true;
+            if (emit({ a: c[0], x: c[1], b: c[2], y: c[3], v: 1, clues: [], cells: nos.map(cell), kind: 'last', line })) return true;
           }
         }
       }
@@ -117,7 +117,7 @@
           if (c === a || c === b) continue;
           for (let z = 0; z < N; z++) {
             const v2 = g(b, y, c, z);
-            if (v2 !== 0 && g(a, x, c, z) === 0 && emit({ a, x, b: c, y: z, v: v2, clues: [], cells: [[a, x, b, y], [b, y, c, z]] })) return true;
+            if (v2 !== 0 && g(a, x, c, z) === 0 && emit({ a, x, b: c, y: z, v: v2, clues: [], cells: [[a, x, b, y], [b, y, c, z]], kind: 'trans' })) return true;
           }
         }
       }
@@ -134,11 +134,11 @@
         const noCells = (c, x) => { const r = []; if (c === O) return r; for (let o = 0; o < N; o++) if (g(c, x, O, o) === -1) r.push([c, x, O, o]); return r; };
         if (c1 !== O) for (const o of P1) {
           if (g(c1, x1, O, o) === 0 && !P2.some((p) => rel(o, p)) &&
-            emit({ a: c1, x: x1, b: O, y: o, v: -1, clues: [i], cells: noCells(c2, x2) })) return true;
+            emit({ a: c1, x: x1, b: O, y: o, v: -1, clues: [i], cells: noCells(c2, x2), kind: 'rank', t: q.t, first: true })) return true;
         }
         if (c2 !== O) for (const o of P2) {
           if (g(c2, x2, O, o) === 0 && !P1.some((p) => rel(p, o)) &&
-            emit({ a: c2, x: x2, b: O, y: o, v: -1, clues: [i], cells: noCells(c1, x1) })) return true;
+            emit({ a: c2, x: x2, b: O, y: o, v: -1, clues: [i], cells: noCells(c1, x1), kind: 'rank', t: q.t, first: false })) return true;
         }
       }
     }
@@ -153,11 +153,36 @@
           if (!ok) continue;
           const cells = [];
           for (let y = 0; y < N; y++) cells.push(g(a, x, b, y) === -1 ? [a, x, b, y] : [b, y, c, z]);
-          if (emit({ a, x, b: c, y: z, v: -1, clues: [], cells })) return true;
+          if (emit({ a, x, b: c, y: z, v: -1, clues: [], cells, kind: 'cross' })) return true;
         }
       }
     }
     return false;
+  }
+
+  // phrase d'explication d'une déduction (la case jouée est entourée d'or, ses raisons surlignées)
+  function explainOracle(d) {
+    const mark = d.v === 1 ? '✓' : '✗';
+    if (d.fallback) return 'Coup de pouce : rien de simple ici, alors je coche ✓ la case dorée.';
+    if (d.kind === 'card') {
+      if (d.t === 'eq') return 'La carte = surlignée dit que ces deux icônes vont ensemble : ✓ sur la case dorée.';
+      if (d.t === 'neq') return 'La carte ≠ surlignée dit que ces deux icônes ne vont jamais ensemble : ✗ sur la case dorée.';
+      return 'La carte ' + (d.t === 'next' ? '↔' : '··›') + ' surlignée place ces deux icônes à des rangs différents : elles ne vont pas ensemble, ✗.';
+    }
+    // grille (a < b) : la catégorie 0 est en lignes, les autres paires ont la plus petite catégorie en colonnes
+    const word = (d.line === 0) === (d.a === 0) ? 'ligne' : 'colonne';
+    if (d.kind === 'yes') return 'Sa ' + word + ' a déjà un ✓ (surligné), et il n\'y en a qu\'un par ' + word + ' : ✗ sur la case dorée.';
+    if (d.kind === 'last') return 'Toutes les autres cases de sa ' + word + ' sont barrées (surlignées) : il ne reste que la case dorée, ✓.';
+    if (d.kind === 'trans') return d.v === 1
+      ? 'Ces deux icônes vont avec la même troisième (cases surlignées) : elles vont donc ensemble, ✓.'
+      : 'L\'une va avec une troisième icône, qui ne va pas avec l\'autre (cases surlignées) : ✗ sur la case dorée.';
+    if (d.kind === 'rank') {
+      const ko = d.cells.length ? ' (✗ surlignés)' : '';
+      if (d.t === 'next') return 'Carte ↔ surlignée : à ce rang, l\'autre icône n\'aurait aucun rang voisin possible' + ko + '. ✗ sur la case dorée.';
+      return 'Carte ··› surlignée : à ce rang, l\'autre icône ne pourrait pas venir ' + (d.first ? 'après' : 'avant') + ko + '. ✗ sur la case dorée.';
+    }
+    if (d.kind === 'cross') return 'Aucune icône de l\'autre catégorie ne peut relier ces deux-là (✗ surlignés) : elles ne vont pas ensemble, ✗.';
+    return 'Les cartes et cases surlignées imposent ' + mark + ' sur la case dorée.';
   }
 
   // applique toutes les déductions jusqu'au point fixe
@@ -526,7 +551,7 @@
           if (m !== 0 && m !== t) {
             setMark(a, x, b, y, 0);
             render(); api.onChange();
-            return { text: 'Cette marque est fausse : je l\'efface.', where: [cellEls[k]], why: [] };
+            return { text: m === 1 ? 'Ce ✓ est faux : ces deux icônes ne vont pas ensemble. Je l\'efface.' : 'Cette ✗ est fausse : ces deux icônes vont ensemble. Je l\'efface.', where: [cellEls[k]], why: [] };
           }
         }
         // état vu par le joueur (✗ automatiques comprises)
@@ -550,7 +575,7 @@
         if (d.v === 1) C.sfx.place(); else C.sfx.tap();
         render(); api.onChange(); check();
         const why = d.clues.map((i) => clueEls[i]).concat(d.cells.slice(0, 10).map((c) => cellEl(c[0], c[1], c[2], c[3]))).filter(Boolean);
-        return { text: d.fallback ? 'Coup de pouce : cette case est juste.' : 'Les cartes et cases surlignées imposent cette case.', where: [cellEl(d.a, d.x, d.b, d.y)], why };
+        return { text: explainOracle(d), where: [cellEl(d.a, d.x, d.b, d.y)], why };
       },
       redraw() { fit(); },
       destroy() { if (ro) ro.disconnect(); }
@@ -596,20 +621,20 @@
     ],
     rules: {
       classic: [
-        'Chaque <b>dieu</b> a un seul objet, un seul lieu, un seul rang.',
-        'Les <b>cartes</b> de l\'Oracle : = ensemble, ≠ jamais ensemble, ↔ rangs voisins, ··› plus loin dans le rang.',
-        'Touche une case : <b>✗</b>, puis <b>✓</b>. Un ✓ barre le reste de sa ligne et de sa colonne.',
-        'Touche une carte pour la ranger quand tu t\'en es servi.'
+        'Chaque <b>dieu</b> a un seul objet, un seul lieu et un seul rang (les dés).',
+        'Les <b>cartes</b> : = vont ensemble, ≠ jamais ensemble, ↔ rangs voisins, ··› la première icône passe avant la seconde.',
+        'Touche une case : <b>✗</b>, puis <b>✓</b>, puis vide. Un ✓ barre tout seul sa ligne et sa colonne (bouton du coin pour l\'activer ou non).',
+        'Touche une carte pour l\'estomper quand tu n\'en as plus besoin.'
       ]
     },
     tutorial: [
       { art: tArt(tCard(10, ['god', 0], 'eq', ['obj', 0]) + tMini([1, -1, -1, -1, 0, 0, -1, 0, 0])),
-        text: 'Carte <b>=</b> : ces deux icônes vont ensemble. Coche ✓ leur case.' },
+        text: 'Carte <b>=</b> : ces deux icônes vont ensemble. Coche ✓ leur case : le reste de sa ligne et de sa colonne se barre tout seul.' },
       { art: tArt(tCard(10, ['god', 1], 'neq', ['obj', 2]) + tMini([1, -1, -1, -1, 0, -1, -1, 0, 0]) + tFinger(97, 95)),
-        text: '≠ : jamais ensemble. Touche une case : <b>✗</b>, puis <b>✓</b>.' },
+        text: 'Carte <b>≠</b> : jamais ensemble. Touche une case : <b>✗</b>, puis <b>✓</b>, puis vide. Touche une carte pour l\'estomper.' },
       { art: tArt(tCard(10, ['god', 0], 'next', ['god', 1]) + tCard(46, ['god', 2], 'left', ['god', 0]) +
           [0, 1, 2].map((k) => tB('order', k, 30 + k * 22, 88, 18)).join('')),
-        text: 'Les dés donnent le <b>rang</b> : ↔ voisins, ··› plus loin dans le rang.' }
+        text: 'Les dés donnent le <b>rang</b> : ↔ rangs voisins, ··› la première icône passe avant la seconde.' }
     ],
     params,
     generate,

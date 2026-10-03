@@ -211,7 +211,7 @@
           history.push(path.slice());
           const lost = path.slice(ok);
           path = sol.slice(0, ok);
-          return finish('Le tracé s\'est égaré après la case dorée : les cases surlignées menaient à une impasse. Je l\'ai ramené là ; repars de cette case.',
+          return finish('Le chemin s\'est égaré après la case dorée : les cases surlignées menaient à une impasse. Je le ramène là, repars d\'ici.',
             lost.map((c) => box(c, 'why')).concat([box(path[path.length - 1], 'where', true)]));
         }
         // 2. passages forcés : on avance tant que la case suivante est imposée
@@ -254,19 +254,20 @@
           const boxes = [box(head, 'why', true)];
           let text;
           if (reason.t === 'only') {
-            text = 'Depuis le bout du chemin, une seule case est encore possible : les autres sont déjà parcourues, murées ou ce sont des numéros pas encore à leur tour.';
+            text = 'Depuis le bout du chemin (surligné), une seule case est possible : les autres sont ' +
+              (puzzle.variant === 'laby' ? 'déjà parcourues, derrière un mur, ou c\'est l\'arrivée (trop tôt).' : 'déjà parcourues ou portent un numéro qui vient plus tard.');
           } else {
             boxes.push(box(reason.exit, 'why'));
-            text = 'La case dorée n\'a plus qu\'une autre sortie (surlignée) : si le chemin ne la prend pas maintenant, elle deviendra un cul-de-sac.';
+            text = 'La case dorée n\'a plus qu\'une autre sortie (surlignée) : si le chemin n\'y passe pas maintenant, elle deviendra un cul-de-sac.';
           }
-          if (steps.length > 1) text += ' La suite (' + (steps.length - 1) + ' case' + (steps.length > 2 ? 's' : '') + ' de plus) est forcée elle aussi.';
+          if (steps.length > 1) text += ' La suite est forcée aussi.';
           return finish(text, boxes.concat(steps.map((c, i) => box(c, 'where', i === 0))));
         }
         // 3. aucun passage forcé : coup de pouce vers le prochain numéro
         const add = sol.slice(path.length, path.length + 2);
         path = path.concat(add);
         const target = puzzle.variant === 'laby' ? 'l\'arrivée' : 'le ' + need;
-        return finish('Coup de pouce : le chemin continue par ici. Rien n\'est encore forcé ; pense à ne pas laisser de case isolée en route vers ' + target + '.',
+        return finish('Coup de pouce : rien n\'est forcé pour l\'instant. Le chemin continue par les cases dorées, en route vers ' + target + '.',
           add.map((c, i) => box(c, 'where', i === 0)));
       },
       redraw: draw,
@@ -286,14 +287,14 @@
     ],
     rules: {
       classic: [
-        'Pars du <b>1</b> et trace un chemin case par case, sans diagonale.',
-        'Passe par les numéros dans l\'ordre croissant et termine sur le plus grand.',
-        'Le chemin doit passer <b>une seule fois par chaque case</b>.'
+        'Pars du <b>1</b> et glisse le doigt pour tracer le chemin, case par case, sans diagonale.',
+        'Passe par les numéros <b>dans l\'ordre</b> et termine sur le plus grand.',
+        'Le chemin passe <b>une seule fois par chaque case</b>. Reviens en arrière pour l\'effacer.'
       ],
       laby: [
-        'Pars de <b>GO</b> et termine sur l\'<b>étoile</b>.',
-        'Les murs épais ne se traversent pas.',
-        'Le chemin doit passer <b>une seule fois par chaque case</b>.'
+        'Pars du <b>point plein</b> et termine sur l\'<b>anneau</b>, en glissant le doigt case par case.',
+        'Les <b>murs</b> ne se traversent pas.',
+        'Le chemin passe <b>une seule fois par chaque case</b>. Reviens en arrière pour l\'effacer.'
       ]
     },
     params,

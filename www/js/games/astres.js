@@ -235,7 +235,6 @@
         });
         const name = (v, pl) => (v === SUN ? 'soleil' : 'lune') + (pl ? 's' : '');
         const un = (v) => (v === SUN ? 'un soleil' : 'une lune');
-        const ord = (k) => k + (k === 1 ? 're' : 'e');
         const rowOf = (i) => Math.floor(i / n), colOf = (i) => i % n;
         const rowCells = (r) => [...Array(n)].map((_, k) => r * n + k), colCells = (c) => [...Array(n)].map((_, k) => k * n + c);
         const put = (i, v, text, why) => {
@@ -251,9 +250,9 @@
             // on montre ce qui coince autour de cette case
             const r = rowOf(i), c = colOf(i);
             const near = [...bad].filter((j) => j !== i && (rowOf(j) === r || colOf(j) === c));
-            return put(i, v, 'Cette case enfreint une règle (trois pareils, trop de ' + name(state[i], true) + ' ou un signe) : c\'est ' + un(v) + ' qu\'il faut.', near);
+            return put(i, v, 'Cette case enfreint une règle (voir les cases surlignées) : trois pareils, trop de ' + name(state[i], true) + ' ou un signe. Il faut ' + un(v) + '.', near);
           }
-          return put(i, v, 'Cette case mène à une impasse plus loin : c\'est ' + un(v) + '. Je la corrige.', []);
+          return put(i, v, 'Cette case mène à une impasse un peu plus loin : il faut ' + un(v) + '. Je la corrige.', []);
         }
         // une case qui se déduit d'une règle simple, avec sa raison et ce qui la justifie
         const half = n / 2;
@@ -271,9 +270,11 @@
               if (at(-1) === o && at(-2) === o) pair = [line[k - 1], line[k - 2]];
               else if (at(1) === o && at(2) === o) pair = [line[k + 1], line[k + 2]];
               else if (at(-1) === o && at(1) === o) pair = [line[k - 1], line[k + 1]];
+              // (soleil masculin, lune féminin : « deux soleils surlignés », « deux lunes surlignées »)
+              const fem = o === MOON;
               if (pair) return {
-                text: (pair[0] === line[k - 1] && pair[1] === line[k + 1] ? 'Cette case est coincée entre deux ' : 'Cette case est collée à deux ') + name(o, true) +
-                  ' (en ' + word + ') : un troisième ferait trois à la suite, interdit. Ici, c\'est ' + un(v) + '.', why: pair };
+                text: (pair[0] === line[k - 1] && pair[1] === line[k + 1] ? 'Entre deux ' : 'Juste à côté de deux ') + name(o, true) + (fem ? ' surlignées' : ' surlignés') +
+                  (word === 'diagonale' ? ' (en diagonale)' : '') + ', ' + (fem ? 'une troisième' : 'un troisième') + ' ferait trois à la suite : ici, c\'est ' + un(v) + '.', why: pair };
             }
           }
           if (rule === 'sign') {
@@ -281,14 +282,15 @@
               const e = puzzle.edges[k];
               const other = e.a === i ? e.b : e.b === i ? e.a : -1;
               if (other < 0 || !state[other]) continue;
-              return { text: e.same ? 'Le signe = qui brille veut deux symboles identiques : sa voisine est ' + un(state[other]) + ', donc ici aussi.'
-                : 'Le × qui brille veut deux symboles différents : sa voisine est ' + un(state[other]) + ', donc ici c\'est ' + un(v) + '.', why: [other, markers[k]] };
+              return { text: e.same ? 'Le signe = qui brille veut deux symboles pareils : la case voisine est ' + un(state[other]) + ', donc ici aussi.'
+                : 'Le signe × qui brille veut deux symboles différents : la case voisine est ' + un(state[other]) + ', donc ici c\'est ' + un(v) + '.', why: [other, markers[k]] };
             }
           }
           if (rule === 'count') {
             const row = rowCells(r), col = colCells(c);
-            if (row.filter((j) => state[j] === o).length === half) return { text: 'La ' + ord(r + 1) + ' ligne a déjà ses ' + half + ' ' + name(o, true) + ' (la moitié) : les cases vides restantes sont des ' + name(v, true) + '.', why: row.filter((j) => state[j] === o) };
-            if (col.filter((j) => state[j] === o).length === half) return { text: 'La ' + ord(c + 1) + ' colonne a déjà ses ' + half + ' ' + name(o, true) + ' (la moitié) : les cases vides restantes sont des ' + name(v, true) + '.', why: col.filter((j) => state[j] === o) };
+            const full = (word) => 'Cette ' + word + ' a déjà ses ' + half + ' ' + name(o, true) + ' (' + (o === MOON ? 'surlignées' : 'surlignés') + '), soit la moitié : ses cases vides sont des ' + name(v, true) + '. Ici, c\'est ' + un(v) + '.';
+            if (row.filter((j) => state[j] === o).length === half) return { text: full('ligne'), why: row.filter((j) => state[j] === o) };
+            if (col.filter((j) => state[j] === o).length === half) return { text: full('colonne'), why: col.filter((j) => state[j] === o) };
           }
           return null;
         };
@@ -300,7 +302,7 @@
         }
         const i = empty[0];
         if (i === undefined) return false;
-        return put(i, puzzle.solution[i], 'Coup de pouce : ici c\'est ' + un(puzzle.solution[i]) + '. Pas de règle simple pour l\'instant ; pense que chaque ligne et colonne a autant de soleils que de lunes.', []);
+        return put(i, puzzle.solution[i], 'Coup de pouce : aucune règle simple ne s\'applique encore, alors je te donne cette case. Ici, c\'est ' + un(puzzle.solution[i]) + '.', []);
       },
       destroy() {}
     };
@@ -318,15 +320,16 @@
     ],
     rules: {
       classic: [
-        'Remplis chaque case avec un <b>soleil</b> ou une <b>lune</b> (touche pour alterner).',
-        'Jamais plus de deux symboles identiques côte à côte, horizontalement ou verticalement.',
-        'Chaque ligne et chaque colonne contient autant de soleils que de lunes.',
-        '<b>=</b> entre deux cases : symboles identiques. <b>×</b> : symboles différents.'
+        'Remplis chaque case d\'un <b>soleil</b> ou d\'une <b>lune</b> : touche une fois pour le soleil, deux fois pour la lune, trois pour vider.',
+        'Jamais <b>trois pareils</b> à la suite, en ligne comme en colonne.',
+        'Chaque ligne et chaque colonne a <b>autant de soleils que de lunes</b>.',
+        '<b>=</b> entre deux cases : les mêmes. <b>×</b> : différents.'
       ],
       diagonales: [
-        'Remplis chaque case avec un <b>soleil</b> ou une <b>lune</b>, autant de chaque par ligne et par colonne.',
-        'Jamais trois symboles identiques alignés, <b>y compris en diagonale</b>.',
-        '<b>=</b> entre deux cases : symboles identiques. <b>×</b> : symboles différents.'
+        'Remplis chaque case d\'un <b>soleil</b> ou d\'une <b>lune</b> : touche une fois pour le soleil, deux fois pour la lune, trois pour vider.',
+        'Jamais <b>trois pareils</b> à la suite, <b>même en diagonale</b>.',
+        'Chaque ligne et chaque colonne a <b>autant de soleils que de lunes</b>.',
+        '<b>=</b> entre deux cases : les mêmes. <b>×</b> : différents.'
       ]
     },
     params,

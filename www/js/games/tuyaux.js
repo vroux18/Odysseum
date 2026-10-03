@@ -324,14 +324,17 @@
             boxes[boxes.length - 1].line = true;
           });
           rs.open.concat(rs.closed, rs.leaf).forEach((j) => boxes.push({ x: x0(j) + 3, y: y0(j) + 3, w: cell - 6, h: cell - 6 }));
-          if (rs.borders.length) parts.push('ne peut rien ouvrir vers le bord (trait doré)');
-          if (rs.open.length) parts.push('doit se brancher sur ' + (rs.open.length > 1 ? 'les voisines qui pointent' : 'la voisine qui pointe') + ' vers elle');
-          if (rs.closed.length) parts.push('ne peut pas viser ' + (rs.closed.length > 1 ? 'des voisines qui lui tournent' : 'une voisine qui lui tourne') + ' le dos');
-          if (rs.leaf.length) parts.push('ne doit pas se brancher sur un autre bout de tuyau (les deux resteraient isolés du réseau)');
-          const list = parts.length > 1 ? parts.slice(0, -1).join(', ') + ' et ' + parts[parts.length - 1] : parts[0] || 'n\'a qu\'une position possible';
-          text = 'La pièce dorée ' + list + '. Une seule orientation convient : la voici.';
+          if (rs.borders.length) parts.push('ne s\'ouvre pas vers le bord (trait doré)');
+          if (rs.open.length) parts.push('doit rejoindre ' + (rs.open.length > 1 ? 'les voisines qui pointent' : 'la voisine qui pointe') + ' vers elle');
+          if (rs.closed.length) parts.push('ne vise pas ' + (rs.closed.length > 1 ? 'les voisines qui lui tournent' : 'la voisine qui lui tourne') + ' le dos');
+          if (rs.leaf.length) parts.push('ne se branche pas sur un autre bout de tuyau');
+          // deux raisons au plus dans la phrase, pour rester courte (toutes restent surlignées)
+          const two = parts.slice(0, 2);
+          const list = two.length > 1 ? two[0] + ' et ' + two[1] : two[0] || 'n\'a qu\'une position possible';
+          const lit = rs.open.length + rs.closed.length + rs.leaf.length ? ' (voisines surlignées)' : '';
+          text = 'La pièce dorée ' + list + lit + '. Une seule position convient.';
         } else {
-          text = 'Coup de pouce : la pièce dorée se tourne ainsi. Aucune déduction simple ici ; pars des bords et des coins, leurs pièces ont peu de choix.';
+          text = 'Coup de pouce : pas de déduction simple ici, alors je tourne la pièce dorée dans le bon sens.';
         }
         return Object.assign({ text }, C.hintBoxes(canvas, boxes));
       },
@@ -355,13 +358,13 @@
     rules: {
       classic: [
         'Touche une pièce pour la faire <b>tourner</b> d\'un quart de tour.',
-        'Raccorde <b>toutes les pièces</b> à la source : le réseau se colore quand il est relié.',
+        'Relie <b>toutes les pièces</b> à la source : l\'eau coule dans chaque tuyau bien raccordé.',
         'Aucun tuyau ne doit rester ouvert dans le vide.'
       ],
       tore: [
-        'Touche une pièce pour la faire tourner.',
-        'Les tuyaux peuvent <b>sortir par un bord</b> et revenir par le bord opposé.',
-        'Raccorde tout le réseau à la source, sans tuyau ouvert.'
+        'Touche une pièce pour la faire <b>tourner</b> d\'un quart de tour.',
+        'Les tuyaux peuvent <b>sortir par un bord</b> et revenir par le bord opposé (petits tirets).',
+        'Relie toutes les pièces à la source, sans tuyau ouvert : l\'eau doit couler partout.'
       ]
     },
     params,

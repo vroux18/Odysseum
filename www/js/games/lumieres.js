@@ -118,11 +118,11 @@
         }
         if (best < 0) return false;
         const a = area(best), off = a.filter((j) => state[j]).length, on = a.length - off;
-        const what = puzzle.variant === 'croix' ? 'elle et ses voisines en diagonale' : 'elle et ses voisines (haut, bas, gauche, droite)';
-        let text = 'Appuie sur la case dorée : ' + what + ', surlignées, vont s\'inverser. ';
-        text += off && !on ? (off > 1 ? 'Elles sont toutes allumées : ' + off + ' ampoules s\'éteignent d\'un coup.' : 'L\'ampoule allumée s\'éteint.')
-          : off > on ? off + ' s\'éteignent, ' + on + ' s\'allume' + (on > 1 ? 'nt' : '') + ' : c\'est un pas vers la combinaison qui éteint tout.'
-          : 'Ça rallume des ampoules, mais cet appui fait partie de la combinaison qui éteint tout.';
+        const what = puzzle.variant === 'croix' ? 'elle et ses voisines en diagonale (surlignées)' : 'elle et ses voisines (surlignées)';
+        let text = 'Touche la case dorée : ' + what + ' vont s\'inverser. ';
+        text += off && !on ? (off > 1 ? off + ' lumières s\'éteignent d\'un coup !' : 'Une lumière s\'éteint, aucune ne s\'allume.')
+          : off > on ? off + ' s\'éteignent, ' + on + ' s\'allume' + (on > 1 ? 'nt' : '') + ' : c\'est un pas vers le noir complet.'
+          : 'Ça en rallume, mais cet appui fait partie de la solution.';
         return { text, where: [cells[best]], why: a.filter((j) => j !== best).map((j) => cells[j]) };
       },
       destroy() {}
@@ -141,14 +141,14 @@
     ],
     rules: {
       classic: [
-        'Touche une ampoule : elle et ses <b>4 voisines</b> (haut, bas, gauche, droite) changent d\'état.',
-        'Éteins <b>toutes</b> les ampoules.',
-        'L\'objectif de coups est indicatif : fais mieux si tu peux.'
+        'Touche une lumière : elle et ses <b>4 voisines</b> (haut, bas, gauche, droite) s\'allument ou s\'éteignent.',
+        '<b>Éteins toutes</b> les lumières pour gagner.',
+        'L\'objectif de coups, affiché en haut, est un défi en plus : pas une obligation.'
       ],
       croix: [
-        'Touche une ampoule : elle et ses <b>4 voisines en diagonale</b> changent d\'état.',
-        'Éteins <b>toutes</b> les ampoules.',
-        'Astuce : une case n\'influence que les cases de sa « couleur » de damier.'
+        'Touche une lumière : elle et ses <b>4 voisines en diagonale</b> s\'allument ou s\'éteignent.',
+        '<b>Éteins toutes</b> les lumières pour gagner.',
+        'Astuce : un appui ne touche que les cases de sa couleur de damier.'
       ]
     },
     params,

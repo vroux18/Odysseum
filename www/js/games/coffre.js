@@ -252,10 +252,10 @@
           const els = rowEls();
           const why = used.map((r) => els[r] && els[r].querySelectorAll('.arrow')[i]).filter(Boolean);
           let text;
-          if (!rows.length) text = 'Coup de pouce : le ' + ordM(i + 1) + ' chiffre est ' + code[i] + '. Ensuite, chaque flèche te dira « plus haut » ou « plus bas » pour sa position.';
-          else if (span === 0) text = 'Les flèches surlignées ne laissent qu\'un seul choix pour le ' + ordM(i + 1) + ' chiffre' + (lo > 0 ? ' : plus que ' + (lo - 1) : '') + (hi < 9 ? (lo > 0 ? ', ' : ' : ') + 'moins que ' + (hi + 1) : '') + '. C\'est donc ' + code[i] + '.';
+          if (!rows.length) text = 'Coup de pouce : le ' + ordM(i + 1) + ' chiffre est ' + code[i] + '. Ensuite, chaque flèche te dira « plus haut » ou « plus bas ».';
+          else if (span === 0) text = 'Les flèches surlignées ne laissent qu\'un seul choix pour le ' + ordM(i + 1) + ' chiffre : c\'est ' + code[i] + '.';
           else if (!used.length) text = 'Coup de pouce : le ' + ordM(i + 1) + ' chiffre est ' + code[i] + '.';
-          else text ='Les flèches surlignées disent que le ' + ordM(i + 1) + ' chiffre est entre ' + lo + ' et ' + hi + '. C\'est ' + code[i] + ' ; astuce : vise toujours le milieu de l\'intervalle.';
+          else text = 'Les flèches surlignées placent le ' + ordM(i + 1) + ' chiffre entre ' + lo + ' et ' + hi + ' : c\'est ' + code[i] + '. Astuce : vise toujours le milieu.';
           return { text, where: [slotEl(i)], why };
         }
 
@@ -297,7 +297,7 @@
           }
           reveal(forced);
           const els = rowEls();
-          const text = (need.length > 1 ? 'Les témoins des essais surlignés' : 'Les témoins de l\'essai surligné') + ' ne laissent qu\'une possibilité pour la ' + ord(forced + 1) + ' case : ' + nameOf(code[forced]) + '. Je le pose.';
+          const text = (need.length > 1 ? 'Les témoins des essais surlignés' : 'Les témoins de l\'essai surligné') + ' ne laissent qu\'un symbole possible pour la ' + ord(forced + 1) + ' case : ' + nameOf(code[forced]) + '. Je le pose.';
           return { text, where: [slotEl(forced)], why: need.map((r) => els[r]).filter(Boolean) };
         }
         // 2. pas de certitude : on révèle une case et on rappelle ce que disent les témoins
@@ -306,9 +306,9 @@
         const els = rowEls();
         const blank = rows.findIndex((g) => { const s = score(code, g); return s.exact + s.near === 0; });
         let text = 'Coup de pouce : la ' + ord(i + 1) + ' case est ' + nameOf(code[i]) + '. ';
-        if (blank >= 0) text += 'Regarde l\'essai surligné : aucun témoin allumé, donc aucun de ses symboles n\'est dans le code.';
-        else if (rows.length) text += 'Compare tes essais : un témoin plein = bon symbole bien placé, un creux = bon symbole mal placé.';
-        else text += 'Fais un premier essai avec des symboles variés : les témoins te guideront.';
+        if (blank >= 0) text += 'Et l\'essai surligné n\'a aucun témoin plein ni creux : aucun de ses symboles n\'est dans le code.';
+        else if (rows.length) text += 'Rien n\'est encore certain : compare tes essais pour trouver la suite.';
+        else text += 'Pour ton premier essai, varie les symboles : les témoins te guideront.';
         return { text, where: [slotEl(i)], why: blank >= 0 && els[blank] ? [els[blank]] : [] };
       },
       destroy() {}
@@ -327,14 +327,14 @@
     ],
     rules: {
       classic: [
-        'Devine la combinaison secrète de symboles en un nombre d\'essais limité.',
-        'Après chaque essai : un témoin <b>plein</b> = un symbole bien placé, un témoin <b>creux</b> = un bon symbole mal placé.',
-        'Touche une case de la ligne en cours pour l\'effacer.'
+        'Devine le <b>code secret</b> : compose ton essai avec les symboles du bas, puis valide avec <b>✓</b>.',
+        'Après chaque essai : témoin <b>plein</b> = bon symbole bien placé, témoin <b>creux</b> = bon symbole mal placé.',
+        'Touche une case de l\'essai en cours pour la vider. Le nombre d\'essais est limité !'
       ],
       expert: [
-        'Le même Mastermind, en plus exigeant : <b>5 symboles</b> à trouver parmi 7.',
-        'Un même symbole peut apparaître <b>plusieurs fois</b> dans le code.',
-        'Témoin plein = bien placé, témoin creux = bon symbole mal placé.'
+        'Le même jeu, en plus corsé : <b>5 symboles</b> à trouver parmi 7.',
+        'Un symbole peut revenir <b>plusieurs fois</b> dans le code.',
+        'Témoin <b>plein</b> = bon symbole bien placé, témoin <b>creux</b> = bon symbole mal placé.'
       ]
     },
     params,

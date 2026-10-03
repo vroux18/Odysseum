@@ -328,7 +328,8 @@
         later(() => {
           phase = 'turn'; pos = keep; hinted = seq[pos]; render(); api.onChange();
         }, 500 + (len - 1) * slow + slow * 0.7);
-        return 'Écoute bien : le chant reprend au ralenti. Ensuite, la coquille qui scintille est ta prochaine note (la ' + (keep + 1) + (keep ? 'e' : 're') + ' du chant).';
+        return 'Écoute bien : le chant reprend au ralenti. Ensuite, la coquille qui scintille est ta prochaine note' +
+          (keep ? ' : tu reprends à la ' + (keep + 1) + 'e note.' : ', la 1re du chant.');
       },
       redraw() { fit(); },
       destroy() {
@@ -378,8 +379,8 @@
       classic: [
         'Les coquilles <b>chantent</b> une suite de notes : écoute et regarde.',
         'Quand le <b>centre s\'illumine</b>, c\'est à toi : rejoue la même suite.',
-        'Chaque réussite ajoute <b>une note</b>. Atteins la longueur visée pour gagner.',
-        'Trois perles au centre : une par étape. Une erreur ? Tout reprend depuis le début.'
+        'Chaque réussite ajoute <b>une note</b>. Les <b>3 perles</b> du centre s\'allument à chaque étape, jusqu\'au chant complet.',
+        'Une erreur ? Le chant reprend <b>depuis le début</b>.'
       ]
     },
     tutorial: [
@@ -387,9 +388,10 @@
         text: 'Écoute : les coquilles <b>chantent</b> une suite de notes, l\'une après l\'autre.' },
       { art: tRing(2, true, tFinger(60, 96)),
         text: 'Quand le <b>centre s\'illumine</b>, rejoue la même suite en touchant les coquilles.' },
-      { art: '<svg viewBox="0 0 120 120" class="tuto-art">' + tDots(3, 4, 40) + tDots(4, 4, 62) +
+      // les 3 perles du centre : une de plus à chaque étape
+      { art: '<svg viewBox="0 0 120 120" class="tuto-art">' + tDots(1, 3, 40) + tDots(2, 3, 62) +
           '<path d="M52 84h16M60 76v16" stroke="#c7849f" stroke-width="3" stroke-linecap="round"/></svg>',
-        text: 'Chaque réussite ajoute <b>une note</b>. Une erreur ? Le chant reprend depuis le début.' }
+        text: 'Chaque réussite ajoute <b>une note</b> ; les <b>perles</b> du centre marquent tes étapes. Une erreur ? Tout reprend depuis le début.' }
     ],
     params,
     generate,

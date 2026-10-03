@@ -63,18 +63,18 @@
           fillCell(4, 1, 1, '#e2ecd8') + fillCell(4, 1, 2, '#e2ecd8') + fillCell(4, 2, 1, '#e2ecd8') + fillCell(4, 2, 2, '#e2ecd8') +
           [[2, 0], [3, 0], [3, 1], [3, 2], [3, 3], [2, 3]].map(([r, c]) => fillCell(4, r, c, '#f4ead2')).join('') +
           dot(4, 0, 1, 'var(--ink)', 7) + dot(4, 1, 3, 'var(--ink)', 7) + dot(4, 2, 0, 'var(--ink)', 7) + dot(4, 3, 2, 'var(--ink)', 7)),
-        text: 'Place <b>une reine par ligne, par colonne et par zone de couleur</b>.' },
+        text: 'Place <b>une couronne par ligne, par colonne et par zone de couleur</b>.' },
       { art: svg(grid(4) + dot(4, 1, 1, 'var(--ink)', 7) + dot(4, 2, 2, 'var(--bad-ink)', 7) + cross(cx(4, 2) + 14, cx(4, 2) - 14)),
-        text: 'Deux reines <b>ne se touchent jamais</b>, même en diagonale.' },
+        text: 'Deux couronnes <b>ne se touchent jamais</b>, même en diagonale. Les cases qu\'une couronne interdit se pointent toutes seules.' },
       { art: svg(grid(3) + dot(3, 1, 0, 'var(--muted)', 4) + dot(3, 1, 2, 'var(--ink)', 9) + finger(cx(3, 0) + 8, cx(3, 1) + 8) +
           '<text x="' + cx(3, 0) + '" y="104" text-anchor="middle" font-size="9" fill="var(--muted)">1 toucher</text>' +
           '<text x="' + cx(3, 2) + '" y="104" text-anchor="middle" font-size="9" fill="var(--muted)">2 touchers</text>'),
-        text: 'Touche une fois pour poser un <b>repère</b>, deux fois pour une <b>reine</b>. Glisse pour poser plusieurs repères.' }
+        text: 'Touche une fois pour un <b>point</b>, deux fois pour une <b>couronne</b>. Glisse pour pointer plusieurs cases ; pars d\'un point pour les effacer.' }
     ],
     variants: {
       cavaliers: { art: svg(grid(4) + dot(4, 0, 0, 'var(--ink)', 7) + dot(4, 1, 2, 'var(--bad-ink)', 7) +
           '<path d="M' + cx(4, 0) + ' ' + cx(4, 0) + 'H' + cx(4, 2) + 'V' + cx(4, 1) + '" fill="none" stroke="var(--bad-ink)" stroke-dasharray="3 3"/>' + dot(4, 1, 1, 'var(--ink)', 7)),
-        text: '<b>Variante Cavaliers</b> : les reines peuvent se toucher, mais jamais à un <b>saut de cavalier</b> (2 cases puis 1).' }
+        text: '<b>Variante Cavaliers</b> : les couronnes peuvent se toucher, mais jamais à un <b>saut de cavalier</b> (2 cases puis 1).' }
     }
   };
 
@@ -83,24 +83,24 @@
       { art: svg(grid(4) + sun(4, 1, 0) + moon(4, 1, 1) + sun(4, 1, 2) + moon(4, 1, 3)),
         text: 'Remplis la grille de <b>soleils</b> et de <b>lunes</b> : autant de chaque par ligne et par colonne.' },
       { art: svg(grid(4) + sun(4, 1, 0) + sun(4, 1, 1) + sun(4, 1, 2) + '<line x1="16" y1="' + cx(4, 1) + '" x2="80" y2="' + cx(4, 1) + '" stroke="var(--bad-ink)" stroke-width="2"/>'),
-        text: 'Jamais <b>trois identiques</b> côte à côte.' },
+        text: 'Jamais <b>trois pareils</b> à la suite, en ligne comme en colonne.' },
       { art: svg(grid(4) + sun(4, 1, 1) + sun(4, 1, 2) + text(4, 1, 1.5, '=', 'var(--muted)') + sun(4, 2, 1) + moon(4, 2, 2) + text(4, 2, 1.5, '×', 'var(--muted)')),
-        text: '<b>=</b> : les deux cases sont identiques. <b>×</b> : elles sont différentes. Touche une case pour changer de symbole.' }
+        text: '<b>=</b> : les deux cases sont pareilles. <b>×</b> : elles sont différentes. Touche une case : soleil, puis lune, puis vide.' }
     ],
     variants: {
       diagonales: { art: svg(grid(4) + moon(4, 0, 0) + moon(4, 1, 1) + moon(4, 2, 2) + '<line x1="20" y1="20" x2="78" y2="78" stroke="var(--bad-ink)" stroke-width="2"/>'),
-        text: '<b>Variante Diagonales</b> : pas trois identiques alignés, <b>même en diagonale</b>.' }
+        text: '<b>Variante Diagonales</b> : jamais trois pareils à la suite, <b>même en diagonale</b>.' }
     }
   };
 
   T.paves = {
     steps: [
       { art: svg(grid(4) + '<rect x="15" y="15" width="42" height="42" rx="6" fill="#d9e6ef"/>' + text(4, 0.5, 0.5, '4') + text(4, 2, 3, '3') + finger(57, 57)),
-        text: 'Trace un <b>rectangle</b> autour de chaque nombre, en glissant le doigt. Sa taille doit être égale au nombre.' },
+        text: 'Glisse le doigt pour tracer un <b>rectangle</b> autour d\'un nombre : il doit avoir autant de cases que ce nombre.' },
       { art: svg(grid(4) + '<rect x="15" y="15" width="42" height="42" rx="6" fill="#d9e6ef"/><rect x="63" y="15" width="42" height="18" rx="6" fill="#f3dcd7"/>' +
           '<rect x="87" y="39" width="18" height="66" rx="6" fill="#e2ecd8"/><rect x="15" y="63" width="66" height="42" rx="6" fill="#f4ead2"/><rect x="63" y="39" width="18" height="18" rx="6" fill="#ebe2f1"/>' +
           text(4, 0.5, 0.5, '4') + text(4, 0, 2.5, '2') + text(4, 2, 3, '3') + text(4, 2.5, 1, '6') + text(4, 1, 2, '1')),
-        text: 'Chaque rectangle contient <b>un seul nombre</b>, et toute la grille doit être couverte.' }
+        text: 'Chaque rectangle contient <b>un seul nombre</b>, et toute la grille doit être couverte. Touche un rectangle pour l\'effacer.' }
     ],
     variants: {
       mystere: { art: svg(grid(4) + text(4, 1, 1, '?', 'var(--muted)') + text(4, 2, 3, '3')),
@@ -115,12 +115,12 @@
         text: 'Les nombres indiquent les <b>blocs de cases pleines</b> d\'une ligne ou d\'une colonne, dans l\'ordre.' },
       { art: svg('<text x="20" y="62" font-size="11" fill="var(--muted)" text-anchor="middle">3 1</text>' +
           [0, 1, 2, 3, 4].map((c) => '<rect x="' + (32 + c * 16) + '" y="50" width="15" height="15" rx="2" fill="' + (c === 3 ? 'var(--soft)' : 'var(--game)') + '"/>').join('') +
-          '<circle cx="' + (32 + 3 * 16 + 7.5) + '" cy="57.5" r="2" fill="var(--muted)"/>'),
-        text: 'Entre deux blocs, au moins une case vide. Choisis l\'outil <b>remplir</b> ou <b>point</b> au-dessus de la grille.' }
+          '<path d="M' + (32 + 3 * 16 + 4) + ' 54l7 7M' + (32 + 3 * 16 + 11) + ' 54l-7 7" stroke="var(--muted)" stroke-width="1.8" stroke-linecap="round"/>'),
+        text: 'Entre deux blocs, au moins une case vide. Outil <b>■</b> pour remplir, outil <b>×</b> pour barrer une case vide.' }
     ],
     variants: {
       miroir: { art: svg(grid(4) + fillCell(4, 1, 0, 'var(--game)') + fillCell(4, 1, 3, 'var(--game)', 0.5) + '<line x1="60" y1="8" x2="60" y2="112" stroke="var(--muted)" stroke-dasharray="4 3"/>'),
-        text: '<b>Variante Miroir</b> : le dessin est symétrique. Chaque case posée se recopie de l\'autre côté.' }
+        text: '<b>Variante Miroir</b> : le dessin est symétrique. Chaque case posée se recopie de l\'autre côté, et seules les colonnes de gauche ont leurs nombres.' }
     }
   };
 
@@ -128,9 +128,9 @@
     steps: [
       { art: svg(grid(3) + path(3, [[0, 0], [0, 1], [0, 2], [1, 2], [1, 1], [1, 0], [2, 0], [2, 1], [2, 2]], '#8cbfb8', 7) +
           dot(3, 0, 0, 'var(--board)', 9) + text(3, 0, 0, '1') + dot(3, 1, 1, 'var(--board)', 9) + text(3, 1, 1, '2') + dot(3, 2, 2, 'var(--board)', 9) + text(3, 2, 2, '3')),
-        text: 'Pars du <b>1</b> et trace un seul chemin qui passe par <b>toutes les cases</b>, une seule fois.' },
+        text: 'Pars du <b>1</b> et glisse le doigt : un seul chemin, qui passe par <b>toutes les cases</b>, une seule fois.' },
       { art: svg(grid(3) + text(3, 0, 0, '1') + text(3, 1, 1, '2') + text(3, 2, 2, '3')),
-        text: 'Passe par les nombres <b>dans l\'ordre</b> et termine sur le plus grand.' }
+        text: 'Passe par les nombres <b>dans l\'ordre</b> et termine sur le plus grand. Reviens en arrière pour effacer.' }
     ],
     variants: {
       laby: { art: svg(grid(3) + '<line x1="44" y1="44" x2="44" y2="108" stroke="var(--muted)" stroke-width="3" stroke-linecap="round"/>' + dot(3, 0, 0, '#8cbfb8', 8) +
@@ -143,14 +143,14 @@
     steps: [
       { art: svg([[1, 1], [0, 1], [2, 1], [1, 0], [1, 2]].map(([r, c]) => dot(3, r, c, '#dcc283', 11)).join('') +
           [[0, 0], [0, 2], [2, 0], [2, 2]].map(([r, c]) => dot(3, r, c, 'var(--soft)', 11)).join('') + finger(cx(3, 1) + 6, cx(3, 1) + 6)),
-        text: 'Touche une lumière : <b>elle et ses quatre voisines</b> changent d\'état.' },
+        text: 'Touche une lumière : <b>elle et ses quatre voisines</b> s\'allument ou s\'éteignent.' },
       { art: svg([0, 1, 2].map((r) => [0, 1, 2].map((c) => dot(3, r, c, 'var(--soft)', 11)).join('')).join('')),
         text: '<b>Éteins toutes les lumières.</b> Essaie d\'y arriver avec le moins de coups possible.' }
     ],
     variants: {
       croix: { art: svg([[1, 1], [0, 0], [0, 2], [2, 0], [2, 2]].map(([r, c]) => dot(3, r, c, '#dcc283', 11)).join('') +
           [[0, 1], [1, 0], [1, 2], [2, 1]].map(([r, c]) => dot(3, r, c, 'var(--soft)', 11)).join('')),
-        text: '<b>Variante Croix</b> : chaque appui inverse la lumière et ses <b>quatre voisines en diagonale</b>.' }
+        text: '<b>Variante Croix</b> : chaque appui allume ou éteint la lumière et ses <b>quatre voisines en diagonale</b>.' }
     }
   };
 
@@ -159,9 +159,9 @@
       { art: svg([0, 1, 2, 3].map((i) => '<circle cx="' + (22 + i * 22) + '" cy="50" r="9" fill="var(--soft)"/><text x="' + (22 + i * 22) + '" y="55" text-anchor="middle" font-size="12" fill="' +
           [A, B, Y, G][i] + '">' + ['●', '▲', '■', '◆'][i] + '</text>').join('') +
           '<circle cx="40" cy="80" r="4" fill="var(--ink)"/><circle cx="54" cy="80" r="4" fill="none" stroke="var(--ink)"/><circle cx="68" cy="80" r="4" fill="none" stroke="var(--faint)"/><circle cx="82" cy="80" r="4" fill="none" stroke="var(--faint)"/>'),
-        text: 'Devine le <b>code secret</b>. Après chaque essai : point plein = bien placé, cercle = bon symbole mal placé.' },
-      { art: svg('<text x="60" y="66" text-anchor="middle" font-size="22" fill="var(--game)">→</text>'),
-        text: 'Compose ton code avec le clavier, puis valide avec la <b>flèche</b>. Le nombre d\'essais est limité.' }
+        text: 'Devine le <b>code secret</b>. Après chaque essai : témoin plein = bien placé, témoin creux = bon symbole mal placé.' },
+      { art: svg('<path d="M44 61l11 11 22-24" fill="none" stroke="var(--game)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>'),
+        text: 'Compose ton code avec les symboles du bas, puis valide avec <b>✓</b>. Touche une case pour la vider. Le nombre d\'essais est limité.' }
     ],
     variants: {
       expert: { art: svg([0, 1, 2, 3, 4].map((i) => '<circle cx="' + (16 + i * 22) + '" cy="56" r="9" fill="var(--soft)"/><text x="' + (16 + i * 22) + '" y="61" text-anchor="middle" font-size="12" fill="' +
@@ -189,7 +189,7 @@
         text: 'Touche une pièce pour la faire <b>tourner</b> d\'un quart de tour.' },
       { art: svg(pipe(34, 60, 'r', 'var(--game)', true) + pipe(60, 60, 'lrd', 'var(--game)', true) + pipe(86, 60, 'l', 'var(--game)', true) + pipe(60, 86, 'u', 'var(--game)', true) +
           '<circle cx="34" cy="60" r="3" fill="var(--bg)"/>'),
-        text: 'Raccorde <b>toutes les pièces à la source</b> : le réseau se colore quand il est relié. Aucun tuyau ne doit rester ouvert.' }
+        text: 'Relie <b>toutes les pièces à la source</b> : l\'eau coule dans les tuyaux raccordés. Aucun tuyau ne doit rester ouvert.' }
     ],
     variants: {
       tore: { art: svg(pipe(24, 60, 'l', 'var(--game)', true) + pipe(96, 60, 'r', 'var(--game)', true) +

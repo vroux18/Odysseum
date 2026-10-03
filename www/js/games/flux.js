@@ -8,9 +8,6 @@
   const COLORS = ['#d0714a', '#4f8fd0', '#d9a441', '#7f9a46', '#8f7fc8', '#e08a3c',
     '#3d9d90', '#c06474', '#a9b85a', '#5f7fd0', '#c9a23a', '#9c7a5c'];
 
-  // noms des couleurs, pour les explications d'indice (« le point bleu »)
-  const COLOR_ADJ = ['rouille', 'bleus', 'jaunes', 'verts', 'violets', 'orange', 'turquoise', 'roses', 'vert pomme', 'indigo', 'moutarde', 'bruns'];
-  const COLOR_NAMES = ['rouille', 'bleu', 'jaune', 'vert', 'violet', 'orange', 'turquoise', 'rose', 'vert pomme', 'indigo', 'moutarde', 'brun'];
   const GLYPHS =['●', '▲', '■', '◆', '★', '✚', '♥', '✿', '◐', '✕', '☾', '◇'];
   const DIRS =[[-1, 0], [1, 0], [0, -1], [0, 1]]; // haut, bas, gauche, droite
 
@@ -545,12 +542,12 @@
           drag = null;
           draw(); api.onChange(); checkWin();
         };
-        const name = (k) => 'le tuyau ' + COLOR_NAMES[k % COLOR_NAMES.length];
+        // (pas de nom de couleur : certaines teintes se ressemblent ; les points cités sont entourés d'or)
         // 1. deux points voisins : on les relie directement
         for (const k of todo) {
           if (solOf(k).length !== 2) continue;
           apply(k, solOf(k));
-          return Object.assign({ text: 'Les deux points ' + COLOR_ADJ[k % COLOR_ADJ.length] + ' se touchent : ils se relient directement, d\'une case à l\'autre.' },
+          return Object.assign({ text: 'Les deux points entourés d\'or sont de la même couleur et se touchent : il suffit de les relier.' },
             C.hintBoxes(canvas, solOf(k).map((v) => cellBox(v, 'where', true))));
         }
         // 2. un point qui n'a qu'une sortie libre : on suit le chemin tant qu'il est forcé
@@ -592,16 +589,16 @@
           where.push(cellBox(head, 'where', true));
           const why = (blockers || []).map((v) => cellBox(v, 'why'));
           const corner = fresh && g.adj[head].length < 4 && !wrap;
-          const who = fresh ? 'Le point ' + COLOR_NAMES[k % COLOR_NAMES.length] : 'Le bout du tuyau ' + COLOR_NAMES[k % COLOR_NAMES.length];
-          const text = who + ' n\'a qu\'une sortie libre' + (corner ? ' (il est contre le bord' + (why.length ? ', et ses autres voisines, surlignées, sont prises)' : ')') : why.length ? ' : ses autres voisines, surlignées, sont prises' : '') +
-            '. ' + (full ? 'En suivant les passages forcés, ' + name(k) + ' rejoint son autre point.' : 'Le tuyau avance donc ' + (gain > 1 ? 'de ' + gain + ' cases, toutes forcées.' : 'd\'une case, la seule possible.'));
+          const who = fresh ? 'Le point entouré d\'or' : 'Le bout du tuyau, entouré d\'or,';
+          const text = who + ' n\'a qu\'une sortie libre' + (corner ? ' : il est contre le bord' + (why.length ? ' et ses autres voisines (surlignées) sont prises' : '') : why.length ? ' : ses autres voisines (surlignées) sont prises' : '') +
+            '. ' + (full ? 'Le tuyau suit les passages forcés jusqu\'à son autre point.' : 'Le tuyau avance donc ' + (gain > 1 ? 'de ' + gain + ' cases, toutes forcées.' : 'd\'une case.'));
           return Object.assign({ text }, C.hintBoxes(canvas, why.concat(where)));
         }
         // 3. pas de passage forcé : coup de pouce, le tuyau le plus court
         const k = todo.slice().sort((a, b) => solOf(a).length - solOf(b).length)[0];
         apply(k, solOf(k));
         const ends = puzzle.endpoints[k];
-        return Object.assign({ text: 'Coup de pouce : voici le chemin ' + COLOR_NAMES[k % COLOR_NAMES.length] + ', le plus court qui reste. Relier d\'abord les couleurs proches libère la place pour les autres.' },
+        return Object.assign({ text: 'Coup de pouce : rien n\'est forcé pour l\'instant. Voici le tuyau le plus court qui reste, entre les deux points entourés d\'or.' },
           C.hintBoxes(canvas, solOf(k).filter((v) => !ends.includes(v)).map((v) => cellBox(v, 'why')).concat(ends.map((v) => cellBox(v, 'where', true)))));
       },
       redraw: draw,
@@ -622,14 +619,14 @@
     ],
     rules: {
       classic: [
-        'Relie chaque paire de carrés de même couleur par un tuyau.',
-        'Les tuyaux ne se croisent pas, sauf sur un <b>pont</b> : un tuyau le traverse à l\'horizontale, un autre à la verticale.',
+        'Glisse le doigt d\'un point à l\'autre pour relier chaque paire de <b>points de même couleur</b>.',
+        'Les tuyaux ne se croisent pas, sauf sur un <b>pont</b> : l\'un passe à l\'horizontale, l\'autre à la verticale.',
         'Remplis <b>toute</b> la grille pour gagner.'
       ],
       tore: [
-        'Relie chaque paire de carrés de même couleur et remplis toute la grille.',
-        'La grille est un <b>tore</b> : un tuyau qui sort par un bord ressort par le bord opposé, comme dans un tunnel.',
-        'Pour passer le tunnel, fais glisser ton doigt juste au-delà du bord.'
+        'Glisse le doigt d\'un point à l\'autre pour relier chaque paire de <b>points de même couleur</b>, et remplis toute la grille.',
+        'Les bords communiquent : un tuyau qui sort par un bord <b>ressort par le bord opposé</b>, comme dans un tunnel.',
+        'Pour passer, glisse le doigt juste au-delà du bord.'
       ]
     },
     params,

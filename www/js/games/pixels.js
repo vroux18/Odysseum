@@ -245,8 +245,8 @@
           if ((state[i] === 1 && !want) || (state[i] === 2 && want)) {
             apply([[i, want]]);
             const r = Math.floor(i / n), c = i % n;
-            return { text: want ? 'Cette croix était de trop : les indices de sa ligne et de sa colonne (en surbrillance) demandent une case pleine ici.'
-              : 'Cette case ne doit pas être pleine : elle ferait dépasser les blocs demandés par sa ligne ou sa colonne (en surbrillance).',
+            return { text: want ? 'Cette croix est de trop : les nombres de sa ligne et de sa colonne (surlignés) veulent une case pleine ici. Je la corrige.'
+              : 'Cette case ne doit pas être pleine : les nombres de sa ligne et de sa colonne (surlignés) veulent du vide ici. Je la corrige.',
               where: [cells[i]], why: [rowEls[r], colEls[mirror && c >= Math.ceil(n / 2) ? n - 1 - c : c]] };
           }
         }
@@ -282,15 +282,16 @@
           const name = lineName(f.axis, f.k), Name = name.charAt(0).toUpperCase() + name.slice(1);
           const cl = f.clues.join(' ');
           const nFill = f.forced.filter(([, v]) => v).length, nEmpty = f.forced.length - nFill;
-          const what = nFill && nEmpty ? 'les cases dorées (pleines et croix)' : nFill ? (nFill > 1 ? 'les cases dorées sont pleines' : 'la case dorée est pleine') : (nEmpty > 1 ? 'les cases dorées sont vides' : 'la case dorée est vide');
+          const what = nFill && nEmpty ? 'les cases dorées sont imposées (pleines ou vides)' : nFill ? (nFill > 1 ? 'les cases dorées sont pleines' : 'la case dorée est pleine') : (nEmpty > 1 ? 'les cases dorées sont vides' : 'la case dorée est vide');
+          const span = f.axis === 'row' ? 'largeur' : 'hauteur';
           let text;
-          if (f.kind === 'zero') text = Name + ' a pour indice 0 : aucune case pleine, tout est vide.';
-          else if (f.kind === 'done') text = Name + ' a déjà tous ses blocs (' + cl + ') : le reste de ses cases est vide.';
-          else if (f.kind === 'full') text = f.clues.length === 1 ? 'Le bloc de ' + cl + ' de ' + name + ' remplit toute la ' + (f.axis === 'row' ? 'largeur' : 'hauteur') + ' : toutes ses cases sont pleines.' : 'Les blocs ' + cl + ' de ' + name + ', avec un vide entre chacun, prennent exactement toute la ' + (f.axis === 'row' ? 'largeur' : 'hauteur') + ' : tout est imposé.';
+          if (f.kind === 'zero') text = Name + ' a pour nombre 0 : aucune case pleine, tout est vide.';
+          else if (f.kind === 'done') text = Name + ' a déjà tous ses blocs (' + cl + ') : ses autres cases sont vides.';
+          else if (f.kind === 'full') text = f.clues.length === 1 ? 'Le bloc de ' + cl + ' de ' + name + ' remplit toute la ' + span + ' : toutes ses cases sont pleines.' : 'Les blocs ' + cl + ' de ' + name + ', avec une case vide entre chacun, prennent toute la ' + span + ' : tout est imposé.';
           else if (f.kind === 'overlap') text = f.clues.length === 1
-            ? 'Le bloc de ' + cl + ' de ' + name + ' est si long que, où qu\'on le place, il recouvre toujours ' + (nFill > 1 ? 'les cases dorées' : 'la case dorée') + '.'
-            : 'Les blocs ' + cl + ' de ' + name + ' laissent peu de jeu : quelle que soit leur position, ' + what + '.';
-          else text = 'Avec les cases déjà trouvées, les blocs ' + cl + ' de ' + name + ' ne peuvent se placer que d\'une façon ici : ' + what + '.';
+            ? 'Le bloc de ' + cl + ' de ' + name + ' est si long que, où qu\'on le place, il couvre toujours ' + (nFill > 1 ? 'les cases dorées' : 'la case dorée') + '.'
+            : 'Les blocs ' + cl + ' de ' + name + ' laissent peu de jeu : où qu\'on les place, ' + what + '.';
+          else text = 'Avec les cases déjà trouvées, où qu\'on place ' + (f.clues.length === 1 ? 'le bloc de ' : 'les blocs ') + cl + ' de ' + name + ', ' + what + '.';
           apply(f.forced.map(([i, v]) => [i, v]));
           return { text, where: f.forced.map(([i]) => cells[i]), why: [clueEl(f.axis, f.k)].concat(f.idx.filter((i) => !f.forced.some(([j]) => j === i)).map((i) => cells[i])) };
         }
@@ -299,7 +300,7 @@
           if (known(i) !== -1) continue;
           const want = puzzle.solution[i];
           apply([[i, want]]);
-          return { text: 'Coup de pouce : cette case est ' + (want ? 'pleine' : 'vide') + '. Croise ensuite les indices de sa ligne et de sa colonne.', where: [cells[i]], why: [] };
+          return { text: 'Coup de pouce : aucune ligne ne force de case pour l\'instant. La case dorée est ' + (want ? 'pleine' : 'vide') + '.', where: [cells[i]], why: [] };
         }
         return false;
       },
@@ -319,14 +320,16 @@
     ],
     rules: {
       classic: [
-        'Les nombres donnent la taille des blocs de cases <b>pleines</b> dans chaque ligne et colonne, dans l\'ordre.',
+        'Les nombres donnent, dans l\'ordre, la taille des <b>blocs de cases pleines</b> de chaque ligne et colonne.',
         'Entre deux blocs, il y a au moins une case vide.',
-        'Choisis l\'outil <b>Remplir</b> ou <b>Croix</b>, puis touche ou glisse en ligne droite. Un sprite apparaît à la fin.'
+        'Outil <b>■</b> pour remplir, outil <b>×</b> pour barrer une case vide. Touche ou glisse en ligne droite ; retouche pour effacer.',
+        'Un petit dessin apparaît à la fin !'
       ],
       miroir: [
-        'Comme un picross, mais le sprite est <b>symétrique</b> : chaque case posée se recopie dans le miroir.',
-        'Seules les colonnes de gauche ont leurs indices ; celles de droite (⇆) en sont le reflet.',
-        'Les nombres donnent la taille des blocs de cases pleines, dans l\'ordre.'
+        'Le dessin est <b>symétrique</b> : chaque case posée se recopie de l\'autre côté du miroir.',
+        'Seules les colonnes de gauche ont leurs nombres ; celles de droite (⇆) en sont le reflet.',
+        'Les nombres donnent, dans l\'ordre, la taille des <b>blocs de cases pleines</b>, avec au moins une case vide entre deux blocs.',
+        'Outil <b>■</b> pour remplir, outil <b>×</b> pour barrer. Touche ou glisse en ligne droite ; retouche pour effacer.'
       ]
     },
     params,
