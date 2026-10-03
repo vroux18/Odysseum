@@ -181,9 +181,9 @@
       ['#btn-undo', '#btn-reset', '#back'].forEach((s) => { const b = $(s); if (b) b.addEventListener('click', later); });
     }
     clearHintFx();
-    tip.textContent = r.text || '';
-    tip.hidden = !r.text;
-    tip.classList.remove('in'); void tip.offsetWidth; tip.classList.add('in');
+    // pas de phrase : l'astuce se lit sur la grille (anneau doré, surlignages)
+    tip.textContent = '';
+    tip.hidden = true;
     const els = [];
     const mark = (list, cls) => (list || []).forEach((el) => {
       if (!el || !el.classList) return;
@@ -194,8 +194,7 @@
     mark(r.where, 'hint-where');
     clearHintFx.cur = { els, clear: r.clear };
     clearTimeout(showTip.timer);
-    // le temps de lire : plus long pour une explication plus longue
-    showTip.timer = setTimeout(hideTip, Math.max(7000, Math.min(12000, (r.text || '').length * 70)));
+    showTip.timer = setTimeout(hideTip, 7000);
   }
   // Surlignages posés par-dessus un plateau dessiné (canvas) ou une zone de plusieurs cases :
   // boxes = [{ x, y, w, h, kind: 'where' | 'why', round, label }] en pixels CSS relatifs à `ref`.
@@ -469,7 +468,7 @@
         (now.level > was.level ? '<small class="ld-up">niveau ' + now.level + '</small>' : '<small>niv. ' + now.level + '</small>') + '</div>' +
         '<div class="skill-bar"><i style="width:' + startW + '%" data-to="' + Math.round(now.frac * 100) + '"></i></div></div>' +
         '<b class="ld-gain" data-gain="' + gain + '">+0</b></div>';
-    }).join('') || '<p class="ld-none">Sans XP cette fois : les grilles résolues automatiquement n\'en donnent pas.</p>';
+    }).join('');
     const ov = $('#level-done');
     ov.hidden = false;
     C.sfx.place();
@@ -726,16 +725,11 @@
   // déduction sur contraintes (Gf), traitement visuo-spatial (Gv), planification, test d'hypothèses.
   // Les jauges reflètent la pratique dans le jeu, pas une mesure des capacités.
   const SKILLS = [
-    { id: 'logique', name: 'Déduction', games: ['reines', 'astres', 'demineur'], at: [72, 160], r: [50, 56],
-      desc: 'Aiguise ta logique : des certitudes, une case après l\'autre, jamais de hasard.' },
-    { id: 'espace', name: 'Espace', games: ['paves', 'pixels', 'tuyaux'], at: [168, 160], r: [50, 56],
-      desc: 'Fais tourner les formes dans ta tête avant de les poser.' },
-    { id: 'anticipation', name: 'Anticipation', games: ['flux', 'serpent', 'rushhour'], at: [120, 84], r: [80, 48],
-      desc: 'Garde toujours trois coups d\'avance, comme Ulysse face au Cyclope.' },
-    { id: 'raisonnement', name: 'Hypothèses', games: ['lumieres', 'coffre', 'bataille'], at: [80, 252], r: [52, 48],
-      desc: 'Lance une idée, mets-la à l\'épreuve, tire la leçon de chaque essai.' },
-    { id: 'memoire', name: 'Mémoire', games: ['simon'], at: [164, 254], r: [46, 46],
-      desc: 'Retiens le chant des sirènes, note après note, sans en perdre une.' }
+    { id: 'logique', name: 'Déduction', games: ['reines', 'astres', 'demineur'], at: [72, 160], r: [50, 56] },
+    { id: 'espace', name: 'Espace', games: ['paves', 'pixels', 'tuyaux'], at: [168, 160], r: [50, 56] },
+    { id: 'anticipation', name: 'Anticipation', games: ['flux', 'serpent', 'rushhour'], at: [120, 84], r: [80, 48] },
+    { id: 'raisonnement', name: 'Hypothèses', games: ['lumieres', 'coffre', 'bataille'], at: [80, 252], r: [52, 48] },
+    { id: 'memoire', name: 'Mémoire', games: ['simon'], at: [164, 254], r: [46, 46] }
   ];
   SKILLS.forEach((sk) => { sk.games = sk.games.filter((id) => C.games.some((g) => g.id === id)); });
   const NODES = 10;
