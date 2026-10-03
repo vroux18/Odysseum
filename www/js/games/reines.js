@@ -106,6 +106,8 @@
     const n = puzzle.n;
     // 0 vide, 1 croix, 2 couronne
     let state = new Uint8Array(n * n);
+    // case vidée à la main (couronne retirée) : elle reste vraiment vide, sans point automatique
+    let cleared = new Uint8Array(n * n);
     const history = [];
     const palette = C.makeRng('palette' + n).shuffle(REGION_COLORS.slice());
 
@@ -165,7 +167,7 @@
       const auto = blocked();
       cells.forEach((d, i) => {
         const v = state[i];
-        const k = v === 2 ? 'c' : v === 1 || auto[i] ? 'm' : '';
+        const k = v === 2 ? 'c' : v === 1 || (auto[i] && !cleared[i]) ? 'm' : '';
         if (d.dataset.k !== k) { d.dataset.k = k; d.innerHTML = k === 'c' ? CROWN : k === 'm' ? '<span class="mark"></span>' : ''; } // seul le symbole qui change s'anime
         d.classList.toggle('bad', bad.has(i));
       });
@@ -196,7 +198,10 @@
       if (!down) return;
       if (!down.dragging) {
         const i = down.start;
-        state[i] = (state[i] + 1) % 3;
+        // une case déjà pointée d'office passe directement à la couronne (sinon le toucher semblerait sans effet)
+        if (state[i] === 0 && !cleared[i] && blocked()[i]) state[i] = 2;
+        else state[i] = (state[i] + 1) % 3;
+        cleared[i] = state[i] === 0 ? 1 : 0; // toucher une couronne vide complètement la case
         if (state[i] === 2) C.sfx.place(); else C.sfx.tap();
       }
       history.push(down.snapshot);
