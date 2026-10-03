@@ -1,0 +1,28 @@
+/* Le voyage : liste des pierres atteintes, île par île (jetons de css/cartoon.css) */
+#home .go-label { pointer-events: auto; cursor: pointer; }
+#home .go-label::after { content: ''; display: inline-block; width: 7px; height: 7px; margin-left: 8px; vertical-align: 2px;
+  border-right: 2.5px solid currentColor; border-bottom: 2.5px solid currentColor; transform: rotate(45deg); opacity: .55; }
+
+.voyage-sheet { max-height: 78vh; overflow-y: auto; padding-top: 56px !important; }
+.vy-list { display: flex; flex-direction: column; gap: 18px; width: 100%; align-self: stretch; box-sizing: border-box; padding: 0 4px 8px; }
+.vy-isle { width: 100%; }
+.vy-isle h3 { margin: 0 0 10px; font: 700 18px/1.1 var(--k-font, 'Fredoka', sans-serif); color: var(--k-ink, #3a3550); }
+.vy-isle:not(.cur) h3 { color: var(--k-ink-soft, #8a83a3); }
+.vy-row { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+
+.vy-stone { position: relative; width: 100%; aspect-ratio: 1; max-width: 100%; border-radius: 50%; border: 0; padding: 0;
+  display: grid; place-items: center; font: 700 15px/1 var(--k-font, 'Fredoka', sans-serif);
+  background: #fff; color: var(--k-ink, #3a3550); box-shadow: 0 4px 0 var(--k-edge, #d9cfe8), var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14));
+  transition: transform .15s ease, box-shadow .15s ease; cursor: pointer; }
+.vy-stone:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--k-edge, #d9cfe8); }
+.vy-stone b { position: relative; top: -2px; }
+.vy-stone.done { background: linear-gradient(#ffe27a, #ffc93d); color: #7a4a00; box-shadow: 0 4px 0 #e08f00, var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14)); }
+.vy-stone.now { background: #fff; box-shadow: 0 4px 0 var(--k-edge, #d9cfe8), 0 0 0 3px var(--game); }
+.vy-stone.lock { opacity: .35; cursor: default; box-shadow: none; background: var(--k-well, #f1ecf8); }
+.vy-stone.here { outline: 3px solid var(--k-ink, #3a3550); outline-offset: 3px; }
+.vy-stone.boss { transform: scale(1.08); }
+.vy-flag { position: absolute; top: -9px; right: -4px; width: 18px; height: 18px; fill: var(--game); stroke: var(--k-ink, #3a3550); stroke-width: 1.6; stroke-linejoin: round; }
+.vy-stars { position: absolute; bottom: 4px; left: 0; right: 0; display: flex; justify-content: center; gap: 1px; }
+.vy-stars s { width: 7px; height: 7px; background: rgba(122, 74, 0, .25);
+  clip-path: polygon(50% 0, 63% 35%, 100% 38%, 71% 61%, 80% 100%, 50% 78%, 20% 100%, 29% 61%, 0 38%, 37% 35%); }
+.vy-stars s.on { background: #fff; }

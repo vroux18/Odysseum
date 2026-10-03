@@ -1289,6 +1289,45 @@
   }
   $('#prev-level').addEventListener('click', () => stepLevel(-1));
   $('#next-level').addEventListener('click', () => stepLevel(1));
+
+  // Le voyage : toutes les pierres dÃ©jÃ  atteintes, Ã®le par Ã®le (Ã©toiles, Ã©preuves) ;
+  // toucher une pierre y tÃ©lÃ©porte Ulysse pour la rejouer.
+  const VOYAGE_ISLANDS = ['Troie', 'Le MarchÃ©', 'Les Lotus', 'Le Cyclope', 'Les Vents', 'Les Falaises',
+    'CircÃ©', 'Les Brumes', 'Les SirÃ¨nes', 'Le Tourbillon', 'Le Soleil', 'Calypso', 'Le Palais', 'Ithaque'];
+  const voyageName = (c) => VOYAGE_ISLANDS[c % VOYAGE_ISLANDS.length] + (c >= VOYAGE_ISLANDS.length ? ' ' + (Math.floor(c / VOYAGE_ISLANDS.length) + 1) : '');
+  function renderVoyage() {
+    const box = $('#vy-list');
+    const stars = (J.stars) || {};
+    const last = Math.floor(J.done / PER);
+    let html = '';
+    for (let c = last; c >= 0; c--) { // l'Ã®le en cours en haut
+      let row = '';
+      for (let k = 0; k < PER; k++) {
+        const L = c * PER + k, info = levelInfo(L), n = stars[L] || 0;
+        const st = L < J.done ? 'done' : L === J.done ? 'now' : 'lock';
+        row += '<button class="vy-stone ' + st + (info.boss ? ' boss' : '') + (L === selected ? ' here' : '') + '" data-l="' + L + '"' +
+          ' style="--game:' + info.accent + '"' + (st === 'lock' ? ' disabled' : '') + '>' +
+          (info.boss ? '<svg class="vy-flag" viewBox="0 0 24 24"><path d="M6 21V4M6 4h11l-2.5 4L17 12H6"/></svg>' : '') +
+          '<b>' + (L + 1) + '</b>' +
+          (st === 'done' ? '<i class="vy-stars">' + [0, 1, 2].map((s) => '<s class="' + (s < n ? 'on' : '') + '"></s>').join('') + '</i>' : '') +
+          '</button>';
+      }
+      html += '<section class="vy-isle' + (c === last ? ' cur' : '') + '"><h3>' + voyageName(c) + '</h3><div class="vy-row">' + row + '</div></section>';
+    }
+    box.innerHTML = html;
+  }
+  function openVoyage() { renderVoyage(); $('#voyage').hidden = false; C.sfx.tap(); }
+  $('#go-label').addEventListener('click', openVoyage);
+  $('#vy-list').addEventListener('click', (e) => {
+    const b = e.target.closest('.vy-stone');
+    if (!b || b.disabled) return;
+    const L = +b.dataset.l;
+    $('#voyage').hidden = true;
+    C.sfx.tap();
+    if (worldReady && C.world.select) C.world.select(L); // loin : Ulysse est tÃ©lÃ©portÃ© sur la pierre
+    else { selected = L; J.selected = L; C.save(); renderPlay(); }
+  });
+  $('#voyage').addEventListener('click', (e) => { if (e.target.id === 'voyage') $('#voyage').hidden = true; });
   $('#cam-mode').addEventListener('click', () => {
     if (!worldReady) return;
     const mode = C.world.setCameraMode(C.world.cameraMode() === 'free' ? 'follow' : 'free');
@@ -1536,7 +1575,7 @@
   // Les navigateurs n'autorisent le son qu'après un premier geste.
   document.addEventListener('pointerdown', () => C.audio.unlock(), { once: true });
   // chaque feuille a sa croix de fermeture (en plus du toucher sur le fond) ; le bouton retour Android ferme d'abord la feuille ouverte
-  const SHEETS = ['library', 'levels', 'brain', 'settings', 'wardrobe', 'rules'];
+  const SHEETS = ['library', 'levels', 'brain', 'settings', 'wardrobe', 'rules', 'voyage'];
   SHEETS.forEach((id) => {
     const ov = document.getElementById(id), sheet = ov && ov.querySelector('.sheet');
     if (!sheet || sheet.querySelector('.sheet-close')) return;
