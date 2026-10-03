@@ -1,0 +1,211 @@
+/* =====================================================================
+   Odysseus — atelier du personnage (plein écran). Chargée en DERNIER.
+   Remplace l'ancienne feuille « garde-robe » (#wardrobe, mêmes identifiants pour app.js).
+   Haut (~55 %) : la scène 3D reste visible derrière (Ulysse en pied sur son podium, cadré par
+   World.showcase(true, { area: 'top', frac })) ; un voile en vignette fait le « projecteur ».
+   Bas (~45 %) : panneau épais, onglets ronds illustrés, grille de tuiles, bouton « C'est parfait ».
+   Uniquement les jetons de cartoon.css (--k-*) : thèmes clair et sombre gratuits.
+   ===================================================================== */
+.creator {
+  /* voile du projecteur : bords voilés, centre clair (teinte du fond de l'interface) */
+  --cr-veil: rgba(246, 241, 231, .78);
+  --cr-veil-mid: rgba(246, 241, 231, .18);
+  --cr-light: rgba(255, 248, 222, .55);
+  --cr-panel-h: clamp(300px, 45%, 430px);
+  position: fixed; inset: 0; z-index: 45;
+  display: flex; flex-direction: column;
+  font-family: var(--k-font); color: var(--k-ink);
+  /* (pas de fond : on voit la 3D au travers de la zone haute) */
+  background: transparent;
+  overscroll-behavior: contain;
+  -webkit-user-select: none; user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.creator[hidden] { display: none !important; }
+/* pendant l'atelier, l'interface de la carte (badges, pièces, flèches…) s'efface : seule la 3D reste */
+.creator-open #home > :not(#world) { visibility: hidden !important; }
+:root[data-theme="dark"] .creator {
+  --cr-veil: rgba(20, 23, 41, .82);
+  --cr-veil-mid: rgba(20, 23, 41, .2);
+  --cr-light: rgba(255, 230, 160, .16);
+}
+
+/* ---------- Scène (haut) : zone de glisser pour faire tourner Ulysse ---------- */
+.cr-stage {
+  position: relative; flex: 1 1 auto; min-height: 0;
+  touch-action: none; cursor: grab;
+  animation: cr-fade .45s ease both;
+}
+.cr-stage.grab { cursor: grabbing; }
+/* projecteur : cône de lumière douce depuis le haut + vignette autour du héros */
+.cr-spot {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 34% 46% at 50% 54%, var(--cr-light), transparent 70%),
+    radial-gradient(ellipse 62% 60% at 50% 54%, transparent 40%, var(--cr-veil-mid) 62%, var(--cr-veil) 100%);
+}
+.cr-top {
+  position: absolute; left: 0; right: 0; top: 0;
+  display: flex; align-items: center; gap: 10px;
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 0;
+}
+.cr-gap { flex: 1; }
+/* bouton rond « bulle bombée » (même recette que les boutons de l'accueil) */
+.cr-round {
+  width: var(--k-btn); height: var(--k-btn); flex: 0 0 auto; padding: 0;
+  display: grid; place-items: center; border-radius: 50%;
+  background: var(--k-bubble); color: var(--k-ink); border: 3px solid var(--k-rim);
+  box-shadow: 0 5px 0 var(--k-edge), var(--k-drop);
+  transition: transform .15s ease, box-shadow .15s ease, opacity .2s ease;
+  cursor: pointer;
+}
+.cr-round:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--k-edge), var(--k-drop-sm); }
+.cr-round[disabled] { opacity: .45; pointer-events: none; }
+.cr-round svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+#cr-cheer svg .f { fill: var(--k-sun); stroke: var(--k-sun-dk); }
+.cr-dice svg .f { fill: var(--k-coral); stroke: #c94d82; }
+.cr-dice svg .d { fill: #fff; stroke: none; }
+.cr-dice.roll svg { animation: cr-roll .5s var(--k-ease); }
+#cr-cheer.pop svg { animation: cr-pop .5s var(--k-ease); }
+
+/* rappel « glisser pour tourner », sous les pieds */
+.cr-spin {
+  position: absolute; left: 50%; bottom: 12px; width: 64px; margin-left: -32px;
+  color: var(--k-ink); opacity: .5; pointer-events: none; transition: opacity .6s ease;
+  animation: cr-sway 2.4s ease-in-out infinite;
+}
+.cr-spin svg { display: block; width: 100%; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.creator.spun .cr-spin { opacity: 0; }
+/* nom du choix courant : petite pastille, apparaît puis s'efface */
+.cr-label {
+  position: absolute; left: 50%; top: calc(80px + env(safe-area-inset-top, 0px)); transform: translateX(-50%) translateY(-6px);
+  max-width: calc(100% - 32px); padding: 5px 14px; border-radius: var(--k-r-pill);
+  background: var(--k-bubble); color: var(--k-ink); border: 2px solid var(--k-rim);
+  box-shadow: 0 3px 0 var(--k-edge), var(--k-drop-sm);
+  font: 600 13px/1.2 var(--k-font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  opacity: 0; pointer-events: none; transition: opacity .25s ease, transform .25s var(--k-ease);
+}
+.cr-label.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ---------- Panneau (bas) ---------- */
+.cr-panel {
+  position: relative; flex: 0 0 var(--cr-panel-h); min-height: 0;
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  background: var(--k-bubble);
+  border-top: 3px solid var(--k-rim);
+  border-radius: var(--k-r-lg) var(--k-r-lg) 0 0;
+  box-shadow: 0 -6px 0 var(--k-edge), 0 -10px 30px rgba(60, 80, 160, .2);
+  animation: cr-rise .5s var(--k-ease) both;
+}
+:root[data-theme="dark"] .cr-panel { box-shadow: 0 -6px 0 var(--k-edge), 0 -10px 30px rgba(8, 6, 40, .5); }
+
+/* onglets : huit pastilles rondes illustrées sur une seule rangée */
+.cr-tabs {
+  display: grid; grid-template-columns: repeat(var(--n, 8), minmax(0, 1fr)); gap: 6px;
+  flex: 0 0 auto; padding: 2px 0 4px;
+}
+.cr-tab {
+  position: relative; width: 100%; max-width: 48px; aspect-ratio: 1; justify-self: center;
+  padding: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  background: var(--k-well); color: var(--k-ink); border: 3px solid transparent;
+  box-shadow: 0 3px 0 var(--k-edge);
+  transition: transform .15s var(--k-ease), background .2s ease, box-shadow .15s ease;
+}
+.cr-tab svg { width: 78%; height: 78%; overflow: visible; }
+.cr-tab:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--k-edge); }
+.cr-tab.on {
+  background: var(--k-sun-lt); border-color: var(--k-rim);
+  box-shadow: 0 4px 0 var(--k-sun-dk), var(--k-drop-sm); transform: translateY(-2px) scale(1.06);
+}
+:root[data-theme="dark"] .cr-tab.on { background: var(--k-sun); color: #3a2a00; }
+/* petite pointe sous l'onglet actif */
+.cr-tab.on::after {
+  content: ''; position: absolute; left: 50%; bottom: -11px; width: 8px; height: 8px; margin-left: -4px;
+  border-radius: 50%; background: var(--k-sun-dk);
+}
+
+/* grille des tuiles : défile si besoin */
+.cr-grid {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 10px; align-content: start;
+  padding: 8px 4px 10px; margin: 0 -4px;
+  -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  /* fondu en bas : on devine qu'il y a une suite */
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 14px), transparent);
+  mask-image: linear-gradient(180deg, #000 calc(100% - 14px), transparent);
+}
+.cr-grid::-webkit-scrollbar { display: none; }
+.cr-tile {
+  position: relative; min-width: 0; padding: 0; border: 0; background: none; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 9px;
+  color: var(--k-ink-soft); font: 600 11px/1.15 var(--k-font);
+  animation: cr-in .35s var(--k-ease) both; animation-delay: calc(var(--k, 0) * 28ms);
+}
+.cr-tile .cr-art {
+  position: relative; width: 100%; aspect-ratio: 1; max-width: 70px; border-radius: 22px;
+  display: grid; place-items: center;
+  background: var(--k-well); border: 3px solid var(--k-rim);
+  box-shadow: 0 4px 0 var(--k-edge), var(--k-shine);
+  transition: transform .18s var(--k-ease), box-shadow .18s ease;
+}
+.cr-tile .cr-art svg { width: 78%; height: 78%; overflow: visible; }
+.cr-tile:active .cr-art { transform: translateY(2px) scale(.96); }
+.cr-tile .cr-name { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* choisi : anneau d'or épais + coche */
+.cr-tile.on { color: var(--k-ink); }
+.cr-tile.on .cr-art {
+  border-color: var(--k-sun);
+  box-shadow: 0 0 0 3px var(--k-sun-dk), 0 5px 0 3px var(--k-sun-dk), var(--k-drop-sm);
+  transform: scale(1.04);
+}
+.cr-tile .cr-check {
+  position: absolute; right: -6px; top: -6px; width: 24px; height: 24px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--k-sun); border: 2.5px solid var(--k-rim);
+  box-shadow: 0 2px 0 var(--k-sun-dk); transform: scale(0); transition: transform .25s var(--k-ease);
+}
+.cr-tile .cr-check svg { width: 14px; height: 14px; fill: none; stroke: #6b4300; stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; }
+.cr-tile.on .cr-check { transform: scale(1); }
+
+/* dessins des tuiles et des onglets : contour à l'encre de l'interface */
+.cr-ico .o { stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.cr-ico .l { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.cr-tile .cr-ico, .cr-tab .cr-ico { color: var(--k-ink); }
+:root[data-theme="dark"] .cr-tab.on .cr-ico { color: #3a2a00; }
+.cr-ico .none { fill: none; stroke: var(--k-ink-soft); stroke-width: 3; stroke-linecap: round; }
+
+/* bouton de validation */
+.cr-done {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 54px; padding: 12px; border-radius: var(--k-r-pill); cursor: pointer;
+  font: 700 18px/1.2 var(--k-font); color: #fff; border: 3px solid var(--k-rim);
+  background: var(--k-grass); text-shadow: 0 1px 0 rgba(0, 0, 0, .2);
+  box-shadow: 0 5px 0 #3a9a26, var(--k-drop-sm), var(--k-shine);
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.cr-done svg { width: 24px; height: 24px; fill: none; stroke: #fff; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+.cr-done:active { transform: translateY(3px); box-shadow: 0 2px 0 #3a9a26, var(--k-shine); }
+
+/* petits écrans (hauteur) : panneau un peu plus compact */
+@media (max-height: 640px) {
+  .creator { --cr-panel-h: clamp(270px, 48%, 360px); }
+  .cr-panel { gap: 8px; padding-top: 10px; }
+  .cr-done { min-height: 46px; font-size: 16px; }
+}
+/* paysage / tablette : panneau centré, pas plus large que 520 px */
+@media (min-width: 600px) {
+  .cr-panel { width: 100%; max-width: 520px; margin: 0 auto; }
+  .cr-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+
+@keyframes cr-fade { from { opacity: 0; } }
+@keyframes cr-rise { from { transform: translateY(100%); } }
+@keyframes cr-in { from { opacity: 0; transform: translateY(8px) scale(.9); } }
+@keyframes cr-roll { 0% { transform: rotate(0); } 60% { transform: rotate(200deg) scale(1.15); } 100% { transform: rotate(360deg); } }
+@keyframes cr-pop { 50% { transform: scale(1.35) rotate(-12deg); } }
+@keyframes cr-sway { 0%, 100% { transform: translateX(-5px); } 50% { transform: translateX(5px); } }
+/* animations réduites (réglage du jeu ou du système) */
+@media (prefers-reduced-motion: reduce) {
+  .cr-stage, .cr-panel, .cr-tile, .cr-spin, .cr-dice.roll svg, #cr-cheer.pop svg { animation: none !important; }
+}
+.a11y-motion .cr-stage, .a11y-motion .cr-panel, .a11y-motion .cr-tile, .a11y-motion .cr-spin { animation: none !important; }

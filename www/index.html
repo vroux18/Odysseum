@@ -26,6 +26,8 @@
 <link rel="stylesheet" href="css/voyage.css">
 <!-- intro « aube calme » (après toutes les autres feuilles : elle remplace les règles d'intro de style.css et cartoon.css) -->
 <link rel="stylesheet" href="css/intro.css">
+<!-- atelier du personnage plein écran (remplace l'ancienne feuille « garde-robe ») -->
+<link rel="stylesheet" href="css/creator.css">
 </head>
 <body>
 <!-- Intro « aube calme » : ciel crème pêche, soleil levant, îles au loin, goélands, mer turquoise douce en houles parallaxe,
@@ -221,12 +223,12 @@
       <button id="btn-reset" class="ghost-icon" aria-label="Effacer">
         <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-eraser"/></svg>
       </button>
-      <button id="btn-hint" class="ghost-icon" aria-label="Indice">
-        <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-lightbulb"/></svg>
       <!-- explication : l'astuce et sa phrase ; indice : le coup montré directement sur la grille -->
       <button id="btn-explain" class="ghost-icon" aria-label="Explication">
         <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4 3v-3H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/><path d="M8 10h8M8 13h5"/></svg>
       </button>
+      <button id="btn-hint" class="ghost-icon" aria-label="Indice">
+        <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-lightbulb"/></svg>
         <span id="hint-left" class="hint-left">3</span>
       </button>
     </nav>
@@ -329,13 +331,28 @@
     </div>
   </div>
 
-  <!-- garde-robe : tenue, cape, cheveux, peau, accessoire, arme ; Ulysse change en direct sur la carte -->
-  <div id="wardrobe" class="overlay wardrobe" hidden>
-    <div class="sheet wardrobe-sheet">
-      <header class="sheet-head"><h2>Garde-robe</h2></header>
-      <div id="wd-tabs" class="wd-tabs" role="tablist"></div>
-      <div id="wd-choices" class="wd-choices"></div>
-      <button id="wd-done" class="wd-done">C'est parfait</button>
+  <!-- Atelier du personnage (plein écran, styles dans css/creator.css) : en haut, Ulysse en pied sur
+       son podium (la 3D derrière, cadrée par World.showcase(true, { area: 'top' })) ; un doigt le fait
+       tourner. En bas, un panneau : onglets ronds illustrés, grille de tuiles, « C'est parfait ».
+       Tout change en direct (World.setSkin) ; app.js remplit #wd-tabs et #wd-choices. -->
+  <div id="wardrobe" class="creator" role="dialog" aria-label="Apparence du personnage" hidden>
+    <div id="cr-stage" class="cr-stage">
+      <i class="cr-spot" aria-hidden="true"></i>
+      <div class="cr-top">
+        <button id="cr-close" class="cr-round" aria-label="Retour"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg></button>
+        <button id="cr-undo" class="cr-round" aria-label="Annuler le dernier changement" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 9.5H15a4.5 4.5 0 0 1 0 9h-4"/><path d="M11.5 5.5 7.5 9.5l4 4"/></svg></button>
+        <span class="cr-gap"></span>
+        <button id="cr-cheer" class="cr-round" aria-label="Pose de joie"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="f" d="M12 3.8l2.3 4.7 5.2.8-3.8 3.6.9 5.1L12 15.6 7.4 18l.9-5.1-3.8-3.6 5.2-.8z"/></svg></button>
+        <button id="cr-random" class="cr-round cr-dice" aria-label="Tenue au hasard"><svg viewBox="0 0 24 24" aria-hidden="true"><rect class="f" x="4" y="4" width="16" height="16" rx="4.5"/><circle class="d" cx="8.6" cy="8.6" r="1.5"/><circle class="d" cx="15.4" cy="8.6" r="1.5"/><circle class="d" cx="12" cy="12" r="1.5"/><circle class="d" cx="8.6" cy="15.4" r="1.5"/><circle class="d" cx="15.4" cy="15.4" r="1.5"/></svg></button>
+      </div>
+      <!-- petit rappel : glisser pour faire tourner (s'efface au premier geste) -->
+      <span class="cr-spin" aria-hidden="true"><svg viewBox="0 0 48 20"><path d="M8 10c0 3.5 7 6 16 6s16-2.5 16-6"/><path d="M36 13.5l4-3.5 1.5 5"/><path d="M12 13.5 8 10l-1.5 5"/></svg></span>
+      <span id="cr-label" class="cr-label" aria-live="polite"></span>
+    </div>
+    <div class="cr-panel">
+      <div id="wd-tabs" class="cr-tabs" role="tablist" aria-label="Catégories"></div>
+      <div id="wd-choices" class="cr-grid" role="listbox"></div>
+      <button id="wd-done" class="cr-done"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 12.5l4.2 4.2 8.8-9.4"/></svg>C'est parfait</button>
     </div>
   </div>
 

@@ -1807,7 +1807,7 @@
       fl.hidden = true; void fl.offsetWidth; fl.hidden = false;
       setTimeout(() => startFocus(sk), 420);
       setTimeout(() => { fl.hidden = true; }, 1300);
-    });
+    }, { games: sk.games });
   }
 
   // Accessibilité : texte agrandi, contraste renforcé, animations réduites, symboles sur les couleurs
@@ -1885,39 +1885,214 @@
   const skinState = () => (C.store.settings.skin = C.store.settings.skin || {});
   function applySkin() { if (worldReady && C.world.setSkin) C.world.setSkin(Object.assign({}, skinState())); }
   applySkin(); // la tenue choisie est remise au lancement
-  function renderWardrobe() {
-    const opts = skinOptions(), st = skinState();
-    // toutes les catégories fournies par le monde 3D (tenue, bouclier…), avec leur nom français
-    const labels = Object.assign({ outfit: 'Tenue', shield: 'Bouclier' }, opts.labels || {});
-    const parts = Object.keys(opts).filter((k) => Array.isArray(opts[k]) && opts[k].length)
-      .map((k) => ({ id: k, name: (SKIN_PARTS.find((p) => p.id === k) || {}).name || labels[k] || k }));
-    if (!parts.some((p) => p.id === wdPart) && parts.length) wdPart = parts[0].id;
-    $('#wd-tabs').innerHTML = parts
-      .map((p) => '<button role="tab" data-part="' + p.id + '" class="' + (p.id === wdPart ? 'on' : '') + '">' + p.name + '</button>').join('');
+
+  // ---------- Atelier du personnage (plein écran) ----------
+  // Ordre des onglets (pastilles rondes illustrées) ; les catégories inconnues suivent.
+  const CR_ORDER = ['outfit', 'tunic', 'cape', 'hair', 'skin', 'accessory', 'weapon', 'shield'];
+  const CR_NAMES = { outfit: 'Tenue', tunic: 'Tunique', cape: 'Cape', hair: 'Cheveux', skin: 'Peau', accessory: 'Coiffe', weapon: 'Arme', shield: 'Bouclier' };
+  // petits dessins (viewBox 48) : .o = rempli + contour encre, .l = trait encre ; couleurs fixes
+  // pour les objets (bronze, bois, or), couleur du choix pour les tuiles de teinte
+  const crLine = (d, col, w) => '<path d="' + d + '" fill="none" stroke="currentColor" stroke-width="' + (w + 2.6) + '" stroke-linecap="round" stroke-linejoin="round"/>' +
+    '<path d="' + d + '" fill="none" stroke="' + col + '" stroke-width="' + w + '" stroke-linecap="round" stroke-linejoin="round"/>';
+  const CR_NONE = '<circle class="none" cx="24" cy="24" r="13"/><path class="none" d="M15 33 33 15"/>';
+  const CR_FACE = (c) => '<circle class="o" cx="24" cy="27" r="11" fill="' + c + '"/><circle cx="20" cy="28.5" r="1.4" fill="#3a3550"/><circle cx="28" cy="28.5" r="1.4" fill="#3a3550"/>';
+  const CR_HAIR = (c) => '<path class="o" fill="' + c + '" d="M12.6 27c-1.6-10 4-17 11.4-17s13 7 11.4 17c-1.2-3.6-3.4-6.4-5.6-7.2-3.2 2.4-8.4 3.4-13.4 1.8-2 1.6-3.3 3.4-3.8 5.4z"/>';
+  const CR_SHIELD_BASE = { chouette: '#b0402f', poulpe: '#b0402f', oeil: '#e9e1cf', soleil: '#2b2f3a' };
+  const CR_SWATCH = {
+    tunic: (c) => '<path class="o" fill="' + c + '" d="M17 8 9.5 12l3 8 3-1.5V40h17V18.5l3 1.5 3-8L31 8c-1.5 3-4 4.5-7 4.5S18.5 11 17 8z"/><path d="M15.5 26.5h17" stroke="#e0a83a" stroke-width="3"/>',
+    cape: (c) => '<path class="o" fill="' + c + '" d="M15 10c5 3 13 3 18 0l5 28c-7 4-21 4-28 0z"/><path d="M21 14.5l-2 23M27 14.5l2 23" stroke="#000" stroke-opacity=".18" stroke-width="2" stroke-linecap="round"/><circle class="o" cx="15" cy="10" r="2.8" fill="#e0a83a"/><circle class="o" cx="33" cy="10" r="2.8" fill="#e0a83a"/>',
+    hair: (c) => CR_FACE('#f1cba7') + CR_HAIR(c),
+    skin: (c) => '<circle class="o" cx="24" cy="25" r="13" fill="' + c + '"/><circle cx="19.5" cy="23.5" r="1.6" fill="#3a3550"/><circle cx="28.5" cy="23.5" r="1.6" fill="#3a3550"/>' +
+      '<ellipse cx="16.5" cy="28.5" rx="2.6" ry="1.6" fill="#ff7eb0" opacity=".45"/><ellipse cx="31.5" cy="28.5" rx="2.6" ry="1.6" fill="#ff7eb0" opacity=".45"/>' +
+      '<path d="M20 29.5c2.4 2.6 5.6 2.6 8 0" fill="none" stroke="#3a3550" stroke-width="2" stroke-linecap="round"/>'
+  };
+  const crLeaves = (side) => [[10.5, 19, -25], [10.6, 26.5, -5], [13.6, 33, 25], [18.6, 37.6, 55]]
+    .map(([x, y, a]) => '<ellipse class="o" cx="' + (side < 0 ? x : 48 - x) + '" cy="' + y + '" rx="2.6" ry="4.6" fill="#7bc043" transform="rotate(' + (side < 0 ? a : -a) + ' ' + (side < 0 ? x : 48 - x) + ' ' + y + ')"/>').join('');
+  const CR_ITEM = {
+    'accessory:laurel': crLine('M24 40C13 38 8 28 11 15', '#5f8f2e', 2.2) + crLine('M24 40c11-2 16-12 13-25', '#5f8f2e', 2.2) + crLeaves(-1) + crLeaves(1),
+    'accessory:helmet': '<path class="o" fill="#d94b3d" d="M13 16c2-8 7-12 11-12s9 4 11 12c-3-3-7-4.5-11-4.5S16 13 13 16z"/>' +
+      '<path class="o" fill="#e0a83a" d="M12 34c0-14 5-21.5 12-21.5S36 20 36 34v6h-7v-9.5l-2.5-2h-5l-2.5 2V40h-7z"/><path d="M16 25h5.5M26.5 25H32" stroke="#3a3550" stroke-width="2.6" stroke-linecap="round"/>',
+    'accessory:band': CR_FACE('#f1cba7') + CR_HAIR('#6f4b2e') + '<path class="o" fill="#d94b3d" d="M12.6 20.6c7-3 15.8-3 22.8 0l-.4 4.6c-7-2.8-15-2.8-22 0z"/>' + crLine('M35.5 22.6l5 5.4M35.5 22.6l6-1.6', '#d94b3d', 2.2),
+    'accessory:petasos': '<ellipse class="o" cx="24" cy="31" rx="19" ry="5.6" fill="#c99a5b"/><path class="o" fill="#b5803f" d="M14 30.5c0-9 4.5-14.5 10-14.5s10 5.5 10 14.5c-6 2-14 2-20 0z"/><path d="M14.6 27c6 1.8 12.8 1.8 18.8 0" stroke="#7a4a1f" stroke-width="2.4" fill="none"/>',
+    'weapon:spear': crLine('M10 40 33 16', '#a8743f', 3.6) + '<path class="o" fill="#d6dbe2" d="M30.5 13 42 6l-6.6 11.6z"/>',
+    'weapon:staff': crLine('M14 42 29 12c1.6-3.6 6.4-3.2 6.2.6', '#a8743f', 4),
+    'weapon:bow': crLine('M17 6c16 5 16 31 0 36', '#a8743f', 3.6) + '<path d="M17 6v36" stroke="currentColor" stroke-width="1.6"/>' + crLine('M9 24h27', '#d6dbe2', 1.8) + '<path class="o" fill="#d6dbe2" d="M35 20.5 41 24l-6 3.5z"/><path d="M9 24l-3-3.4M9 24l-3 3.4" stroke="#d94b3d" stroke-width="2.6" stroke-linecap="round"/>',
+    'weapon:sword': '<path class="o" fill="#dfe4ea" d="M24 4.5c4 7 4.6 16 2 25.5h-4c-2.6-9.5-2-18.5 2-25.5z"/>' + crLine('M16.5 31h15', '#e0a83a', 3.6) + crLine('M24 33.5v5', '#7a4a1f', 3.6) + '<circle class="o" cx="24" cy="42" r="2.8" fill="#e0a83a"/>',
+    'outfit:voyageur': '<path class="l" d="M15.5 20c0-11 17-11 17 0"/><path class="o" fill="#b5803f" d="M11 20h26v15a5 5 0 0 1-5 5H16a5 5 0 0 1-5-5z"/><path class="o" fill="#c99a5b" d="M11 20h26l-3 8.5H14z"/><rect class="o" x="21.5" y="26" width="5" height="5.5" rx="1.2" fill="#e0a83a"/>',
+    'outfit:hoplite': crLine('M8 42 40 8', '#a8743f', 3) + '<circle class="o" cx="24" cy="25" r="14" fill="#e0a83a"/><circle cx="24" cy="25" r="10" fill="#c0643c"/><path d="M19.4 31.5 24 18.5l4.6 13" stroke="#ffe3a1" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
+    'outfit:roi': '<path class="o" fill="#ffc93d" d="M10 34 8 14l9 8 7-12.5 7 12.5 9-8-2 20z"/><path class="o" fill="#e0a83a" d="M10 34h28v5.5H10z"/><circle cx="24" cy="27" r="2.6" fill="#d94b3d"/><circle cx="16" cy="29" r="1.8" fill="#3d8ee8"/><circle cx="32" cy="29" r="1.8" fill="#3d8ee8"/>',
+    'outfit:marin': crLine('M24 14.5V40M16.5 20h15M10 29c1 7 7 11 14 11s13-4 14-11', '#3d8ee8', 3) + '<circle class="o" cx="24" cy="10.5" r="3.6" fill="none"/>' + crLine('M7 31.5l3-3.5 3.5 3M41 31.5l-3-3.5-3.5 3', '#3d8ee8', 2.4),
+    'outfit:pelerin': crLine('M31 43 34 7', '#a8743f', 3.6) + crLine('M33.6 15C30 17 28 18 26.5 20', '#7a4a1f', 1.8) + '<circle class="o" cx="24" cy="24.5" r="5.2" fill="#d5a03c"/><circle class="o" cx="24" cy="17.8" r="2.2" fill="#d5a03c"/>' +
+      '<path class="o" fill="#f4e4c8" d="M9 40c0-6 3-10 7-10s7 4 7 10z"/><path d="M12 39.5l4-8.6 4 8.6M16 31v8.5" stroke="#c99a5b" stroke-width="1.6" fill="none"/>',
+    'outfit:hanger': '<path class="l" d="M24 16.5v-2.2a4 4 0 1 0-4-4"/><path class="l" d="M24 16.5 7.5 30.5c-1.6 1.4-.6 4 1.5 4h30c2.1 0 3.1-2.6 1.5-4z"/>'
+  };
+  function crShield(m) {
+    const base = '<circle class="o" cx="24" cy="24" r="17" fill="#e0b450"/><circle cx="24" cy="24" r="13.2" fill="' + (CR_SHIELD_BASE[m] || '#b0402f') + '"/>';
+    const ink = '#1e1b19';
+    if (m === 'chouette') return base + '<ellipse cx="24" cy="27.5" rx="6.6" ry="7.6" fill="' + ink + '"/><circle cx="21" cy="21.5" r="3" fill="#efe4c8"/><circle cx="27" cy="21.5" r="3" fill="#efe4c8"/><circle cx="21" cy="21.5" r="1.3" fill="' + ink + '"/><circle cx="27" cy="21.5" r="1.3" fill="' + ink + '"/>';
+    if (m === 'poulpe') return base + '<ellipse cx="24" cy="19.5" rx="5" ry="5.6" fill="' + ink + '"/><path d="M20 23.5c-3 4-6 5-7 8M22.5 24.5c-1 4-2 6-3 9M25.5 24.5c1 4 2 6 3 9M28 23.5c3 4 6 5 7 8" stroke="' + ink + '" stroke-width="2.4" fill="none" stroke-linecap="round"/>';
+    if (m === 'oeil') return base + '<path d="M13.5 24c6-7 15-7 21 0-6 7-15 7-21 0z" fill="#fff" stroke="' + ink + '" stroke-width="2"/><circle cx="24" cy="24" r="4" fill="#2f6f9f"/><circle cx="24" cy="24" r="1.8" fill="' + ink + '"/>';
+    if (m === 'soleil') {
+      let r = '';
+      for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4, c = Math.cos(a), s = Math.sin(a); r += 'M' + (24 + c * 7.4).toFixed(1) + ' ' + (24 + s * 7.4).toFixed(1) + 'L' + (24 + c * 10.6).toFixed(1) + ' ' + (24 + s * 10.6).toFixed(1); }
+      return base + '<path d="' + r + '" stroke="#ffc93d" stroke-width="2.4" stroke-linecap="round"/><circle cx="24" cy="24" r="5" fill="#ffc93d"/>';
+    }
+    return base;
+  }
+  // dessin d'un choix (tuile) : teinte → silhouette colorée ; objet → petite illustration
+  function crArt(cat, o) {
+    if (o.id === 'none') return CR_NONE;
+    if (o.color) return (CR_SWATCH[cat] || ((c) => '<circle class="o" cx="24" cy="24" r="15" fill="' + c + '"/>'))(o.color);
+    if (cat === 'shield') return crShield(o.id);
+    return CR_ITEM[cat + ':' + o.id] || '<circle class="o" cx="24" cy="24" r="12" fill="#e0a83a"/><text x="24" y="29" text-anchor="middle" font-size="14" font-weight="700" fill="#3a3550">' + (o.name || '?').charAt(0) + '</text>';
+  }
+  // dessin d'un onglet : la teinte portée (tunique, cape…) ou un objet représentatif
+  function crTabArt(cat, opts, cur) {
+    if (CR_SWATCH[cat]) {
+      const list = opts[cat] || [];
+      const o = list.find((x) => x.id === cur[cat] && x.color) || list.find((x) => x.color);
+      return CR_SWATCH[cat](o ? o.color : '#c9c2dc');
+    }
+    if (cat === 'shield') return crShield('chouette');
+    return CR_ITEM[{ outfit: 'outfit:hanger', accessory: 'accessory:laurel', weapon: 'weapon:sword' }[cat]] || crArt(cat, (opts[cat] || [{}])[0]);
+  }
+  const crSvg = (inner) => '<svg class="cr-ico" viewBox="0 0 48 48" aria-hidden="true">' + inner + '</svg>';
+  const CR_CHECK = '<i class="cr-check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5.5 12.5l4.2 4.2 8.8-9.4"/></svg></i>';
+  // tenue complète en cours : réglages enregistrés, complétés par l'état du monde 3D
+  const crCurrent = () => Object.assign({}, (worldReady && C.world.getSkin && C.world.getSkin()) || {}, skinState());
+  const crParts = (opts) => Object.keys(opts).filter((k) => Array.isArray(opts[k]) && opts[k].length)
+    .sort((a, b) => (CR_ORDER.indexOf(a) + 1 || 99) - (CR_ORDER.indexOf(b) + 1 || 99));
+  const crName = (k, opts) => CR_NAMES[k] || (worldReady && C.world.skinLabels && C.world.skinLabels()[k]) || (SKIN_PARTS.find((p) => p.id === k) || {}).name || k;
+  let crHistory = [], crLabelT = 0;
+  function renderWardrobe(animate) {
+    const opts = skinOptions(), cur = crCurrent();
+    const parts = crParts(opts);
+    if (!parts.includes(wdPart) && parts.length) wdPart = parts[0];
+    const tabs = $('#wd-tabs');
+    tabs.style.setProperty('--n', parts.length);
+    tabs.innerHTML = parts.map((k) => '<button class="cr-tab' + (k === wdPart ? ' on' : '') + '" role="tab" aria-selected="' + (k === wdPart) + '" data-part="' + k + '" aria-label="' + crName(k, opts) + '" title="' + crName(k, opts) + '">' + crSvg(crTabArt(k, opts, cur)) + '</button>').join('');
     const list = opts[wdPart] || [];
-    const cur = st[wdPart] || (list[0] && list[0].id);
-    $('#wd-choices').innerHTML = list.map((o, k) => o.color
-      ? '<button class="wd-swatch' + (o.id === cur ? ' on' : '') + '" data-id="' + o.id + '" style="--c:' + o.color + ';--k:' + k + '" aria-label="' + o.name + '"><i></i><span>' + o.name + '</span></button>'
-      : '<button class="wd-chip' + (o.id === cur ? ' on' : '') + '" data-id="' + o.id + '" style="--k:' + k + '">' + o.name + '</button>').join('');
+    const sel = cur[wdPart] || (list[0] && list[0].id);
+    const grid = $('#wd-choices');
+    grid.setAttribute('aria-label', crName(wdPart, opts));
+    grid.innerHTML = list.map((o, k) => '<button class="cr-tile' + (o.id === sel ? ' on' : '') + '" role="option" aria-selected="' + (o.id === sel) + '" data-id="' + o.id + '" title="' + o.name + '" style="--k:' + (animate ? k : 0) + (animate ? '' : ';animation:none') + '">' +
+      '<span class="cr-art">' + crSvg(crArt(wdPart, o)) + CR_CHECK + '</span><span class="cr-name">' + o.name + '</span></button>').join('');
+    $('#cr-undo').disabled = !crHistory.length;
+  }
+  // pastille du choix courant (catégorie · nom), s'efface seule
+  function crShowLabel(cat, id) {
+    const opts = skinOptions(), o = (opts[cat] || []).find((x) => x.id === id);
+    const el = $('#cr-label');
+    el.textContent = crName(cat, opts) + ' · ' + (o ? o.name : id);
+    el.classList.add('show');
+    clearTimeout(crLabelT);
+    crLabelT = setTimeout(() => el.classList.remove('show'), 1600);
+  }
+  // applique une tenue complète (mémorisée) et met l'atelier à jour
+  function crApply(next, keepHistory) {
+    if (!keepHistory) { crHistory.push(crCurrent()); if (crHistory.length > 40) crHistory.shift(); }
+    const st = skinState();
+    Object.keys(next).forEach((k) => { st[k] = next[k]; });
+    C.save(); applySkin(); renderWardrobe(false);
+  }
+  // cadrage : Ulysse en pied au-dessus du panneau, sous les boutons du haut
+  function crFrame() {
+    const ov = $('#wardrobe'), H = ov.clientHeight || window.innerHeight;
+    const panel = ov.querySelector('.cr-panel'), top = ov.querySelector('.cr-top');
+    return { area: 'top', fullBody: true, frac: Math.max(0.3, Math.min(0.85, panel.offsetTop / H)), pad: Math.min(0.2, (top.offsetTop + top.offsetHeight + 4) / H) };
+  }
+  function crShowcase() {
+    const on = !$('#wardrobe').hidden;
+    document.documentElement.classList.toggle('creator-open', on); // (masque l'interface de la carte)
+    if (!worldReady || !C.world.showcase) return;
+    C.world.showcase(on, on ? crFrame() : undefined);
   }
   $('#open-wardrobe').addEventListener('click', () => {
     if (worldReady && C.world.setCameraMode) C.world.setCameraMode('follow'); // on voit Ulysse pendant l'essayage
-    renderWardrobe();
+    crHistory = [];
+    applySkin(); // (le héros porte bien la tenue enregistrée)
+    $('#wardrobe').classList.remove('spun');
+    $('#cr-label').classList.remove('show');
+    renderWardrobe(true);
     $('#wardrobe').hidden = false;
     C.sfx.tap();
   });
-  // pendant l'essayage, la caméra montre Ulysse de face, au-dessus de la feuille ; quelle que soit
-  // la façon de la refermer (bouton, croix, fond, Échap, retour), la caméra de suivi reprend
-  if (window.MutationObserver) new MutationObserver(() => {
-    if (worldReady && C.world.showcase) C.world.showcase(!$('#wardrobe').hidden);
-  }).observe($('#wardrobe'), { attributes: true, attributeFilter: ['hidden'] });
+  // pendant l'essayage, la caméra montre Ulysse en pied dans le haut de l'écran ; quelle que soit
+  // la façon de refermer l'atelier (bouton, Échap, retour Android), la caméra de suivi reprend
+  if (window.MutationObserver) new MutationObserver(crShowcase).observe($('#wardrobe'), { attributes: true, attributeFilter: ['hidden'] });
+  window.addEventListener('resize', () => { if (!$('#wardrobe').hidden) crShowcase(); });
   $('#wardrobe').addEventListener('click', (e) => {
-    if (e.target.id === 'wardrobe' || e.target.id === 'wd-done') { $('#wardrobe').hidden = true; return; }
-    const tab = e.target.closest('#wd-tabs button');
-    if (tab) { wdPart = tab.dataset.part; renderWardrobe(); C.sfx.tap(); return; }
-    const pick = e.target.closest('.wd-swatch, .wd-chip');
-    if (pick) { skinState()[wdPart] = pick.dataset.id; C.save(); applySkin(); renderWardrobe(); C.sfx.place(); }
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    if (btn.id === 'wd-done' || btn.id === 'cr-close') { $('#wardrobe').hidden = true; C.sfx.tap(); return; }
+    if (btn.id === 'cr-undo') {
+      const prev = crHistory.pop();
+      if (prev) { crApply(prev, true); C.sfx.tap(); }
+      return;
+    }
+    if (btn.id === 'cr-random') {
+      // une tenue au hasard (différente de l'actuelle dans chaque catégorie quand c'est possible)
+      const opts = skinOptions(), cur = crCurrent(), next = {};
+      crParts(opts).forEach((k) => {
+        const pool = opts[k].filter((o) => o.id !== cur[k]);
+        const o = (pool.length ? pool : opts[k])[Math.floor(Math.random() * (pool.length || opts[k].length))];
+        next[k] = o.id;
+      });
+      crApply(next);
+      btn.classList.remove('roll'); void btn.offsetWidth; btn.classList.add('roll');
+      if (worldReady && C.world.cheerHero) C.world.cheerHero();
+      C.sfx.place();
+      return;
+    }
+    if (btn.id === 'cr-cheer') {
+      if (worldReady && C.world.cheerHero) C.world.cheerHero();
+      btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop');
+      C.sfx.tap();
+      return;
+    }
+    if (btn.classList.contains('cr-tab')) {
+      if (btn.dataset.part === wdPart) return;
+      wdPart = btn.dataset.part; renderWardrobe(true); $('#wd-choices').scrollTop = 0; C.sfx.tap();
+      return;
+    }
+    if (btn.classList.contains('cr-tile')) {
+      const id = btn.dataset.id;
+      if (crCurrent()[wdPart] === id) { crShowLabel(wdPart, id); return; }
+      crApply({ [wdPart]: id });
+      crShowLabel(wdPart, id);
+      C.sfx.place();
+    }
   });
+  // un doigt glissé sur la scène fait tourner Ulysse (avec élan au lâcher)
+  (() => {
+    const stage = $('#cr-stage');
+    let drag = null;
+    stage.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('button') || drag) return;
+      drag = { id: e.pointerId, x: e.clientX, t: performance.now(), v: 0 };
+      try { stage.setPointerCapture(e.pointerId); } catch (err) { /* rien */ }
+      stage.classList.add('grab');
+    });
+    stage.addEventListener('pointermove', (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const now = performance.now(), dx = e.clientX - drag.x, dt = Math.max(1, now - drag.t);
+      const k = 5.4 / Math.max(280, stage.clientWidth); // (≈ un tour pour une largeur d'écran)
+      if (worldReady && C.world.spinHero) C.world.spinHero(dx * k);
+      // vitesse lissée (rad/s) pour l'élan
+      drag.v = drag.v * 0.6 + (dx * k / dt * 1000) * 0.4;
+      drag.x = e.clientX; drag.t = now;
+      if (Math.abs(dx) > 2) $('#wardrobe').classList.add('spun');
+    });
+    const end = (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const idle = performance.now() - drag.t > 90; // doigt immobile avant le lâcher : pas d'élan
+      if (worldReady && C.world.spinHero) C.world.spinHero(0, idle ? 0 : drag.v);
+      drag = null;
+      stage.classList.remove('grab');
+    };
+    stage.addEventListener('pointerup', end);
+    stage.addEventListener('pointercancel', end);
+  })();
   $('#settings').addEventListener('click', (e) => { if (e.target.id === 'settings') $('#settings').hidden = true; });
   $('#opt-sound').addEventListener('change', (e) => { C.audio.setSound(e.target.checked); C.sfx.tap(); });
   $('#opt-music').addEventListener('change', (e) => C.audio.setMusic(e.target.checked));

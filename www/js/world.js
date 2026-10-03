@@ -1795,8 +1795,26 @@
     plan.lone = [];
     for (let i = 0; i < 3; i++) { const t = pick(0.5, 0, 1.0); if (t) plan.lone.push(t); }
     // l'événement spécial de l'île : un petit totem à l'écart du sentier, choisi en dernier
-    // (le décor existant ne bouge pas), assez près du sentier pour qu'on le voie en passant
-    plan.event = pick(0.5, 0, 0.75) || pick(0.32, 0, 0.5);
+    // (le décor existant ne bouge pas). Jamais au premier plan de la caméra de suivi : on le
+    // pose de l'autre côté du sentier (vu depuis la caméra), bien à l'écart, vers le fond de l'île.
+    const camTh = islandTheta(ch.c), cdx = Math.cos(camTh), cdz = Math.sin(camTh);
+    const pickFar = (need, gap) => {
+      let best = null, bs = -Infinity;
+      cand.forEach((c) => {
+        if (c.d < need + gap) return;
+        if (c.r + need * 0.85 > R * 0.84) return;
+        if (occ.some((o) => Math.hypot(o.x - c.x, o.z - c.z) < o.r + need + 0.25)) return;
+        // « derrière » le sentier : du point du sentier le plus proche, on s'éloigne de la caméra
+        const away = -((c.x - c.px) * cdx + (c.z - c.pz) * cdz) / Math.max(1e-3, c.d);
+        if (away < 0.35) return;
+        const sc = away * 2 + Math.min(c.d, 2.6) * 0.7 - (c.x * cdx + c.z * cdz) / R + c.j;
+        if (sc > bs) { bs = sc; best = c; }
+      });
+      if (!best) return null;
+      occ.push({ x: best.x, z: best.z, r: need });
+      return Object.assign({}, best, { s: 1, rad: need, ry: Math.atan2(best.px - best.x, best.pz - best.z) });
+    };
+    plan.event = pickFar(0.5, 1.3) || pickFar(0.4, 0.9) || pick(0.5, 0, 0.75) || pick(0.32, 0, 0.5);
     // (choisis APRÈS le reste : rien de ce qui précède ne bouge)
     // affleurement rocheux : une butte ronde coiffée de rochers, à l'écart du sentier
     plan.outcrop = pick(0.95, 0, 0.9);
@@ -2552,7 +2570,7 @@
     band.position.y = 0.5;
     const starMat = toonMat({ color: '#ffffff', transparent: true });
     const star = new THREE.Mesh(geos.star, starMat);
-    star.scale.setScalar(0.25);
+    star.scale.setScalar(0.175); // (−30 % : le totem reste discret dans le décor)
     const cupMat = toonMat({ color: '#ffc531', vertexColors: true, emissive: lin('#b86e00').multiplyScalar(0.4) });
     const cup = new THREE.Mesh(geos.cup, cupMat);
     cup.position.y = 0.56;
@@ -2560,7 +2578,7 @@
     pedestal.receiveShadow = true;
     // halo doux et paillettes qui tournent autour de l'étoile
     const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), transparent: true, depthWrite: false, opacity: 0.6 }));
-    halo.scale.set(1.1, 1.1, 1);
+    halo.scale.set(0.8, 0.8, 1);
     const sparks = [0, 1, 2].map((i) => {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: '#fff6c8', transparent: true, depthWrite: false }));
       s.userData.k = i;
@@ -3468,7 +3486,10 @@
       // le bouclier ou l'arme, il montre son dos un instant
       if (showcaseOn) {
         const back = showBack > 0 ? smooth(0, 0.5, 2.6 - showBack) * smooth(0, 0.5, showBack) : 0;
-        hero.facing = Math.atan2(Math.cos(showcaseBase), Math.sin(showcaseBase)) + Math.sin(showcaseT * 0.55) * 0.75 * (1 - back) + Math.PI * back;
+        // atelier (showOpts) : le joueur le fait tourner au doigt (showYaw, avec inertie) ;
+        // sans geste depuis un moment, il reprend un léger balancement
+        const sway = showOpts ? 0.3 * showIdle : 0.75;
+        hero.facing = Math.atan2(Math.cos(showcaseBase), Math.sin(showcaseBase)) + showYaw + Math.sin(showcaseT * 0.55) * sway * (1 - back) + Math.PI * back;
       }
     }
     hero.moving = moving;
@@ -3482,8 +3503,8 @@
     hero.shadow.scale.setScalar(1 - Math.min(0.5, lift));
     let d = hero.facing - g.rotation.y;
     d = Math.atan2(Math.sin(d), Math.cos(d));
-    g.rotation.y += d * (1 - Math.exp(-dt * 8));
-    hero.focus += (hero.focusTarget - hero.focus) * (1 - Math.exp(-dt * 4));
+    g.rotation.y += d * (1 - Math.exp(-dt * (showOpts && showcaseOn ? 16 : 8))); // (atelier : suit le doigt de près)
+    hero.focus +=(hero.focusTarget - hero.focus) * (1 - Math.exp(-dt * 4));
     if (hero.rig) updateRig(dt, t, moving, speed, lift);
     else animateProceduralHero(t, moving, speed, lift);
     const f = hero.focus;
@@ -3692,24 +3713,56 @@
 
     updateHero(dt, t);
 
-    // mode concentration : la caméra plonge vers le visage d'Ulysse (de face, un peu de côté)
+    // effets de la concentration (aura, anneaux, onde de choc) et passe plein écran
+    updateCineFx(dt, t);
+
+    // mode concentration : la caméra décrit un arc jusqu'à un gros plan de face, en
+    // contre-plongée ; la charge monte, puis l'explosion de lumière ouvre le premier jeu
     if (cine) {
       cine.t += dt;
-      const head = new THREE.Vector3();
-      hero.head.getWorldPosition(head);
-      goal.tx = head.x; goal.ty = head.y + 0.02; goal.tz = head.z;
-      goal.radius = 1.8; goal.elev = 0.14; // (grosse tête de dessin animé : on recule un peu)
-      const ry = hero.group.rotation.y;
-      goal.theta = Math.atan2(Math.cos(ry), Math.sin(ry)) + 0.35;
       setLin(hero.mind.material.color, cine.accent);
-      if (cine.t > 2.3 && cine.done) { const cb = cine.done; cine.done = null; cb(); }
-      const k = 1 - Math.exp(-dt * 2.4);
-      let dth = goal.theta - cam.theta;
-      dth = Math.atan2(Math.sin(dth), Math.cos(dth));
-      cam.theta += dth * k;
-      ['elev', 'radius', 'tx', 'ty', 'tz'].forEach((key) => { cam[key] += (goal[key] - cam[key]) * k; });
+      const p = hero.group.position, ry = hero.group.rotation.y;
+      const front = Math.atan2(Math.cos(ry), Math.sin(ry)); // (la caméra face à Ulysse)
+      const F = cine.from;
+      if (cine.soft) {
+        // animations réduites : pas d'arc ni de secousse, simple rapprochement en fondu
+        const k = 1 - Math.exp(-dt * 2.4);
+        let dth = front + 0.3 - cam.theta;
+        dth = Math.atan2(Math.sin(dth), Math.cos(dth));
+        cam.theta += dth * k;
+        const G = { radius: 3.4, elev: 0.08, tx: p.x, ty: p.y + cine.hh * 0.68, tz: p.z };
+        ['elev', 'radius', 'tx', 'ty', 'tz'].forEach((key) => { cam[key] += (G[key] - cam[key]) * k; });
+      } else {
+        // 1) l'arc : la caméra s'élève puis redescend devant lui, très bas
+        const e = Math.min(1, cine.t / CINE_SWOOP);
+        const ease = e < 0.5 ? 4 * e * e * e : 1 - Math.pow(-2 * e + 2, 3) / 2;
+        let dth = front + 0.32 - F.theta;
+        dth = Math.atan2(Math.sin(dth), Math.cos(dth));
+        // 2) la charge : lente orbite et léger rapprochement ; 3) après l'éclair, petit recul
+        const charge = smooth(CINE_SWOOP * 0.6, CINE_BURST, cine.t);
+        const after = cine.t > CINE_BURST ? smooth(CINE_BURST, CINE_BURST + 0.6, cine.t) : 0;
+        cam.theta = F.theta + dth * ease + charge * 0.28;
+        cam.radius = F.radius + (3.3 - F.radius) * ease - charge * 0.25 + after * 0.4;
+        cam.elev = F.elev + (-0.06 - F.elev) * ease + Math.sin(Math.PI * e) * 0.28;
+        const ty = p.y + cine.hh * 0.5; // (Ulysse cadré au-dessus des boutons du bas)
+        cam.tx = F.tx + (p.x - F.tx) * ease; cam.tz = F.tz + (p.z - F.tz) * ease;
+        cam.ty = F.ty + (ty - F.ty) * ease;
+        // tremblement discret au sommet de la charge (l'énergie déborde)
+        const shake = cine.t < CINE_BURST ? charge * charge * charge * 0.012 : 0;
+        cam.ty += Math.sin(t * 47) * shake; cam.tx += Math.sin(t * 39 + 1) * shake;
+        // le champ se resserre pendant la charge, puis s'ouvre d'un coup à l'explosion
+        const punch = cine.t > CINE_BURST ? Math.exp(-(cine.t - CINE_BURST) * 5) * 9 : 0;
+        camera.fov = baseFov - charge * 3 + punch;
+        camera.updateProjectionMatrix();
+      }
+      if (cine.t >= cine.burstAt && !cine.burst) cineBurst();
       placeCamera();
       return;
+    }
+    // (après la concentration ou une plongée, l'angle de vue revient en douceur)
+    if (!(lvlCam && lvlCam.kind === 'enter') && Math.abs(camera.fov - baseFov) > 0.01) {
+      camera.fov += (baseFov - camera.fov) * (1 - Math.exp(-dt * 3));
+      camera.updateProjectionMatrix();
     }
 
     // Caméra « suivi » : toujours derrière Ulysse, un peu au-dessus de l'épaule, tournée vers
@@ -3721,12 +3774,33 @@
       // la caméra oscille lentement de part et d'autre de lui
       showcaseT += calm ? 0 : dt;
       if (showBack > 0) showBack = Math.max(0, showBack - dt);
-      goal.theta = showcaseBase + Math.sin(showcaseT * 0.35) * 0.2;
-      goal.radius = 3.9; goal.elev = 0.1;
       groundY += (focus.y - groundY) * (1 - Math.exp(-dt * 1.5));
       goal.tx = focus.x; goal.tz = focus.z;
-      goal.ty = groundY - 0.22; // (on vise sous ses pieds : il apparaît au-dessus de la feuille)
-      rate = 2.2; thetaRate = 1.8;
+      if (showOpts) {
+        // atelier du personnage : caméra presque fixe, Ulysse en pied dans la zone haute ;
+        // c'est lui qui tourne (doigt + inertie), le balancement revient après 2 s sans geste
+        if (!showDrag && Math.abs(showSpin) > 1e-3) { showYaw += showSpin * dt; showSpin *= Math.exp(-dt * 3.2); }
+        else if (!showDrag) showSpin = 0;
+        showStill += dt;
+        showIdle += ((showStill > 2 && !showDrag ? 1 : 0) - showIdle) * (1 - Math.exp(-dt * 1.2));
+        const fr = showFrame();
+        // l'île peut finir d'apparaître (ou le cadrage changer) : on revérifie l'angle dégagé chaque seconde
+        showRecheck -= dt;
+        if (showRecheck <= 0) { showRecheck = 1; showcaseBase = clearShowcaseTheta(showIsleTheta, fr.R, SHOW_ELEV, fr.dy); }
+        goal.theta = showcaseBase + Math.sin(showcaseT * 0.3) * 0.04;
+        goal.radius = fr.R; goal.elev = SHOW_ELEV;
+        goal.ty = groundY + fr.dy;
+        rate = 2.6; thetaRate = 2.2;
+        if (showPodium) {
+          showPodium.position.set(focus.x, groundY + 0.02, focus.z);
+          showPodium.userData.halo.material.opacity = 0.32 + Math.sin(showcaseT * 1.6) * 0.06;
+        }
+      } else {
+        goal.theta = showcaseBase + Math.sin(showcaseT * 0.35) * 0.2;
+        goal.radius = 3.9; goal.elev = 0.1;
+        goal.ty = groundY - 0.22; // (on vise sous ses pieds : il apparaît au-dessus de la feuille)
+        rate = 2.2; thetaRate = 1.8;
+      }
     } else if (camMode === 'follow') {
       // Caméra calme et fixe : distance et inclinaison constantes, un angle propre à chaque île
       // (il ne change qu'en passant d'une île à l'autre, très lentement) ; la cible glisse en
@@ -3737,15 +3811,29 @@
         const d = Math.hypot(focus.x - ch.group.position.x, focus.z - ch.group.position.z);
         if (d < bd) { bd = d; near = ch.c; }
       });
-      goal.theta = islandTheta(near);
+      // Orbite au doigt : l'angle choisi reste tant qu'Ulysse ne repart pas vers une autre
+      // pierre et qu'on ne change pas d'île ; ensuite, retour en douceur à l'angle de l'île.
+      const okey = near + ':' + selected + ':' + (hero.route ? 1 : 0);
+      if (orbit.key !== okey) {
+        if (orbit.key != null && !drag) { orbit.yaw = 0; orbit.pitch = 0; orbit.vel = 0; }
+        orbit.key = okey;
+      }
+      if (!drag && Math.abs(orbit.vel) > 1e-3) { // inertie
+        orbit.yaw = wrapAngle(orbit.yaw + orbit.vel * dt);
+        orbit.vel *= Math.exp(-dt * 4);
+        orbit.active = Math.max(orbit.active, 0.3);
+      } else if (!drag) orbit.vel = 0;
+      goal.theta = islandTheta(near) + orbit.yaw;
       const cross = hero.crossing ? 1 : 0;
       crossK += (cross - crossK) * (1 - Math.exp(-dt * 0.8));
       goal.radius = followR * (1 + crossK * 0.35);
-      goal.elev = followElev + crossK * 0.12;
+      goal.elev = Math.max(ORBIT_ELEV[0], Math.min(ORBIT_ELEV[1], followElev + crossK * 0.12 + orbit.pitch));
       groundY += (focus.y - groundY) * (1 - Math.exp(-dt * 1.2));
       goal.tx = focus.x; goal.tz = focus.z;
       goal.ty = groundY + 0.6;
       rate = 1.6; thetaRate = 0.7;
+      // pendant le geste (et son inertie), la caméra suit le doigt de près, sans à-coup
+      if (orbit.active > 0) { orbit.active -= dt; thetaRate = 9; rate = 6; }
     } else {
       goal.theta = userTheta;
       goal.tx = freeTarget.x; goal.ty = 0.9; goal.tz = freeTarget.z;
@@ -3776,7 +3864,7 @@
       cam.elev = F.elev + (0.2 - F.elev) * ease;
       camera.fov = baseFov + 12 * ease;
       camera.updateProjectionMatrix();
-      if (e >= 1 && !lvlCam.hold) { const cb = lvlCam.cb; lvlCam.cb = null; lvlCam.hold = true; if (cb) { try { cb(); } catch (err) { console.warn(err); } } }
+      if (e >= 1 && !lvlCam.hold) { postFx.flash = Math.max(postFx.flash, 0.25); const cb = lvlCam.cb; lvlCam.cb = null; lvlCam.hold = true; if (cb) { try { cb(); } catch (err) { console.warn(err); } } }
       // (si personne ne nous rappelle, on revient seul derrière Ulysse)
       if (lvlCam && lvlCam.hold && lvlCam.t > lvlCam.dur + 8) { lvlCam = null; camera.fov = baseFov; camera.updateProjectionMatrix(); }
     }
@@ -3788,19 +3876,55 @@
   // (vue fixe, un peu reculée : on voit le coin d'île autour d'Ulysse ; pas de zoom au doigt)
   const FOLLOW_R = 6.9, FOLLOW_ELEV = 0.5;
   let showcaseOn = false, showcaseT = 0, showcaseBase = 0, showBack = 0;
+  // Atelier du personnage (showcase(true, opts)) : cadrage en pied dans une zone haute de l'écran,
+  // rotation du héros au doigt (showYaw, showSpin = vitesse d'inertie), petit podium lumineux.
+  let showOpts = null, showYaw = 0, showSpin = 0, showDrag = false, showStill = 0, showIdle = 0, showHH = 1.1, showPodium = null;
+  let showIsleTheta = 0, showRecheck = 1;
+  const SHOW_ELEV = 0.13;
+  // distance et hauteur de visée pour que le héros (tête + coiffe) tienne dans la zone choisie :
+  // opts.frac = part haute de l'écran réservée au héros (0..1), opts.pad = marge en haut (boutons)
+  function showFrame() {
+    const t = Math.tan(baseFov * Math.PI / 360);
+    const frac = Math.max(0.3, Math.min(1, (showOpts && showOpts.frac) || 0.55));
+    const pad = (showOpts && showOpts.pad) || 0.07;
+    const H = showHH + 0.45; // (coiffe, lance levée, saut de joie)
+    const fill = showOpts && showOpts.fullBody === false ? 1.15 : 0.74;
+    const R = Math.max(2.2, Math.min(7, H / (2 * t * (frac - pad) * fill)));
+    const ndc = 1 - 2 * (pad + (frac - pad) / 2); // centre de la zone, en coordonnées écran (-1..1)
+    return { R, dy: H / 2 - ndc * R * t * Math.cos(SHOW_ELEV) };
+  }
+  // podium : disque crème cerclé d'or et halo doux au sol, sous les pieds d'Ulysse
+  function makePodium() {
+    const g = new THREE.Group();
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(0.62, 40),
+      new THREE.MeshBasicMaterial({ color: 0xfff3d6, transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+    const rim = new THREE.Mesh(new THREE.RingGeometry(0.6, 0.68, 48),
+      new THREE.MeshBasicMaterial({ color: 0xf2c14e, transparent: true, opacity: 0.9, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5 }));
+    const halo = new THREE.Mesh(new THREE.RingGeometry(0.68, 1.15, 48),
+      new THREE.MeshBasicMaterial({ color: 0xfff0b8, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+    [disc, rim, halo].forEach((m) => { m.rotation.x = -Math.PI / 2; m.renderOrder = 2; g.add(m); });
+    g.userData.halo = halo;
+    g.visible = false;
+    scene.add(g);
+    return g;
+  }
   // Vitrine : un angle de caméra dégagé (aucune maison, aucun arbre entre Ulysse et l'objectif).
   // On essaie l'angle de l'île, puis des angles de plus en plus écartés ; chaque candidat est
   // testé par des rayons depuis la tête et le buste d'Ulysse, sur toute l'amplitude du balancement.
-  function clearShowcaseTheta(base) {
+  // (R, e, tyOff facultatifs : distance, élévation et hauteur de visée de la caméra testée)
+  function clearShowcaseTheta(base, R0, e0, tyOff) {
     const p = hero.group.position;
     const blockers = [];
     chapters.forEach((ch) => {
       if (!ch || Math.hypot(p.x - ch.group.position.x, p.z - ch.group.position.z) > ch.r + 6) return;
-      ch.group.traverse((o) => { if (o.isMesh && o.visible && !(o.material && o.material.transparent && o.material.opacity < 0.5)) blockers.push(o); });
+      // (les matériaux du fondu d'apparition de l'île comptent même à demi transparents : l'île
+      // peut être encore en train d'apparaître juste après le lancement)
+      const fm = new Set(ch.fadeMats || []);
+      ch.group.traverse((o) => { if (o.isMesh && o.visible && !(o.material && o.material.transparent && o.material.opacity < 0.5 && !fm.has(o.material))) blockers.push(o); });
     });
     if (!blockers.length) return base;
     const rc = new THREE.Raycaster(), from = new THREE.Vector3(), to = new THREE.Vector3(), dir = new THREE.Vector3();
-    const R = 3.9, e = 0.1, ty = p.y - 0.22;
+    const R = R0 || 3.9, e = e0 || 0.1, ty = p.y + (tyOff == null ? -0.22 : tyOff);
     // points visés autour d'Ulysse : tête, buste, et de part et d'autre (le cadre entier doit être libre)
     const aims = [[0, 0.95], [0, 0.45], [-0.75, 0.75], [0.75, 0.75], [-0.9, 0.25], [0.9, 0.25]];
     const clear = (th) => aims.every(([lat, hy]) => [-0.2, 0, 0.2].every((dth) => {
@@ -3826,6 +3950,11 @@
     return thetaCache[c];
   }
   let followR = FOLLOW_R, followElev = FOLLOW_ELEV, followYaw = 0, crossK = 0, rotVel = 0, baseFov = 55;
+  // orbite de la caméra de suivi au doigt : décalage d'angle (tour complet) et d'inclinaison
+  // (bornée : jamais sous le sol, jamais à la verticale), inertie après le geste
+  const orbit = { yaw: 0, pitch: 0, vel: 0, active: 0, key: null };
+  const ORBIT_ELEV = [0.12, 1.15];
+  const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
   let lvlCam = null; // séquence d'entrée / de sortie de niveau
 
   function placeCamera() {
@@ -3927,7 +4056,17 @@
       userTheta = drag.theta + dx * 0.008;
       goal.elev = clampElev(drag.elev + dy * 0.004);
       rotVel = (userTheta - prev) / Math.max(0.008, (now - drag.lt) / 1000) * 0.5;
-    } // (suivi : caméra fixe, glisser ne la fait plus pivoter)
+    } else if (!showcaseOn && !cine && !(lvlCam && lvlCam.kind === 'enter')) {
+      // suivi : glisser fait tourner la caméra autour d'Ulysse (horizontal = tour complet,
+      // vertical = inclinaison douce) ; la distance reste fixe
+      const mx = e.clientX - drag.lx, my = e.clientY - drag.ly;
+      const prev = orbit.yaw;
+      orbit.yaw = wrapAngle(orbit.yaw + mx * 0.009);
+      const base = followElev + crossK * 0.12;
+      orbit.pitch = Math.max(ORBIT_ELEV[0] - base, Math.min(ORBIT_ELEV[1] - base, orbit.pitch + my * 0.004));
+      orbit.vel = wrapAngle(orbit.yaw - prev) / Math.max(0.008, (now - drag.lt) / 1000) * 0.5;
+      orbit.active = 0.6;
+    }
     drag.lx = e.clientX; drag.ly = e.clientY; drag.lt = now;
   }
   function onWheel(e) {
@@ -3938,8 +4077,14 @@
     pointers.delete(e.pointerId);
     if (pointers.size < 2) pinch = null;
     if (!drag || pointers.size > 0) { if (pointers.size === 0) drag = null; return; }
-    if (cine) { drag = null; return; } // pas de déplacement pendant la concentration
+    if (cine) { // pas de déplacement pendant la concentration ; un toucher saute la charge
+      const quick = drag.moved < 8;
+      drag = null;
+      if (quick && cine.t > 0.2) World.skipConcentrate();
+      return;
+    }
     const tap = drag.moved < 8 && performance.now() - drag.t < 400;
+    if (performance.now() - drag.lt > 90) orbit.vel = 0; // (doigt arrêté avant de lever : pas d'élan)
     drag = null;
     if (!tap) return;
     const rc = raycaster(e);
@@ -3983,16 +4128,21 @@
   // une photo de diorama), un léger vignettage et des couleurs un peu plus riches.
   // ------------------------------------------------------------------
   let post = null;
+  // effets plein écran pilotés par la concentration et les entrées / sorties de niveau
+  const postFx = { cine: 0, flash: 0, tint: { r: 1, g: 1, b: 1 } };
   function setupPost() {
     try {
       const RT = renderer.capabilities.isWebGL2 && THREE.WebGLMultisampleRenderTarget ? THREE.WebGLMultisampleRenderTarget : THREE.WebGLRenderTarget;
       const target = new RT(4, 4, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat });
       target.texture.encoding = THREE.sRGBEncoding; // la scène y est déjà tone-mappée et encodée en sRGB
       const material = new THREE.ShaderMaterial({
-        uniforms: { tDiffuse: { value: target.texture }, texel: { value: new THREE.Vector2(1, 1) }, focus: { value: 0.5 }, strength: { value: 1 } },
+        uniforms: { tDiffuse: { value: target.texture }, texel: { value: new THREE.Vector2(1, 1) }, focus: { value: 0.5 }, strength: { value: 1 },
+          // mode concentration : pénombre autour d'Ulysse (cine 0..1), éclair final (flash 0..1), teinte de la capacité (sRGB)
+          cine: { value: 0 }, flash: { value: 0 }, tint: { value: new THREE.Color(1, 1, 1) } },
         vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
         fragmentShader: [
           'uniform sampler2D tDiffuse; uniform vec2 texel; uniform float focus; uniform float strength; varying vec2 vUv;',
+          'uniform float cine; uniform float flash; uniform vec3 tint;',
           'void main() {',
           '  float d = abs(vUv.y - focus);',
           '  float blur = smoothstep(0.22, 0.6, d) * 3.5 * strength;', // net au centre, flou vers les bords
@@ -4011,6 +4161,16 @@
           '  c += vec3(-0.012, 0.0, 0.022) * (1.0 - s) + vec3(0.03, 0.012, -0.022) * hi;',
           '  c = max(c, vec3(0.0));',
           '  vec2 q = vUv - 0.5; c *= 1.0 - dot(q, q) * 0.12 * strength;',    // vignettage doux
+          // concentration : le monde se désature et s'assombrit autour d'Ulysse, une lueur
+          // de la couleur de la capacité baigne le centre ; puis l'éclair blanc teinté
+          '  if (cine > 0.001 || flash > 0.001) {',
+          '    float r2 = dot(q * vec2(1.0, 1.25), q * vec2(1.0, 1.25));',
+          '    float lc = dot(c, vec3(0.299, 0.587, 0.114));',
+          '    c = mix(c, vec3(lc) * vec3(0.94, 0.97, 1.06), cine * 0.55 * smoothstep(0.015, 0.16, r2));',
+          '    c *= 1.0 - cine * 0.6 * smoothstep(0.04, 0.42, r2);',
+          '    c += tint * cine * 0.07 * (1.0 - smoothstep(0.0, 0.2, r2));',
+          '    c = mix(c, mix(vec3(1.0), tint, 0.22), clamp(flash, 0.0, 1.0));',
+          '  }',
           '  gl_FragColor = vec4(c, 1.0);',
           '}'
         ].join('\n'),
@@ -4035,6 +4195,9 @@
     else {
       // en gros plan (mode concentration), le flou se resserre autour du visage
       post.material.uniforms.strength.value = calm ? 0.35 : 1;
+      post.material.uniforms.cine.value = postFx.cine;
+      post.material.uniforms.flash.value = postFx.flash;
+      post.material.uniforms.tint.value.setRGB(postFx.tint.r, postFx.tint.g, postFx.tint.b);
       renderer.setRenderTarget(post.target);
       renderer.render(scene, camera);
       renderer.setRenderTarget(null);
@@ -4365,7 +4528,7 @@
       freeTarget.x = cam.tx; freeTarget.z = cam.tz;
       userTheta = cam.theta; goal.radius = Math.max(R_MIN, Math.min(R_MAX, cam.radius * 1.6)); goal.elev = clampElev(Math.max(0.55, cam.elev));
     }
-    if (camMode === 'follow') { followYaw = 0; rotVel = 0; }
+    if (camMode === 'follow') { followYaw = 0; rotVel = 0; orbit.yaw = orbit.pitch = orbit.vel = 0; }
     return camMode;
   };
   World.cameraMode = () => camMode;
@@ -4398,22 +4561,310 @@
   World.viewHero = () => World.setCameraMode('follow');
   // Vitrine (garde-robe ouverte) : gros plan de face sur Ulysse, en pied, dans le haut de
   // l'écran (au-dessus de la feuille) ; showcase(false) rend la main à la caméra de suivi.
-  World.showcase = (on) => {
+  // showcase(true, { area: 'top', fullBody: true, frac: 0.55, pad: 0.07 }) : atelier du personnage,
+  // Ulysse en pied centré dans la part haute `frac` de l'écran, sur un podium, tournable au doigt
+  // (World.spinHero) ; un nouvel appel avec d'autres options recadre sans tout relancer.
+  World.showcase = (on, opts) => {
     if (!World.ok) return;
     on = !!on;
-    if (on === showcaseOn) return;
+    const nextOpts = on && opts && (opts.area || opts.frac) ? Object.assign({ area: 'top', fullBody: true }, opts) : null;
+    if (on === showcaseOn) {
+      if (!on) return;
+      if (nextOpts && showOpts) { showOpts = nextOpts; if (!running) placeCamera(); return; }
+      if (!nextOpts && !showOpts) return;
+    }
     showcaseOn = on;
     showcaseT = 0;
+    showOpts = nextOpts;
+    showYaw = 0; showSpin = 0; showDrag = false; showStill = 0; showIdle = 0;
     if (on) {
       cine = null; lvlCam = null; World.setCameraMode('follow');
       // on garde l'angle de l'île (vue déjà dégagée) : la caméra s'approche, Ulysse se retourne
       const p = hero.group.position;
       let near = chapterOf(selected), bd = Infinity;
       chapters.forEach((ch) => { if (!ch) return; const d = Math.hypot(p.x - ch.group.position.x, p.z - ch.group.position.z); if (d < bd) { bd = d; near = ch.c; } });
-      showcaseBase = clearShowcaseTheta(islandTheta(near));
+      if (showOpts) {
+        // hauteur réelle de la tête (modèle animé ou héros de secours) pour cadrer en pied
+        try {
+          hero.group.updateMatrixWorld(true);
+          const hw = hero.head ? hero.head.getWorldPosition(new THREE.Vector3()) : null;
+          if (hw) showHH = Math.max(0.7, Math.min(1.7, hw.y - p.y + 0.12));
+        } catch (err) { /* cadrage par défaut */ }
+        const fr = showFrame();
+        showIsleTheta = islandTheta(near); showRecheck = 1;
+        showcaseBase = clearShowcaseTheta(showIsleTheta, fr.R, SHOW_ELEV, fr.dy);
+        if (!showPodium) showPodium = makePodium();
+        showPodium.position.set(p.x, p.y + 0.02, p.z);
+      } else showcaseBase = clearShowcaseTheta(islandTheta(near));
     }
+    if (showPodium) showPodium.visible = !!(on && showOpts);
     if (!running) placeCamera();
   };
+  // rotation du héros pendant l'atelier : delta (radians) pendant le glisser ; à la fin du geste,
+  // spinHero(0, vitesse) lance l'inertie (rad/s). end === true : fin du geste sans élan.
+  World.spinHero = (delta, velocity) => {
+    if (!showcaseOn) return 0;
+    if (delta) { showYaw += delta; showDrag = true; showSpin = 0; }
+    if (velocity != null) { showDrag = false; showSpin = Math.max(-10, Math.min(10, velocity)); }
+    showStill = 0;
+    return showYaw;
+  };
+  World.heroYaw = () => showYaw;
+  // petite joie (animation Cheer + saut) : bouton « pose » de l'atelier
+  World.cheerHero = () => { if (World.ok && hero.group && !hero.route) hero.celebrate = 1; };
+  // ------------------------------------------------------------------
+  // Aura du mode concentration. Tout est créé une seule fois (première concentration) puis
+  // réutilisé : anneaux toon qui s'élargissent au sol, flaque de lumière sous ses pieds,
+  // colonne de lumière douce (un plan tourné vers la caméra), étincelles en spirale (un seul
+  // nuage de points additif), couronne à méandres grecs au-dessus de la tête, icônes des jeux
+  // de la capacité en orbite, puis l'onde de choc qui balaie l'île à l'explosion.
+  // ------------------------------------------------------------------
+  const CINE_SWOOP = 0.95, CINE_BURST = 2.05; // (s) fin de l'arc de caméra, explosion
+  const N_SPARK = 120, N_RING = 4, N_ICON = 4;
+  let cfx = null;
+  // (World._fullMotion : outil de test, ignore la préférence du système)
+  const reducedMotion = () => calm || !World._fullMotion && !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  function sparkTexture() {
+    const tex = canvasTexture(64, 64, (g) => {
+      const grd = g.createRadialGradient(32, 32, 0, 32, 32, 30);
+      grd.addColorStop(0, 'rgba(255,255,255,1)'); grd.addColorStop(0.22, 'rgba(255,255,255,.55)'); grd.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
+      // éclat de dessin animé : petite étoile à quatre branches
+      g.fillStyle = '#fff';
+      g.beginPath(); g.moveTo(32, 4);
+      g.quadraticCurveTo(35, 29, 60, 32); g.quadraticCurveTo(35, 35, 32, 60);
+      g.quadraticCurveTo(29, 35, 4, 32); g.quadraticCurveTo(29, 29, 32, 4); g.fill();
+    });
+    tex.encoding = THREE.LinearEncoding;
+    return tex;
+  }
+  function columnTexture() {
+    return canvasTexture(64, 128, (g) => {
+      const img = g.createImageData(64, 128);
+      for (let y = 0; y < 128; y++) {
+        for (let x = 0; x < 64; x++) {
+          const u = (x - 31.5) / 32, v = y / 127; // v : 0 en haut, 1 au sol
+          const a = Math.exp(-u * u * 7) * Math.pow(v, 1.4) * (0.55 + 0.45 * Math.exp(-u * u * 40));
+          const i = (y * 64 + x) * 4;
+          img.data[i] = img.data[i + 1] = img.data[i + 2] = 255; img.data[i + 3] = Math.round(a * 255);
+        }
+      }
+      g.putImageData(img, 0, 0);
+    });
+  }
+  // frise à méandres (la « grecque ») : motif blanc sur fond transparent, répété autour de la couronne
+  function meanderTexture() {
+    const tex = canvasTexture(64, 32, (g) => {
+      g.strokeStyle = '#fff'; g.lineWidth = 3.2; g.lineCap = 'square'; g.lineJoin = 'miter';
+      g.beginPath(); g.moveTo(0, 2.5); g.lineTo(64, 2.5); g.moveTo(0, 29.5); g.lineTo(64, 29.5); g.stroke();
+      g.beginPath();
+      g.moveTo(0, 24); g.lineTo(8, 24); g.lineTo(8, 8); g.lineTo(40, 8); g.lineTo(40, 20);
+      g.lineTo(20, 20); g.lineTo(20, 14); g.lineTo(30, 14);
+      g.moveTo(8, 24); g.lineTo(56, 24); g.lineTo(56, 8); g.lineTo(64, 8);
+      g.stroke();
+    });
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.repeat.set(8, 1);
+    return tex;
+  }
+  function makeCineFx() {
+    const group = new THREE.Group();
+    group.visible = false;
+    scene.add(group);
+    const add = (o, order) => { o.renderOrder = order; o.frustumCulled = false; group.add(o); return o; };
+    const glowMatl = (extra) => new THREE.MeshBasicMaterial(Object.assign({ transparent: true, opacity: 0, depthWrite: false,
+      blending: THREE.AdditiveBlending, toneMapped: false, fog: false }, extra || {}));
+    const ringGeo = new THREE.RingGeometry(0.84, 1, 64);
+    ringGeo.rotateX(-Math.PI / 2);
+    const rings = [];
+    for (let i = 0; i < N_RING; i++) { const m = add(new THREE.Mesh(ringGeo, glowMatl()), 4); m.userData.age = 9; rings.push(m); }
+    const poolGeo = new THREE.PlaneGeometry(1, 1);
+    poolGeo.rotateX(-Math.PI / 2);
+    const pool = add(new THREE.Mesh(poolGeo, glowMatl({ map: glowTexture() })), 4);
+    const colGeo = new THREE.PlaneGeometry(1.4, 4.4);
+    colGeo.translate(0, 2.2, 0);
+    const column = add(new THREE.Mesh(colGeo, glowMatl({ map: columnTexture(), side: THREE.DoubleSide })), 5);
+    const halo = add(new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.1, 48, 1, true), glowMatl({ map: meanderTexture(), side: THREE.DoubleSide })), 6);
+    // étincelles : une seule géométrie, positions et opacités réécrites à chaque image
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N_SPARK * 3), 3));
+    geo.setAttribute('aAlpha', new THREE.BufferAttribute(new Float32Array(N_SPARK), 1));
+    const seed = new Float32Array(N_SPARK * 4);
+    const r = C.makeRng('etincelles');
+    for (let i = 0; i < N_SPARK; i++) {
+      seed[i * 4] = r() * Math.PI * 2; seed[i * 4 + 1] = 0.35 + r() * 0.55;
+      seed[i * 4 + 2] = 0.35 + r() * 0.5; seed[i * 4 + 3] = r();
+    }
+    const sparkMat = new THREE.ShaderMaterial({
+      uniforms: { map: { value: sparkTexture() }, color: { value: new THREE.Color(1, 1, 1) }, size: { value: 0.13 }, scale: { value: 400 } },
+      vertexShader: [
+        'attribute float aAlpha; uniform float size; uniform float scale; varying float vA;',
+        'void main() {',
+        '  vA = aAlpha;',
+        '  vec4 mv = modelViewMatrix * vec4(position, 1.0);',
+        '  gl_PointSize = size * scale / max(0.1, -mv.z) * (0.55 + 0.45 * aAlpha);',
+        '  gl_Position = projectionMatrix * mv;',
+        '}'
+      ].join('\n'),
+      fragmentShader: [
+        'uniform sampler2D map; uniform vec3 color; varying float vA;',
+        'void main() {',
+        '  float a = texture2D(map, gl_PointCoord).a;',
+        '  gl_FragColor = vec4(mix(color, vec3(1.0), a * a * 0.8), a * vA);',
+        '}'
+      ].join('\n'),
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+    });
+    const sparks = add(new THREE.Points(geo, sparkMat), 7);
+    const shockGeo = new THREE.RingGeometry(0.9, 1, 96);
+    shockGeo.rotateX(-Math.PI / 2);
+    const shock = [add(new THREE.Mesh(shockGeo, glowMatl()), 4), add(new THREE.Mesh(shockGeo, glowMatl()), 4)];
+    // anneau d'éclat face à la caméra (l'onde au sol est vue de très bas : on la double à l'écran)
+    const blast = add(new THREE.Mesh(new THREE.RingGeometry(0.78, 1, 72), glowMatl({ side: THREE.DoubleSide })), 9);
+    blast.visible = false;
+    const icons = [];
+    for (let i = 0; i < N_ICON; i++) {
+      const s = add(new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, opacity: 0, depthWrite: false, toneMapped: false, fog: false })), 8);
+      s.visible = false;
+      icons.push(s);
+    }
+    return { group, rings, pool, column, halo, sparks, seed, shock, blast, icons, nIcons: 0, k: 0, c: 0, time: 0, spawn: 0,
+      shockAge: 99, shockMax: 22, burstAge: 99 };
+  }
+  function tintCineFx(accent) {
+    const light = new THREE.Color(accent).lerp(new THREE.Color('#ffffff'), 0.3).convertSRGBToLinear();
+    const deep = lin(accent);
+    cfx.rings.forEach((m) => m.material.color.copy(light));
+    cfx.pool.material.color.copy(deep);
+    cfx.column.material.color.copy(light);
+    cfx.halo.material.color.copy(new THREE.Color(accent).lerp(new THREE.Color('#fff6d8'), 0.55).convertSRGBToLinear());
+    cfx.shock[0].material.color.copy(light);
+    cfx.shock[1].material.color.copy(deep);
+    cfx.blast.material.color.copy(light);
+    cfx.sparks.material.uniforms.color.value.set(accent); // (shader maison : couleur sRGB brute)
+  }
+  function armCineFx(accent, games) {
+    tintCineFx(accent);
+    cfx.k = 0; cfx.c = 0; cfx.time = 0; cfx.spawn = 0; cfx.shockAge = 99; cfx.shockMax = 22; cfx.burstAge = 99;
+    cfx.rings.forEach((m) => { m.userData.age = 9; });
+    cfx.nIcons = Math.min(N_ICON, games.length);
+    cfx.icons.forEach((s, i) => {
+      s.visible = i < cfx.nIcons;
+      if (s.visible) { s.material.map = iconTexture(games[i], accent); s.material.needsUpdate = true; }
+    });
+  }
+  const easeBack = (x) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+  function updateCineFx(dt, t) {
+    // passe plein écran : pénombre (concentration, plongée vers un niveau) et éclair
+    let goalCine = 0;
+    if (cine) goalCine = cine.burst ? 1 : smooth(0, 0.8, cine.t) * (cine.soft ? 0.7 : 1);
+    else if (lvlCam && lvlCam.kind === 'enter') goalCine = 0.6 * smooth(0, lvlCam.dur, lvlCam.t);
+    postFx.cine += (goalCine - postFx.cine) * (1 - Math.exp(-dt * (goalCine > postFx.cine ? 4 : 1.8)));
+    postFx.flash = Math.max(0, postFx.flash - dt * 1.6);
+    if (cine && cine.soft && !cine.burst) postFx.flash = Math.max(postFx.flash, smooth(cine.burstAt - 0.5, cine.burstAt, cine.t) * 0.4);
+    if (!cfx) return;
+    const on = !!(cine && !cine.soft && !cine.burst);
+    cfx.k += ((on ? 1 : 0) - cfx.k) * (1 - Math.exp(-dt * (on ? 6 : 3.5)));
+    cfx.shockAge += dt; cfx.burstAge += dt;
+    const shockLive = cfx.shockAge < 1.2;
+    if (cfx.k < 0.004 && !on && !shockLive) { cfx.group.visible = false; return; }
+    cfx.group.visible = true;
+    const p = hero.group.position, k = cfx.k;
+    const ct = cine ? cine.t : 9;
+    if (on) cfx.c = smooth(0.3, CINE_BURST, ct);
+    const c = cfx.c, hh = cine ? cine.hh : 1;
+    // flaque de lumière sous ses pieds
+    cfx.pool.position.set(p.x, p.y + 0.03, p.z);
+    cfx.pool.scale.setScalar(1.3 + c * 1.1 + Math.sin(t * 5) * 0.05);
+    cfx.pool.material.opacity = k * (0.08 + 0.2 * c);
+    // anneaux toon : de plus en plus rapprochés à mesure que la charge monte
+    if (on && ct > 0.3) {
+      cfx.spawn -= dt;
+      if (cfx.spawn <= 0) {
+        const ring = cfx.rings.reduce((a, b) => (b.userData.age > a.userData.age ? b : a));
+        ring.userData.age = 0;
+        cfx.spawn = 0.5 - 0.32 * c;
+      }
+    }
+    cfx.rings.forEach((m) => {
+      const u = (m.userData.age += dt) / 1.05;
+      m.visible = u < 1;
+      if (!m.visible) return;
+      m.position.set(p.x, p.y + 0.04 + u * 0.05, p.z);
+      m.scale.setScalar(0.3 + (1 - Math.pow(1 - u, 2)) * (1.3 + c * 0.6));
+      m.material.opacity = Math.max(k, 0.3) * Math.pow(1 - u, 1.4) * Math.min(1, u * 10) * 0.85;
+    });
+    // colonne de lumière : elle monte de ses pieds, toujours tournée vers la caméra
+    const col = cfx.column;
+    // (un peu en retrait derrière lui : il se découpe sur la lumière au lieu d'être voilé)
+    const ya = Math.atan2(camera.position.x - p.x, camera.position.z - p.z);
+    col.position.set(p.x - Math.sin(ya) * 0.45, p.y, p.z - Math.cos(ya) * 0.45);
+    col.rotation.y = ya;
+    col.scale.set(0.6 + c * 0.6 + Math.sin(t * 7) * 0.04 * c, 0.25 + 0.75 * smooth(0.25, 1.3, ct), 1);
+    col.material.opacity = k * (0.12 + 0.45 * c);
+    // couronne à méandres : elle tourne de plus en plus vite au-dessus de la tête
+    const hp = smooth(0.45, 1.05, ct);
+    cfx.halo.visible = hp > 0;
+    cfx.halo.position.set(p.x, p.y + hh + 0.34 + Math.sin(t * 2.4) * 0.02, p.z);
+    cfx.halo.rotation.y += dt * (0.7 + c * 2.6);
+    cfx.halo.scale.set(easeBack(hp) * (1 + c * 0.15), 1, easeBack(hp) * (1 + c * 0.15));
+    cfx.halo.material.opacity = k * hp * (0.75 + 0.25 * Math.sin(t * 9));
+    // icônes des jeux en orbite (elles s'envolent au moment de l'explosion)
+    const fly = cfx.burstAge < 2 ? cfx.burstAge : 0;
+    cfx.icons.forEach((s, i) => {
+      if (i >= cfx.nIcons) return;
+      const pop = smooth(0, 0.35, ct - 0.55 - i * 0.14);
+      const a = t * (1 + c * 0.8) + (i / cfx.nIcons) * Math.PI * 2;
+      const rad = 0.8 + fly * 5;
+      s.position.set(p.x + Math.cos(a) * rad, p.y + hh * 0.5 + Math.sin(t * 2.2 + i) * 0.07 + fly * 1.5, p.z + Math.sin(a) * rad);
+      const sc = 0.26 * easeBack(pop) * (1 + fly * 0.5);
+      s.scale.set(sc, sc, 1);
+      s.material.opacity = Math.min(1, k * 1.2) * pop;
+    });
+    // étincelles en spirale : de plus en plus nombreuses et rapides ; à l'explosion, elles fusent
+    cfx.time += dt * (0.5 + 1.7 * c);
+    const P = cfx.sparks.geometry.attributes.position, A = cfx.sparks.geometry.attributes.aAlpha, S = cfx.seed;
+    const active = Math.floor(N_SPARK * (0.2 + 0.8 * c));
+    const blast = cfx.burstAge < 2 ? 1 + cfx.burstAge * 9 : 1;
+    for (let i = 0; i < N_SPARK; i++) {
+      const u = (S[i * 4 + 3] + cfx.time * S[i * 4 + 2]) % 1;
+      const rr = (S[i * 4 + 1] * (1 - 0.55 * u) + 0.12) * blast;
+      const a = S[i * 4] + u * 5.5 + cfx.time * 1.3;
+      P.array[i * 3] = p.x + Math.cos(a) * rr;
+      P.array[i * 3 + 1] = p.y + u * (1.6 + hh) + (blast - 1) * 0.05;
+      P.array[i * 3 + 2] = p.z + Math.sin(a) * rr;
+      A.array[i] = i < active ? Math.sin(Math.PI * u) * k : 0;
+    }
+    P.needsUpdate = true; A.needsUpdate = true;
+    cfx.sparks.material.uniforms.scale.value = renderer.domElement.height * 0.5;
+    // onde de choc : deux anneaux (le second un peu en retard) qui balaient l'île
+    cfx.shock.forEach((m, j) => {
+      const u = (cfx.shockAge - j * 0.12) / (1.0 + j * 0.15);
+      m.visible = u > 0 && u < 1;
+      if (!m.visible) return;
+      m.position.set(p.x, p.y + 0.06, p.z);
+      m.scale.setScalar(0.4 + (1 - Math.pow(1 - u, 3)) * cfx.shockMax * (j ? 0.7 : 1));
+      m.material.opacity = Math.pow(1 - u, 1.6) * (j ? 0.6 : 0.95);
+    });
+    const bu = cfx.burstAge / 0.6;
+    cfx.blast.visible = bu < 1;
+    if (cfx.blast.visible) {
+      cfx.blast.position.set(p.x, p.y + hh * 0.6, p.z);
+      cfx.blast.quaternion.copy(camera.quaternion);
+      cfx.blast.scale.setScalar(0.2 + (1 - Math.pow(1 - bu, 2)) * 2.6);
+      cfx.blast.material.opacity = Math.pow(1 - bu, 1.5) * 0.9;
+    }
+  }
+  function cineBurst() {
+    cine.burst = true;
+    postFx.flash = cine.soft ? 0.4 : 0.35; // (l'éclair blanc plein écran de l'application prend le relais)
+    if (!cine.soft && cfx) { cfx.shockAge = 0; cfx.shockMax = 22; cfx.burstAge = 0; }
+    if (cine.snd) { cine.snd(); cine.snd = null; }
+    if (C.sfx.burst) C.sfx.burst();
+    const cb = cine.done;
+    cine.done = null;
+    if (cb) { try { cb(); } catch (err) { console.warn(err); } }
+  }
   // Plongée vers le niveau (bouton « Jouer ») : la caméra fonce par-dessus l'épaule d'Ulysse
   // vers la pierre devant lui (≈ 0,7 s), puis cb(). Sans 3D (ou boucle à l'arrêt) : cb() tout de suite.
   World.enterLevel = (cb) => {
@@ -4421,13 +4872,19 @@
     if (lvlCam && lvlCam.kind === 'enter') { if (cb) lvlCam.cb = lvlCam.hold ? (cb(), null) : cb; return; } // (déjà en route)
     if (camMode !== 'follow') World.setCameraMode('follow');
     lvlCam = { kind: 'enter', t: 0, dur: 0.7, cb: cb || null, from: { tx: cam.tx, ty: cam.ty, tz: cam.tz, radius: cam.radius, elev: cam.elev } };
+    // la pénombre se referme autour de la pierre, un souffle accompagne la plongée
+    const col = new THREE.Color(opts.levelInfo(selected).accent);
+    postFx.tint = { r: col.r, g: col.g, b: col.b };
+    if (C.sfx.whoosh) C.sfx.whoosh(true);
   };
   // Retour sur la carte : départ tout près, derrière Ulysse, puis recul en douceur (≈ 1,2 s)
   World.exitLevel = (won) => {
     if (!World.ok) return;
+    if (cine && cine.snd) cine.snd();
     cine = null;
     hero.focusTarget = 0;
     camMode = 'follow'; followYaw = 0;
+    orbit.yaw = orbit.pitch = orbit.vel = 0;
     const ry = hero.group.rotation.y, fx = Math.sin(ry), fz = Math.cos(ry);
     const p = hero.group.position;
     cam.theta = islandTheta(hero.free ? hero.free.c : chapterOf(selected)); // (déjà dans l'angle fixe de l'île : pas de virage au recul)
@@ -4435,15 +4892,31 @@
     cam.tx = p.x + fx * 0.8; cam.ty = p.y + 0.6; cam.tz = p.z + fz * 0.8;
     camera.fov = baseFov; camera.updateProjectionMatrix();
     lvlCam = { kind: 'exit', t: 0, dur: 1.2, won: !!won };
+    // on ressort de la lumière : léger éclair qui s'efface, pénombre qui se rouvre ;
+    // niveau gagné : une petite onde de la couleur du jeu court sur l'île
+    const accent = opts.levelInfo(selected).accent, col = new THREE.Color(accent);
+    postFx.tint = { r: col.r, g: col.g, b: col.b };
+    postFx.cine = Math.max(postFx.cine, 0.55);
+    postFx.flash = Math.max(postFx.flash, 0.2);
+    if (won && !reducedMotion()) {
+      if (!cfx) cfx = makeCineFx();
+      tintCineFx(accent);
+      cfx.shockAge = 0; cfx.shockMax = 7; cfx.burstAge = 99;
+    }
+    if (C.sfx.whoosh) C.sfx.whoosh(false);
     if (!running) placeCamera();
   };
   // plongée d'intro : la caméra part très haut dans le ciel et descend vers Ulysse
   let swoopT = 0, camSave = null;
   World.swoop = () => { cam.radius = 64; cam.elev = 1.38; cam.theta = goal.theta + 1.7; swoopT = 3.2; };
-  // Mode concentration : Ulysse pose les mains sur sa tête, la caméra plonge vers lui,
-  // une lueur s'allume dans sa tête ; `done` est appelé à la fin de la séquence.
-  World.concentrate = (accent, done) => {
-    if (!World.ok) { done(); return; }
+  // Mode concentration : Ulysse pose les mains sur sa tête, la caméra décrit un arc jusqu'à
+  // un gros plan en contre-plongée, l'aura de la capacité monte (≈ 1,6 s de charge), puis une
+  // onde de choc et un éclair : `done` est appelé à l'explosion. Un toucher saute la charge.
+  // o (facultatif) : { games: [id…] } → icônes des jeux de la capacité en orbite.
+  World.concentrate = (accent, done, o) => {
+    done = done || (() => {});
+    if (!World.ok || !running) { done(); return; }
+    if (cine && cine.snd) cine.snd();
     if (hero.route) { // il s'arrête où il est
       const p = hero.group.position;
       const ch = chapters.find((c) => c && Math.hypot(p.x - c.group.position.x, p.z - c.group.position.z) < c.r);
@@ -4453,14 +4926,34 @@
     hero.focusTarget = 1;
     if (!camSave) camSave = { radius: goal.radius, elev: goal.elev };
     lvlCam = null;
-    cine = { t: 0, accent, done };
+    const soft = reducedMotion();
+    hero.group.updateMatrixWorld(true);
+    const hw = hero.head.getWorldPosition(new THREE.Vector3());
+    const hh = Math.max(0.6, Math.min(1.6, hw.y - hero.group.position.y)); // hauteur de la tête
+    cine = { t: 0, accent, done, soft, hh, burst: false, burstAt: soft ? 1.1 : CINE_BURST,
+      from: { theta: cam.theta, radius: cam.radius, elev: cam.elev, tx: cam.tx, ty: cam.ty, tz: cam.tz } };
+    const col = new THREE.Color(accent);
+    postFx.tint = { r: col.r, g: col.g, b: col.b };
+    if (!soft) {
+      if (!cfx) cfx = makeCineFx();
+      armCineFx(accent, (o && o.games) || []);
+    }
+    cine.snd = C.sfx.charge ? C.sfx.charge(cine.burstAt) : null;
   };
   World.endConcentrate = () => {
     if (!World.ok) return;
+    const was = cine;
+    if (was && was.snd) was.snd();
     cine = null;
     hero.focusTarget = 0;
+    postFx.flash = 0;
     if (camSave) { goal.radius = camSave.radius; goal.elev = camSave.elev; camSave = null; }
+    // recul en douceur depuis le gros plan (l'aura s'éteint, la pénombre se rouvre)
+    if (was && !was.soft) lvlCam = { kind: 'exit', t: 0, dur: 1.4, won: false };
   };
+  World.concentrating = () => !!(cine && !cine.burst);
+  // saute la charge (toucher pendant la séquence) : l'explosion a lieu tout de suite
+  World.skipConcentrate = () => { if (cine && !cine.burst) cine.t = Math.max(cine.t, cine.burstAt); };
   // animations réduites : mer immobile, pas d'oiseaux ni de poussières
   World.setCalm = (on) => { if (!World.ok) return; calm = on; birds.forEach((b) => { b.visible = !on; }); motes.visible = !on; };
   World.selected = () => selected;
