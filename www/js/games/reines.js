@@ -5,9 +5,11 @@
   const C = window.Carnet;
 
   // voiles pastel très légers
-  const REGION_COLORS = ['#f2a99b', '#8fc6e8', '#f5cf73', '#a8d59a', '#c3aef0',
-    '#f7b98a', '#86d1c4', '#f0a8c8', '#b8c3d6', '#e4d08a'];
-  const CROWN = '<span class="queen"></span>';
+  // pastels mats, bien distincts les uns des autres (esprit « Rois » d'Almanac)
+  const REGION_COLORS = ['#c2b6e0', '#e3b3b0', '#aea296', '#b4cbab', '#a6cdd1',
+    '#d5e2e9', '#d9b7de', '#dcc4ab', '#efd28a', '#9fbadb'];
+  // couronne pleine, bien lisible sur toutes les couleurs
+  const CROWN = '<svg class="crown" viewBox="0 0 24 24"><path d="M3 8.5 7.2 12 12 5l4.8 7L21 8.5 19.2 18H4.8z" fill="#15191e" stroke="#15191e" stroke-width="1.2" stroke-linejoin="round"/></svg>';
 
   // Interdit entre deux couronnes de lignes voisines (hors même colonne) :
   // classique = se toucher, cavaliers = être à un saut de cavalier.
@@ -119,10 +121,9 @@
       const reg = puzzle.region[i];
       d.style.background = palette[reg % palette.length];
       // bordures épaisses entre zones
-      if (r === 0 || puzzle.region[i - n] !== reg) d.classList.add('bt');
-      if (c === 0 || puzzle.region[i - 1] !== reg) d.classList.add('bl');
-      if (r === n - 1 || puzzle.region[i + n] !== reg) d.classList.add('bb');
-      if (c === n - 1 || puzzle.region[i + 1] !== reg) d.classList.add('br');
+      // frontières de zones : un seul trait épais entre deux zones (le cadre fait le tour)
+      if (r > 0 && puzzle.region[i - n] !== reg) d.classList.add('bt');
+      if (c > 0 && puzzle.region[i - 1] !== reg) d.classList.add('bl');
       d.dataset.i = i;
       grid.appendChild(d);
       cells.push(d);
@@ -143,11 +144,27 @@
       return { bad, queens: q.length };
     }
 
+    // cases rendues impossibles par les couronnes posées : marquées d'office d'un point
+    function blocked() {
+      const out = new Uint8Array(n * n);
+      state.forEach((v, q) => {
+        if (v !== 2) return;
+        const rq = Math.floor(q / n), cq = q % n;
+        for (let i = 0; i < n * n; i++) {
+          if (i === q) continue;
+          const r = Math.floor(i / n), c = i % n;
+          if (r === rq || c === cq || puzzle.region[i] === puzzle.region[q] || forbidden(puzzle.variant, Math.abs(r - rq), c - cq)) out[i] = 1;
+        }
+      });
+      return out;
+    }
+
     function render() {
       const { bad } = conflicts();
+      const auto = blocked();
       cells.forEach((d, i) => {
         const v = state[i];
-        d.innerHTML = v === 2 ? CROWN : v === 1 ? '<span class="mark"></span>' : '';
+        d.innerHTML = v === 2 ? CROWN : v === 1 || auto[i] ? '<span class="mark"></span>' : '';
         d.classList.toggle('bad', bad.has(i));
       });
     }

@@ -1221,18 +1221,26 @@
       return;
     }
 
-    // caméra : derrière le voyageur, dans le sens du sentier
-    const dir = pathDir(selected);
-    if (holdTheta > 0) holdTheta -= dt; else userTheta *= 1 - Math.min(1, dt * 0.4);
-    goal.theta = Math.atan2(-dir.z, -dir.x) + 0.55 + userTheta;
-    goal.tx = focus.x + dir.x * 1.6; goal.ty = focus.y + 0.2; goal.tz = focus.z + dir.z * 1.6;
-    const k = 1 - Math.exp(-dt * 2);
+    // Caméra stable : centrée sur Ulysse (mode suivi) ou sur un point qu'on fait glisser
+    // (caméra libre). L'angle, l'inclinaison et le zoom ne changent que si le joueur les
+    // touche ; la hauteur suit en douceur pour ignorer le léger tangage des îles.
+    goal.theta = userTheta;
+    if (camMode === 'follow') {
+      goal.tx = focus.x; goal.tz = focus.z;
+      groundY += (focus.y - groundY) * (1 - Math.exp(-dt * 1.5));
+      goal.ty = groundY + 0.6;
+    } else {
+      goal.tx = freeTarget.x; goal.ty = 0.9; goal.tz = freeTarget.z;
+    }
+    const k = 1 - Math.exp(-dt * 3);
     let dth = goal.theta - cam.theta;
     dth = Math.atan2(Math.sin(dth), Math.cos(dth));
     cam.theta += dth * k;
     ['elev', 'radius', 'tx', 'ty', 'tz'].forEach((key) => { cam[key] += (goal[key] - cam[key]) * k; });
     placeCamera();
   }
+  let camMode = 'follow', groundY = 0.7;
+  const freeTarget = { x: 0, z: 0 };
 
   function placeCamera() {
     const ce = Math.cos(cam.elev);
@@ -1262,23 +1270,58 @@
     return rc;
   }
 
+  // Gestes : un doigt → pivoter (horizontal) et incliner (vertical), ou déplacer la vue en
+  // caméra libre ; deux doigts → pincer pour zoomer ; molette → zoom ; toucher bref → aller là.
+  const pointers = new Map();
+  let pinch = null;
+  const R_MIN = 5, R_MAX = 36;
+
   function onDown(e) {
-    drag = { x: e.clientX, y: e.clientY, t: performance.now(), moved: 0, theta: userTheta, radius: goal.radius };
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     renderer.domElement.setPointerCapture(e.pointerId);
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y), radius: goal.radius };
+      if (drag) drag.moved = 999; // un pincement n'est jamais un toucher
+      return;
+    }
+    drag = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, t: performance.now(), moved: 0, theta: userTheta, elev: goal.elev };
   }
   function onMove(e) {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && pointers.size >= 2) {
+      const [a, b] = [...pointers.values()];
+      const d = Math.max(10, Math.hypot(a.x - b.x, a.y - b.y));
+      goal.radius = Math.max(R_MIN, Math.min(R_MAX, pinch.radius * pinch.dist / d));
+      return;
+    }
     if (!drag) return;
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
     drag.moved = Math.max(drag.moved, Math.abs(dx) + Math.abs(dy));
-    if (drag.moved > 8) {
-      userTheta = drag.theta + dx * 0.006;
-      holdTheta = 3;
-      goal.radius = Math.max(7, Math.min(34, drag.radius + dy * 0.04));
-      goal.elev = 0.45 + ((goal.radius - 7) / 27) * 0.6;
+    if (drag.moved <= 8) return;
+    if (camMode === 'free') {
+      // on fait glisser la carte sous le doigt
+      const mx = e.clientX - drag.lx, my = e.clientY - drag.ly;
+      const s = cam.radius * 0.0022;
+      const fx = -Math.cos(cam.theta), fz = -Math.sin(cam.theta); // avant (vers la cible)
+      const rx = -fz, rz = fx;                                     // droite
+      freeTarget.x += (-mx * rx + my * fx) * s;
+      freeTarget.z += (-mx * rz + my * fz) * s;
+    } else {
+      userTheta = drag.theta + dx * 0.007;
+      goal.elev = Math.max(0.18, Math.min(1.3, drag.elev + dy * 0.004));
     }
+    drag.lx = e.clientX; drag.ly = e.clientY;
+  }
+  function onWheel(e) {
+    e.preventDefault();
+    goal.radius = Math.max(R_MIN, Math.min(R_MAX, goal.radius * (1 + e.deltaY * 0.0012)));
   }
   function onUp(e) {
-    if (!drag) return;
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) pinch = null;
+    if (!drag || pointers.size > 0) { if (pointers.size === 0) drag = null; return; }
     if (cine) { drag = null; return; } // pas de déplacement pendant la concentration
     const tap = drag.moved < 8 && performance.now() - drag.t < 400;
     drag = null;
@@ -1373,7 +1416,11 @@
     el.addEventListener('pointerdown', onDown);
     el.addEventListener('pointermove', onMove);
     el.addEventListener('pointerup', onUp);
-    el.addEventListener('pointercancel', () => { drag = null; });
+    el.addEventListener('pointercancel', (e) => { pointers.delete(e.pointerId); pinch = null; drag = null; });
+    el.addEventListener('wheel', onWheel, { passive: false });
+    // angle de départ : derrière Ulysse, dans le sens du sentier
+    const d0 = pathDir(selected);
+    userTheta = goal.theta = cam.theta = Math.atan2(-d0.z, -d0.x) + 0.55;
     window.addEventListener('resize', resize);
     resize();
     World.ok = true;
@@ -1398,6 +1445,13 @@
   // heure réelle (ex. 18.5 pour 18 h 30) ; night = forcer la nuit (mode sombre choisi)
   World.setTime = (hour, night) => { if (!World.ok) return; lightHour = hour; forceNight = !!night; applyLight(); };
   World.isNight = (hour) => hour < 6 || hour >= 20.5;
+  // caméra libre (on survole la carte) ou suivi d'Ulysse
+  World.setCameraMode = (mode) => {
+    camMode = mode === 'free' ? 'free' : 'follow';
+    if (camMode === 'free') { freeTarget.x = cam.tx; freeTarget.z = cam.tz; }
+    return camMode;
+  };
+  World.cameraMode = () => camMode;
   // Mode concentration : Ulysse pose les mains sur sa tête, la caméra plonge vers lui,
   // une lueur s'allume dans sa tête ; `done` est appelé à la fin de la séquence.
   World.concentrate = (accent, done) => {

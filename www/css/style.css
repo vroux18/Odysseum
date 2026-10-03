@@ -542,3 +542,49 @@ svg .f { fill: currentColor; stroke: none; }
 .queen::after { background: rgba(255, 255, 255, .9); }
 .reines .cell.bad .queen { background: #b4473a; }
 .mark { background: rgba(43, 48, 53, .55); }
+
+/* =====================================================================
+   Mini-jeux v3 : pastilles en relief (esprit Almanac)
+   ===================================================================== */
+:root { --tile-edge: #d6cfc3; --frame: #2b3035; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --tile-edge: #3f4752; --frame: #0f1317; } }
+:root[data-theme="dark"] { --tile-edge: #3f4752; --frame: #0f1317; }
+
+/* tuile en relief : bordure plus foncée, ombre dessous */
+.cell-grid .cell, .bulb, .key, .slot { border: 3px solid var(--tile-edge); box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .14); }
+.cell-grid { gap: 8px; }
+
+/* Astres : pastilles colorées avec reflet en diagonale */
+.astres .cell { border-radius: 16px; }
+.astres .cell.sun { background: linear-gradient(135deg, #ffe7a6 0 46%, #f4c654 46%); border-color: #c79b33; }
+.astres .cell.moon { background: linear-gradient(135deg, #c9d6f6 0 46%, #94ade6 46%); border-color: #6c86c4; }
+.astres .cell.given.sun, .astres .cell.given.moon { filter: saturate(.85); }
+.astres .cell svg { width: 48%; height: 48%; }
+.edge-mark {
+  width: 26px; height: 26px; border-radius: 50%; background: #f4f5f6; color: #15191e;
+  border: 2.5px solid #15191e; font-size: 17px; font-weight: 700; line-height: 1; z-index: 3;
+}
+.edge-mark.bad { background: var(--bad); color: #fff; }
+
+/* Reines : zones continues, bordures épaisses, quadrillage fin, cadre arrondi */
+.cell-grid.reines { gap: 0; border: 3px solid var(--frame); border-radius: 16px; overflow: hidden; background: var(--frame); }
+.cell-grid.reines .cell {
+  border-radius: 0; box-shadow: none; margin: 0;
+  border-top: 1px solid rgba(0, 0, 0, .14) !important; border-left: 1px solid rgba(0, 0, 0, .14) !important;
+  border-right: 0 !important; border-bottom: 0 !important;
+}
+.cell-grid.reines .cell.bt { border-top: 3px solid var(--frame) !important; }
+.cell-grid.reines .cell.bl { border-left: 3px solid var(--frame) !important; }
+.cell-grid.reines .cell.bb { border-bottom: 3px solid var(--frame) !important; }
+.cell-grid.reines .cell.br { border-right: 3px solid var(--frame) !important; }
+.reines .crown { width: 58%; height: 58%; }
+.reines .mark { width: 15%; background: #15191e; opacity: .8; }
+.reines .cell.bad::after { inset: 2px; border-radius: 6px; box-shadow: inset 0 0 0 3px #c43d2e; }
+.reines .cell.bad .crown path { fill: #b4382b; stroke: #b4382b; }
+
+/* Lumières, Coffre : mêmes tuiles en relief */
+.bulb.on { border-color: #c79b33; box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .12), 0 0 18px color-mix(in srgb, var(--game) 60%, transparent); }
+
+/* bouton caméra libre */
+.cam-btn { position: fixed; left: 14px; bottom: calc(52px + env(safe-area-inset-bottom, 0px)); z-index: 5; background: var(--glass); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.cam-btn.on { color: var(--surface); background: var(--p2); }

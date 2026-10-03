@@ -164,9 +164,9 @@
         text: 'Compose ton code avec le clavier, puis valide avec la <b>flèche</b>. Le nombre d\'essais est limité.' }
     ],
     variants: {
-      cadenas: { art: svg([0, 1, 2].map((i) => '<text x="' + (34 + i * 26) + '" y="52" text-anchor="middle" font-size="18" fill="var(--ink)">' + [3, 7, 5][i] +
-          '</text><text x="' + (34 + i * 26) + '" y="76" text-anchor="middle" font-size="12" fill="var(--muted)">' + ['▲', '✓', '▼'][i] + '</text>').join('')),
-        text: '<b>Variante Cadenas</b> : un code à chiffres. Sous chaque chiffre : ✓ juste, ▲ le bon est plus grand, ▼ plus petit.' }
+      expert: { art: svg([0, 1, 2, 3, 4].map((i) => '<circle cx="' + (16 + i * 22) + '" cy="56" r="9" fill="var(--soft)"/><text x="' + (16 + i * 22) + '" y="61" text-anchor="middle" font-size="12" fill="' +
+          [A, A, Y, B, G][i] + '">' + ['●', '●', '■', '▲', '◆'][i] + '</text>').join('')),
+        text: '<b>Variante Expert</b> : 5 symboles parmi 7, et un symbole peut revenir <b>plusieurs fois</b>.' }
     }
   };
 

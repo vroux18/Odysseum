@@ -33,58 +33,53 @@
   const dataKey = (g, v) => (v === 'classic' ? g.id : g.id + ':' + v);
 
   // ------------------------------------------------------------------
-  // La quête principale : tous les mini-jeux en alternance, difficulté croissante.
-  // - La première île présente les 8 jeux un par un (avec leur tutoriel).
-  // - Ensuite, les jeux tournent par cycles de 8 dans un ordre mélangé, sans répétition.
+  // La quête principale :
+  // - Chaque monde (île) ajoute des mini-jeux : 3 au premier, puis 5, 6, et les 8 au 4e monde.
+  // - Un niveau = une petite série de 2 à 3 mini-jeux enchaînés (2 au tout début).
+  // - Les nouveaux jeux d'un monde ouvrent ses premiers niveaux (avec leur tutoriel).
   // - La difficulté monte d'île en île et au fil de chaque île.
-  // - Le dernier niveau de chaque île est un boss : 2, puis 3, puis 4 grilles d'affilée,
-  //   plus difficiles que le reste de l'île, de plus en plus souvent en variante.
+  // - Le dernier niveau de chaque île est un boss : 4, puis 5 grilles d'affilée, plus
+  //   difficiles, mêlant les capacités, de plus en plus souvent en variante.
   // ------------------------------------------------------------------
   const PER = 10;
   const ORDER = ['flux', 'reines', 'astres', 'paves', 'pixels', 'serpent', 'lumieres', 'coffre'];
-
-  const cycles = [ORDER.slice()];
-  function cyclePerm(n) {
-    while (cycles.length <= n) {
-      const prev = cycles[cycles.length - 1];
-      const perm = C.makeRng('cycle:' + cycles.length).shuffle(ORDER.slice());
-      if (perm[0] === prev[prev.length - 1]) [perm[0], perm[1]] = [perm[1], perm[0]]; // pas deux fois le même jeu d'affilée
-      cycles.push(perm);
-    }
-    return cycles[n];
-  }
-  // n-ième niveau « normal » (hors boss) → mini-jeu
-  const rotation = (n) => cyclePerm(Math.floor(n / ORDER.length))[n % ORDER.length];
+  const POOL_SIZE = [3, 5, 6, 8]; // jeux disponibles dans les mondes 1, 2, 3, 4 et suivants
+  const poolOf = (c) => ORDER.slice(0, POOL_SIZE[Math.min(c, POOL_SIZE.length - 1)]);
 
   function levelInfo(L) {
     const c = Math.floor(L / PER), k = L % PER;
     const rng = C.makeRng('sentier:' + L);
     const boss = k === PER - 1;
-    const normals = L - c; // niveaux normaux avant celui-ci (un boss par île)
-    const met = ORDER.slice(0, Math.min(ORDER.length, normals + (boss ? 0 : 1)));
+    const pool = poolOf(c);
+    const fresh = c > 0 ? pool.filter((id) => !poolOf(c - 1).includes(id)) : pool.slice(); // nouveaux jeux du monde
     const pickVariant = (id, chance) => {
       const g = game(id);
-      // une variante seulement pour un jeu déjà rencontré au moins une fois avant
-      const seen = ORDER.indexOf(id) < normals - 1 || normals > ORDER.length;
-      return g.variants && g.variants[1] && seen && rng() < chance ? g.variants[1].id : 'classic';
+      // une variante seulement pour un jeu présent depuis au moins un monde
+      const known = c > 0 && poolOf(c - 1).includes(id);
+      return g.variants && g.variants[1] && known && rng() < chance ? g.variants[1].id : 'classic';
     };
-    let steps;
+    const skillOf = (id) => (SKILLS.find((s) => s.games.includes(id)) || {}).id;
+    let ids;
     if (boss) {
-      const count = 2 + Math.min(2, Math.floor(c / 2));
+      const count = c < 2 ? 4 : 5;
       // des jeux différents, si possible de capacités différentes
-      const pool = rng.shuffle(met.slice());
-      const ids = [];
-      const skillOf = (id) => (SKILLS.find((s) => s.games.includes(id)) || {}).id;
-      pool.forEach((id) => { if (ids.length < count && !ids.some((x) => skillOf(x) === skillOf(id))) ids.push(id); });
-      pool.forEach((id) => { if (ids.length < count && !ids.includes(id)) ids.push(id); });
-      while (ids.length < count) ids.push(rng.pick(met));
-      const level = 4 + c * 4 + 6 + c; // nettement au-dessus du reste de l'île, et de plus en plus
-      steps = ids.map((id) => ({ id, variant: pickVariant(id, Math.min(0.7, 0.25 + c * 0.1)), level }));
+      const shuffled = rng.shuffle(pool.slice());
+      ids = [];
+      shuffled.forEach((id) => { if (ids.length < count && !ids.some((x) => skillOf(x) === skillOf(id))) ids.push(id); });
+      shuffled.forEach((id) => { if (ids.length < count && !ids.includes(id)) ids.push(id); });
+      while (ids.length < count) ids.push(rng.pick(pool));
     } else {
-      const id = rotation(normals);
-      const level = 1 + c * 4 + Math.floor(k * 0.7); // montée douce au fil de l'île
-      steps = [{ id, variant: pickVariant(id, c >= 1 ? Math.min(0.55, 0.12 + c * 0.08) : 0), level }];
+      const count = c === 0 && k < 3 ? 2 : 3;
+      ids = [];
+      // les premiers niveaux d'un monde présentent ses nouveaux jeux
+      if (k * 2 < fresh.length) ids.push(fresh[k * 2]);
+      if (k * 2 + 1 < fresh.length) ids.push(fresh[k * 2 + 1]);
+      const others = rng.shuffle(pool.slice());
+      others.forEach((id) => { if (ids.length < count && !ids.includes(id)) ids.push(id); });
     }
+    const level = boss ? 4 + c * 4 + 6 + c : 1 + c * 4 + Math.floor(k * 0.7);
+    const vChance = boss ? Math.min(0.7, 0.25 + c * 0.1) : Math.min(0.55, 0.12 + c * 0.08);
+    const steps = ids.map((id, i) => ({ id, variant: pickVariant(id, vChance), level: level + (boss ? 0 : i) }));
     return { L, c, k, boss, id: steps[0].id, accent: ACCENT[steps[0].id], steps };
   }
 
@@ -490,6 +485,15 @@
   applyTheme(); // avant le premier affichage, pour éviter un flash
 
   // --------------------------- Événements ---------------------------
+  $('#cam-mode').addEventListener('click', () => {
+    if (!worldReady) return;
+    const mode = C.world.setCameraMode(C.world.cameraMode() === 'free' ? 'follow' : 'free');
+    const b = $('#cam-mode');
+    b.classList.toggle('on', mode === 'free');
+    b.setAttribute('aria-pressed', String(mode === 'free'));
+    b.setAttribute('aria-label', mode === 'free' ? 'Recentrer sur Ulysse' : 'Caméra libre');
+    C.sfx.tap();
+  });
   $('#open-library').addEventListener('click', () => { renderLibrary(); $('#library').hidden = false; });
   $('#library').addEventListener('click', (e) => { if (e.target.id === 'library') $('#library').hidden = true; });
   document.querySelectorAll('.lib-mode button').forEach((b) => b.addEventListener('click', () => {

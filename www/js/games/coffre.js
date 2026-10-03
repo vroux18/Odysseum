@@ -29,6 +29,9 @@
     if (variant === 'cadenas') {
       return { variant, len: Math.min(6, 3 + Math.floor((level + 2) / 6)), symbols: 10, repeats: true, tries: 6 };
     }
+    if (variant === 'expert') { // Mastermind expert : code plus long, plus de symboles, répétitions
+      return { variant: 'classic', len: 5, symbols: 7, repeats: true, tries: level < 20 ? 10 : 9 };
+    }
     return {
       variant: 'classic',
       len: level < 10 ? 4 : 5,
@@ -211,7 +214,7 @@
     icon: '<svg viewBox="0 0 24 24" shape-rendering="crispEdges"><path d="M8 2h8v2h2v6h-2V4H8v6H6V4h2zM4 10h16v12H4zm7 4v4h2v-4z" fill="currentColor"/></svg>',
     variants: [
       { id: 'classic', name: 'Classique', desc: 'Symboles, indices bien placé / mal placé.' },
-      { id: 'cadenas', name: 'Cadenas', desc: 'Chiffres, chaque position dit plus haut ou plus bas.' }
+      { id: 'expert', name: 'Expert', desc: 'Code de 5 symboles parmi 7, répétitions possibles.' }
     ],
     rules: {
       classic: [
@@ -219,10 +222,10 @@
         'Après chaque essai : un témoin <b>plein</b> = un symbole bien placé, un témoin <b>creux</b> = un bon symbole mal placé.',
         'Touche une case de la ligne en cours pour l\'effacer.'
       ],
-      cadenas: [
-        'Devine le code à chiffres du cadenas.',
-        'Sous chaque chiffre : <b>✓</b> s\'il est juste, <b>▲</b> si le bon chiffre est plus grand, <b>▼</b> s\'il est plus petit.',
-        'Tu as 6 essais. Un raisonnement par dichotomie aide beaucoup.'
+      expert: [
+        'Le même Mastermind, en plus exigeant : <b>5 symboles</b> à trouver parmi 7.',
+        'Un même symbole peut apparaître <b>plusieurs fois</b> dans le code.',
+        'Témoin plein = bien placé, témoin creux = bon symbole mal placé.'
       ]
     },
     params,
