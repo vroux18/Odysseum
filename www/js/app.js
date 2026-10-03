@@ -863,7 +863,7 @@
     $('#ld-title').textContent = info.daily ? game(info.steps[0].id).name : info.event != null || info.mega ? 'Méga ' + game(info.steps[0].id).name : info.boss ? 'Épreuve réussie' : 'Niveau ' + (info.L + 1);
     // trois grosses étoiles sous le titre : elles éclosent une à une (les manquantes restent grises)
     const ldStars = $('#ld-stars');
-    const hasStars = info.stars != null;
+    const hasStars = info.stars != null && !info.assisted; // résolu d'office (outil de test) : ni étoiles ni chrono
     ldStars.hidden = !hasStars;
     if (hasStars) {
       ldStars.innerHTML = starRow(info.stars, 'big-stars');
@@ -876,7 +876,7 @@
     let clock = $('#ld-clock');
     if (!clock) { clock = document.createElement('div'); clock.id = 'ld-clock'; clock.className = 'ld-clock'; ldStars.after(clock); }
     const run = info.run || {};
-    clock.hidden = !(run.time > 0 && run.target > 0);
+    clock.hidden = !(run.time > 0 && run.target > 0) || !!info.assisted;
     if (!clock.hidden) {
       const span = run.target * 2.6, pos = (v) => Math.min(100, (v / span) * 100).toFixed(1) + '%';
       const tick = (v, n) => '<i class="ck-tick" style="left:' + pos(v) + '">' + starRow(n, 'ck-stars') + '<em>' + C.formatTime(Math.round(v)) + '</em></i>';
@@ -1017,6 +1017,7 @@
   }
   // fin d'une grille de palier (enchaînée, sans récapitulatif) : les étoiles éclosent sur le plateau
   function popStars(n) {
+    if (!n) return; // résolu d'office : pas d'étoiles à montrer
     let el = $('#pop-stars');
     if (!el) { el = document.createElement('div'); el.id = 'pop-stars'; el.className = 'pop-stars'; document.body.appendChild(el); } // (hors de #play, qui s'estompe à la fin)
     el.innerHTML = starRow(n, 'big-stars');
