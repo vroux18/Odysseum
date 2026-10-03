@@ -1648,3 +1648,6 @@ svg.ic.ic-solid { --duo-o: 1; }
 #library .tile .tile-icon svg { width: 22px !important; height: 22px !important; }
 #library .tile .tile-name { font-size: 15px !important; line-height: 1.15; }
 #library .tile .tile-lvl { font-size: 11px !important; padding: 2px 8px !important; }
+
+/* Astres : soleils et lunes un peu plus petits */
+.astres .cell svg { width: 54% !important; height: 54% !important; }

@@ -202,8 +202,14 @@
     }
 
     setTimeout(() => {
-      const seed = (info.seed || 'odysseum:' + info.L) + ':' + stepIndex;
-      const puzzle = g.generate(C.makeRng(seed), g.params(step.level, variant));
+      let seed = (info.seed || 'odysseum:' + info.L) + ':' + stepIndex, genLevel = step.level, mark = null;
+      // quête et liste des mini-jeux partagent la même progression : une grille de la quête
+      // est le prochain niveau du palier en cours de ce jeu (même grille que dans la liste), et la réussir l'y coche
+      if (!info.free && variant === 'classic') {
+        const nx = nextTier(g.id);
+        if (nx) { mark = nx; genLevel = tierLevel(nx.tier, nx.k); seed = 'palier:' + g.id + ':' + nx.tier.id + ':' + nx.k; }
+      }
+      const puzzle = g.generate(C.makeRng(seed), g.params(genLevel, variant));
       host.innerHTML = '';
       let elapsed = 0, won = false, tool = 'fill', hints = 0, auto = false;
       const tick = setInterval(() => {
@@ -223,6 +229,7 @@
           d.solved++;
           d.totalTime += elapsed;
           gainXp(g, step.level, !!info.boss, elapsed, hints, auto);
+          if (mark) tierMark(g.id, mark.tier.id, mark.k);
           C.save();
           host.classList.add('solved');
           if (stepIndex + 1 < info.steps.length) {
@@ -571,6 +578,23 @@
     if (k > (d[tierId] || 0)) d[tierId] = k;
     C.save();
   }
+  // une fois : les grilles déjà réussies (quête comprise) comptent dans la progression de chaque mini-jeu
+  if (!C.store.tiersMigrated) {
+    C.store.tiers = C.store.tiers || {};
+    C.games.forEach((g) => {
+      const solved = variantsOf(g).reduce((s, v) => s + ((C.store.games[dataKey(g, v.id)] || {}).solved || 0), 0);
+      const d = C.store.tiers[g.id] = C.store.tiers[g.id] || {};
+      d.basique = Math.min(TIER_SIZE, Math.max(d.basique || 0, solved));
+    });
+    C.store.tiersMigrated = 1;
+    C.save();
+  }
+  // prochain niveau à jouer d'un mini-jeu : le plus haut palier ouvert pas encore terminé
+  function nextTier(id) {
+    let nx = null;
+    TIERS.forEach((t, k) => { const d = tierDone(id, t.id); if (tierOpen(id, k) && d < TIER_SIZE) nx = { tier: t, k: d + 1 }; });
+    return nx;
+  }
   function startTier(id, tierId, k) {
     const t = TIERS.find((x) => x.id === tierId);
     $('#levels').hidden = true;
@@ -610,8 +634,7 @@
     grid.innerHTML = h;
     const sk = SKILLS.find((s) => s.games.includes(lv.id));
     // reprendre là où on s'est arrêté : le plus haut palier ouvert qui n'est pas terminé
-    let resume = null;
-    TIERS.forEach((t, k) => { const d = tierDone(lv.id, t.id); if (tierOpen(lv.id, k) && d < TIER_SIZE) resume = { tier: t, k: d + 1 }; });
+    const resume = nextTier(lv.id);
     const fb = $('#lv-focus');
     fb.hidden = !resume;
     if (resume) {
