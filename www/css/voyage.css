@@ -270,3 +270,22 @@
 .lvcard .lc-games i { width: 30px !important; height: 30px !important; }
 .lvcard .lc-games svg { width: 17px !important; height: 17px !important; }
 #home #go { left: auto !important; right: calc(50% - var(--lc-w) / 2 + 12px) !important; transform: none !important; }
+
+/* carte du niveau un peu moins large */
+#home { --lc-w: min(310px, calc(100vw - 64px)); }
+.lvcard { padding-right: 96px !important; padding-left: 18px !important; }
+.lvcard .lc-games i { width: 26px !important; height: 26px !important; }
+.lvcard .lc-games svg { width: 15px !important; height: 15px !important; }
+
+/* alignement général : carte du niveau, barre d'onglets et boutons du haut partagent les mêmes bords */
+#home { --W: min(340px, calc(100vw - 40px)); --edge: calc((100vw - var(--W)) / 2); --lc-w: var(--W); }
+#home::after { left: var(--edge) !important; right: var(--edge) !important; }
+#home #open-daily { left: var(--edge) !important; }
+#home #open-wardrobe { left: calc(var(--edge) + var(--W) / 4) !important; }
+#home #cam-mode { left: calc(var(--edge) + var(--W) / 2) !important; }
+#home #open-library { left: calc(var(--edge) + 3 * var(--W) / 4) !important; }
+#home #open-library, #home #open-daily, #home #open-wardrobe, #home #cam-mode { width: calc(var(--W) / 4) !important; }
+#home #open-brain { left: var(--edge) !important; }
+#home #open-settings { right: var(--edge) !important; }
+#home #open-daily-top { left: var(--edge) !important; }
+.lvcard { padding-left: 20px !important; padding-right: 100px !important; }
