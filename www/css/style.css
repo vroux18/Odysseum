@@ -774,3 +774,55 @@ svg .f { fill: currentColor; stroke: none; }
   50% { transform: perspective(320px) rotateY(90deg) scale(.96); }
   100% { transform: perspective(320px) rotateY(0); }
 }
+
+/* =====================================================================
+   Coffre v2 : rangées compactes, jetons pleins, indices nets
+   ===================================================================== */
+.coffre { --len: 4; width: 100%; max-width: 360px; gap: 20px; align-items: center; }
+.coffre-rows { width: 100%; max-height: none; overflow: visible; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 0; scrollbar-width: none; }
+.coffre-rows::-webkit-scrollbar { display: none; }
+.coffre-row { width: auto; display: flex; align-items: center; gap: 14px; padding: 8px 12px; border-radius: 16px; opacity: 1; background: transparent; }
+.coffre-row:not(.current) .slots { opacity: .92; }
+.coffre-row.current { background: var(--tile); box-shadow: none; outline: 0; }
+.coffre .slots { display: flex; gap: 8px; }
+.coffre .slot { width: 42px; height: 42px; max-height: none; aspect-ratio: auto; padding: 0; border: 0; border-radius: 50%; background: transparent; box-shadow: none; display: grid; place-items: center; }
+.coffre .slot.empty { border: 2px dashed var(--faint); }
+.chip {
+  width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--c); color: #1b2530; font-size: 20px; line-height: 1;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .18), inset 0 2px 0 rgba(255, 255, 255, .25);
+  animation: chip-in .3s var(--slow);
+}
+@keyframes chip-in { from { transform: scale(.4); } }
+.coffre .fb { display: grid; grid-template-columns: repeat(2, 10px); gap: 4px; min-width: 24px; }
+.coffre .peg { width: 10px; height: 10px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--faint); }
+.coffre .peg.exact { background: var(--ink); box-shadow: none; }
+.coffre .peg.near { box-shadow: inset 0 0 0 2px var(--ink); }
+.coffre-left { display: flex; gap: 6px; padding: 4px; }
+.coffre-left i { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+.coffre-pad { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; max-width: 320px; }
+.coffre .key { width: 52px; height: 52px; aspect-ratio: auto; border-radius: 50%; padding: 0; background: transparent; border: 0; box-shadow: none; display: grid; place-items: center; }
+.coffre .key .chip { width: 52px; height: 52px; font-size: 24px; animation: none; }
+.coffre .key:active { transform: scale(.92); }
+.coffre .tool-key { background: var(--tile); border-radius: 16px; color: var(--ink); }
+.coffre .tool-key svg { width: 24px; height: 24px; stroke-width: 2; }
+.coffre .tool-key.enter { background: var(--p2); color: #fffaf0; }
+.coffre .key.enter::before { content: none; }
+
+/* =====================================================================
+   Liste des mini-jeux v2 : cartes alignées
+   ===================================================================== */
+.library .sheet { gap: 16px; padding-top: 22px; }
+.library .sheet::before { content: 'Mini-jeux'; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.library .game-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.library .tile {
+  flex-direction: column; align-items: center; gap: 6px; padding: 14px 6px 12px; border-radius: 18px; background: var(--tile);
+}
+.library .tile:active { transform: scale(.96); }
+.library .tile-icon {
+  width: 46px; height: 46px; max-width: none; aspect-ratio: auto; border-radius: 50%; box-shadow: none;
+  background: color-mix(in srgb, var(--game) 20%, transparent); color: var(--game);
+}
+.library .tile-icon svg { width: 54%; height: 54%; }
+.library .tile-name { font-size: 14px; color: var(--ink); text-transform: capitalize; }
+.library .tile-lvl { margin: 0; font-size: 11px; color: var(--muted); padding: 2px 8px; border-radius: 999px; background: var(--bg); }

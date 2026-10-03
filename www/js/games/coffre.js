@@ -75,11 +75,12 @@
     pad.className = 'coffre-pad';
     box.appendChild(pad);
 
+    // jeton : pastille de couleur pleine avec un gros symbole foncé
     const tokenHTML = (v) => {
       if (v == null) return '';
       if (isLock) return '<span class="digit">' + v + '</span>';
       const s = SYMBOLS[v];
-      return '<span class="sym" style="color:' + s.color + '">' + s.ch + '</span>';
+      return '<span class="chip" style="--c:' + s.color + '">' + s.ch + '</span>';
     };
 
     function feedbackHTML(guess) {
@@ -95,20 +96,30 @@
       return h;
     }
 
+    // on n'affiche que les essais joués et l'essai en cours ; les essais restants sont de petits points
     function render() {
       board.innerHTML = '';
-      for (let r = 0; r < puzzle.tries; r++) {
+      const shown = over ? rows.length : rows.length + 1;
+      for (let r = 0; r < shown; r++) {
         const row = document.createElement('div');
         row.className = 'coffre-row' + (r === rows.length && !over ? ' current' : '');
-        const guess = r < rows.length ? rows[r] : r === rows.length ? cur : [];
+        const guess = r < rows.length ? rows[r] : cur;
         let slots = '';
         for (let i = 0; i < L; i++) {
           const v = r === rows.length && locked.has(i) && guess[i] == null ? locked.get(i) : guess[i];
-          slots += '<button class="slot" data-i="' + i + '"' + (r !== rows.length ? ' disabled' : '') + '>' + tokenHTML(v) + '</button>';
+          slots += '<button class="slot' + (v == null ? ' empty' : '') + '" data-i="' + i + '"' + (r !== rows.length ? ' disabled' : '') + '>' + tokenHTML(v) + '</button>';
         }
-        row.innerHTML = '<span class="row-num">' + (r + 1) + '</span><div class="slots">' + slots + '</div>' +
+        row.innerHTML = '<div class="slots">' + slots + '</div>' +
           '<div class="fb">' + (r < rows.length ? feedbackHTML(rows[r]) : '') + '</div>';
         board.appendChild(row);
+      }
+      const left = puzzle.tries - rows.length - (over ? 0 : 1);
+      if (left > 0) {
+        const rest = document.createElement('div');
+        rest.className = 'coffre-left';
+        rest.setAttribute('aria-label', left + ' essais restants');
+        rest.innerHTML = '<i></i>'.repeat(left);
+        board.appendChild(rest);
       }
       if (over) {
         const reveal = document.createElement('div');
@@ -131,9 +142,19 @@
         b.addEventListener('click', () => put(v));
         pad.appendChild(b);
       }
+      // effacer le dernier jeton, puis valider : mêmes dimensions que les jetons
+      const del = document.createElement('button');
+      del.className = 'key tool-key';
+      del.setAttribute('aria-label', 'Effacer');
+      del.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 6h10v12H9l-5-6z"/><path d="M12 10l4 4M16 10l-4 4"/></svg>';
+      del.addEventListener('click', () => {
+        for (let i = L - 1; i >= 0; i--) if (cur[i] != null) { cur[i] = undefined; C.sfx.tap(); render(); return; }
+      });
+      pad.appendChild(del);
       const ok = document.createElement('button');
-      ok.className = 'key enter';
-      ok.textContent = 'OK';
+      ok.className = 'key tool-key enter';
+      ok.setAttribute('aria-label', 'Valider');
+      ok.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
       ok.addEventListener('click', submit);
       pad.appendChild(ok);
     }

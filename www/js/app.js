@@ -450,8 +450,8 @@
       const b = document.createElement('button');
       b.className = 'tile';
       b.style.setProperty('--game', ACCENT[g.id]);
-      b.innerHTML = '<span class="tile-icon">' + icon(g.id) + '</span><span class="tile-name">' + g.name.toLowerCase() + '</span>' +
-        '<span class="tile-lvl">' + C.gameData(dataKey(g, v)).level + '</span>';
+      b.innerHTML = '<span class="tile-icon">' + icon(g.id) + '</span><span class="tile-name">' + g.name + '</span>' +
+        '<span class="tile-lvl">niv. ' + C.gameData(dataKey(g, v)).level + '</span>';
       b.addEventListener('click', () => startFree(g, v));
       gl.appendChild(b);
     });
