@@ -334,3 +334,17 @@
   font: 700 19px/1 var(--k-font, 'Fredoka', sans-serif); color: #fff; opacity: 1 !important; transform: none !important; width: auto; height: auto; background: none !important; }
 #home #go.boss::after { content: 'Épreuve'; }
 #home #go svg.ic, #home #go svg { width: 22px !important; height: 22px !important; }
+
+/* carte du niveau v6 (épurée) : île + petites étoiles sur la 1re ligne, « ‹ Niveau › », puis les mini-jeux nommés, puis Jouer */
+.lvcard { grid-template-columns: 1fr !important; grid-template-rows: auto auto auto 56px !important; }
+.lvcard .lc-isle { grid-column: 1 !important; grid-row: 1 !important; justify-self: center; display: inline-flex; align-items: center; gap: 6px; }
+.lvcard .lc-stars { grid-column: 1 !important; grid-row: 1 !important; justify-self: end; }
+.lvcard .lc-st svg { width: 13px !important; height: 13px !important; }
+.lvcard .lc-title { grid-row: 2 !important; grid-column: 1 !important; }
+.lvcard .lc-games { grid-column: 1 !important; grid-row: 3 !important; justify-self: center !important; flex-wrap: wrap; justify-content: center; gap: 6px !important; }
+.lvcard .lc-play-slot { grid-column: 1 !important; }
+.lc-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px 3px 3px; border-radius: 999px;
+  background: color-mix(in srgb, var(--c) 16%, transparent); color: var(--k-ink, #3a3550); font: 700 12.5px/1 var(--k-font, 'Fredoka', sans-serif); white-space: nowrap; }
+.lc-chip i { width: 22px !important; height: 22px !important; border-radius: 50%; display: grid; place-items: center; background: var(--c); }
+.lc-chip svg { width: 13px !important; height: 13px !important; fill: none; stroke: #fff; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
+.lc-chip svg .f { fill: #fff; }

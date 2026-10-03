@@ -308,7 +308,7 @@
       (info.boss ? 'Épreuve ' : 'Niveau ') + (selected + 1) +
       '<i class="lc-nav" data-d="1"' + (selected >= J.done ? ' hidden' : '') + '>›</i></span>' +
       '<span class="lc-stars' + (past ? '' : ' todo') + '">' + starRow(past ? won : 0, 'lc-st') + '</span>' +
-      '<span class="lc-games">' + ids.map((id) => '<i style="--c:' + ACCENT[id] + '"><svg viewBox="0 0 24 24">' + (ICON[id] || '') + '</svg></i>').join('') + '</span>';
+      '<span class="lc-games">' + ids.map((id) => '<span class="lc-chip" style="--c:' + ACCENT[id] + '"><i><svg viewBox="0 0 24 24">' + (ICON[id] || '') + '</svg></i>' + game(id).name + '</span>').join('') + '</span>';
   }
 
   // ----------------------------- Partie -----------------------------
