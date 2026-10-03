@@ -221,7 +221,7 @@
       phase = 'listen'; pos = 0; render(); api.onChange();
       step = step || puzzle.step;
       for (let k = 0; k < len; k++) {
-        later(() => light(seq[k], step * 0.62), 380 + k * step);
+        later(() => { light(seq[k], step * 0.62); if (dots[k]) { dots[k].classList.add('sung'); } }, 380 + k * step); // la perle de la note s'allume pendant le chant
       }
       later(() => { phase = 'turn'; render(); api.onChange(); }, 380 + (len - 1) * step + step * 0.7);
     }

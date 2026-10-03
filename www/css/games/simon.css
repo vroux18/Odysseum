@@ -120,3 +120,11 @@
 @media (prefers-reduced-motion: reduce) {
   .simon-shell, .simon-shell svg, .simon-ring, .simon-core { animation: none !important; }
 }
+
+/* compteur de perles bien lisible : creuses = notes de la suite, pleines et brillantes = notes déjà rendues */
+.simon-prog i { width: 10px !important; height: 10px !important; margin: -5px 0 0 -5px !important; opacity: .35 !important; background: var(--faint) !important;
+  transform: rotate(var(--a)) translateX(calc(var(--s) * .15)) !important; transition: background .25s, opacity .25s, box-shadow .3s, transform .35s var(--spring); }
+.simon-prog i.in { background: transparent !important; box-shadow: inset 0 0 0 2px var(--game); opacity: .9 !important; }
+.simon-prog i.in.sung { background: color-mix(in srgb, var(--game) 45%, transparent) !important; }
+.simon-prog i.done { background: var(--game) !important; opacity: 1 !important; box-shadow: 0 0 10px 2px color-mix(in srgb, var(--game) 60%, transparent);
+  transform: rotate(var(--a)) translateX(calc(var(--s) * .15)) scale(1.35) !important; }
