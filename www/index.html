@@ -63,7 +63,15 @@
       </svg>
       <!-- petit cerveau dessiné : on comprend que ce bouton ouvre la carte des capacités -->
       <!-- icônes : Phosphor duotone (MIT) en sprite, assets/ui/icons.svg -->
-      <span class="brain-glyph"><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-brain"/></svg></span>
+      <span class="brain-glyph brain-art"><svg viewBox="0 0 64 56" aria-hidden="true">
+        <!-- cerveau illustré : deux hémisphères roses en relief, circonvolutions, petit reflet -->
+        <defs><linearGradient id="bg-l" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f7b9cc"/><stop offset="1" stop-color="#d9789a"/></linearGradient>
+        <linearGradient id="bg-r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f2a9c0"/><stop offset="1" stop-color="#c9658a"/></linearGradient></defs>
+        <path d="M31 6C25 3 17 5 14.5 10.5 8.5 11.5 5 17 7 22.5 2.5 26 3.5 33 8.5 35.5 8 41.5 13 46 19 45.5 21.5 50 27 51.5 31 49Z" fill="url(#bg-l)"/>
+        <path d="M33 6c6-3 14-1 16.5 4.5 6 1 9.5 6.5 7.5 12 4.5 3.5 3.5 10.5-1.5 13 .5 6-4.5 10.5-10.5 10-2.5 4.5-8 6-12 3.5Z" fill="url(#bg-r)"/>
+        <path d="M14.5 10.5c3 1 4.5 3.5 4 6.5M7 22.5c3.5-.5 6.5 1 7.5 4M8.5 35.5c2-2.5 5.5-3 8-1.5M19 45.5c0-3 2-5.5 5-6M24 18c3 0 5 2 5 5M17 29c3-1 6 0 7.5 2.5M49.5 10.5c-3 1-4.5 3.5-4 6.5M57 22.5c-3.5-.5-6.5 1-7.5 4M55.5 35.5c-2-2.5-5.5-3-8-1.5M45 45.5c0-3-2-5.5-5-6M40 18c-3 0-5 2-5 5M47 29c-3-1-6 0-7.5 2.5" fill="none" stroke="#9e3f63" stroke-width="1.6" stroke-linecap="round" opacity=".55"/>
+        <path d="M17 12c2.5-3 7-4 10.5-2.5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".55"/>
+      </svg></span>
       <span class="brain-txt"><small>niveau</small><span id="level-num">1</span></span>
       <i class="brain-xp"><b id="brain-xp-mini"></b></i>
     </button>
