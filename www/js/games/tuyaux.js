@@ -155,7 +155,15 @@
         const arms = [];
         DIRS.forEach(([bit, dr, dc]) => { if (m & bit) arms.push([dc, dr]); });
         // l'eau arrive en douceur : le niveau de remplissage glisse vers 0 ou 1
-        glow[i] += ((on[i] ? 1 : 0) - glow[i]) * 0.22;
+        // l'eau avance de proche en proche : une pièce ne se remplit que quand une voisine raccordée est déjà pleine
+        let feed = i === puzzle.src;
+        if (on[i] && !feed) DIRS.forEach(([bit, dr, dc, opp]) => {
+          if (feed || !(m & bit)) return;
+          const j = neighbor(n, wrap, i, dr, dc);
+          if (j >= 0 && (cur[j] & opp) && glow[j] > 0.75) feed = true;
+        });
+        if (on[i] && feed) glow[i] += (1 - glow[i]) * 0.085; // remplissage lent, qui coule
+        else if (!on[i]) glow[i] += (0 - glow[i]) * 0.14;
         if (Math.abs((on[i] ? 1 : 0) - glow[i]) < 0.02) glow[i] = on[i] ? 1 : 0;
         const lit = glow[i] > 0.5;
         // tuyau « creux » : un trait épais (contour) puis un trait plus fin (intérieur)

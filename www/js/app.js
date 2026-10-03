@@ -83,9 +83,13 @@
     // grille logique : ~1,4 s par case de la grille ; 3×3 ≈ 53 s, 4×4 ≈ 149 s
     oracle: (p) => 15 + 1.4 * (p.n || 4) * (p.n || 4) * (p.k || 3) * ((p.k || 3) - 1) / 2
   };
-  const targetTime = (id, p) => Math.max(12, Math.round(TARGET[id] && p ? TARGET[id](p) : 45));
+  const targetTime = (id, p) => Math.max(10, Math.round(TARGET[id] && p ? TARGET[id](p) : 45));
+  // repères lisibles : arrondis à 5 s (10 s au-delà d'une minute, 15 s au-delà de trois)
+  const niceTime = (t) => { const step = t < 60 ? 5 : t < 180 ? 10 : 15; return Math.max(step, Math.round(t / step) * step); };
+  const starMarks = (target) => { const a = niceTime(target); return [a, Math.max(a + 5, niceTime(target * 1.8))]; };
   function starsFor(time, target, hints) {
-    const s = time <= target ? 3 : time <= 2 * target ? 2 : 1;
+    const [a, b] = starMarks(target);
+    const s = time <= a ? 3 : time <= b ? 2 : 1;
     return Math.max(1, s - (hints || 0));
   }
   // petite rangée de 3 étoiles (dessin vectoriel), les manquantes en gris
@@ -878,10 +882,11 @@
     const run = info.run || {};
     clock.hidden = !(run.time > 0 && run.target > 0) || !!info.assisted;
     if (!clock.hidden) {
-      const span = run.target * 2.6, pos = (v) => Math.min(100, (v / span) * 100).toFixed(1) + '%';
+      const [m3, m2] = starMarks(run.target); // les mêmes repères que ceux qui donnent les étoiles
+      const span = Math.max(m2 * 1.3, run.time * 1.05), pos = (v) => Math.min(100, (v / span) * 100).toFixed(1) + '%';
       const tick = (v, n) => '<i class="ck-tick" style="left:' + pos(v) + '">' + starRow(n, 'ck-stars') + '<em>' + C.formatTime(Math.round(v)) + '</em></i>';
       clock.innerHTML = '<div class="ck-time"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9.5 2.5h5M12 2.5V5"/></svg><b>' + C.formatTime(Math.round(run.time)) + '</b></div>' +
-        '<div class="ck-track"><span class="ck-fill" style="--w:' + pos(run.time) + '"></span>' + tick(run.target, 3) + tick(run.target * 2, 2) + '</div>';
+        '<div class="ck-track"><span class="ck-fill" style="--w:' + pos(run.time) + '"></span>' + tick(m3, 3) + tick(m2, 2) + '</div>';
     }
     const delay0 = hasStars ? 1.25 : 0.35; // les lignes d'XP arrivent après les étoiles
     box.innerHTML = rows.map((sk, i) => {
