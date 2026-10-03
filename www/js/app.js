@@ -1072,7 +1072,12 @@
   applySkin(); // la tenue choisie est remise au lancement
   function renderWardrobe() {
     const opts = skinOptions(), st = skinState();
-    $('#wd-tabs').innerHTML = SKIN_PARTS.filter((p) => opts[p.id] && opts[p.id].length)
+    // toutes les catégories fournies par le monde 3D (tenue, bouclier…), avec leur nom français
+    const labels = Object.assign({ outfit: 'Tenue', shield: 'Bouclier' }, opts.labels || {});
+    const parts = Object.keys(opts).filter((k) => Array.isArray(opts[k]) && opts[k].length)
+      .map((k) => ({ id: k, name: (SKIN_PARTS.find((p) => p.id === k) || {}).name || labels[k] || k }));
+    if (!parts.some((p) => p.id === wdPart) && parts.length) wdPart = parts[0].id;
+    $('#wd-tabs').innerHTML = parts
       .map((p) => '<button role="tab" data-part="' + p.id + '" class="' + (p.id === wdPart ? 'on' : '') + '">' + p.name + '</button>').join('');
     const list = opts[wdPart] || [];
     const cur = st[wdPart] || (list[0] && list[0].id);
