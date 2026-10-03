@@ -9,8 +9,13 @@ self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
+  // code et pages (js, css, html, json) : on contourne aussi le cache du CDN de GitHub Pages (~10 min),
+  // sinon le téléphone peut mélanger une feuille de style neuve et un script ancien juste après une mise à jour
+  const url = new URL(req.url);
+  const fresh = /\.(js|css|html|json|webmanifest)$/.test(url.pathname) || url.pathname.endsWith('/');
+  if (fresh) url.searchParams.set('_', Date.now().toString(36));
   e.respondWith(
-    fetch(req, { cache: 'no-cache' })
+    fetch(fresh ? url.toString() : req, { cache: 'no-cache' })
       .then((res) => {
         if (res.ok) {
           const copy = res.clone();
