@@ -87,8 +87,45 @@
     return count;
   }
 
+  // Déductions simples de l'indice : un nombre qui n'a plus qu'une forme possible,
+  // ou une case qu'un seul nombre peut atteindre par une seule forme. Vrai si cela suffit à tout couvrir.
+  function simpleSolvable(n, clues) {
+    const clueAt = new Set(clues.map((k) => k.cell));
+    const taken = new Uint8Array(n * n);
+    const open = new Set(clues);
+    const cellsOf = (rc) => { const out = []; for (let y = rc.r; y < rc.r + rc.h; y++) for (let x = rc.c; x < rc.c + rc.w; x++) out.push(y * n + x); return out; };
+    const candsOf = (k) => {
+      const kr = Math.floor(k.cell / n), kc = k.cell % n, list = [];
+      for (let w = 1; w <= n; w++) for (let h = 1; h <= n; h++) {
+        if (k.hidden ? w * h > 16 || w * h < 2 : w * h !== k.value) continue;
+        for (let r = kr - h + 1; r <= kr; r++) for (let c = kc - w + 1; c <= kc; c++) {
+          if (r < 0 || c < 0 || r + h > n || c + w > n) continue;
+          const cs = cellsOf({ r, c, w, h });
+          if (!cs.some((x) => taken[x] || (x !== k.cell && clueAt.has(x)))) list.push(cs);
+        }
+      }
+      return list;
+    };
+    const put = (k, cs) => { cs.forEach((x) => { taken[x] = 1; }); open.delete(k); };
+    while (open.size) {
+      const cands = new Map([...open].map((k) => [k, candsOf(k)]));
+      let done = false;
+      for (const k of open) { const l = cands.get(k); if (l.length === 1) { put(k, l[0]); done = true; break; } }
+      if (done) continue;
+      for (let x = 0; x < n * n && !done; x++) {
+        if (taken[x]) continue;
+        const who = [...open].filter((k) => cands.get(k).some((cs) => cs.includes(x)));
+        if (who.length !== 1) continue;
+        const l = cands.get(who[0]).filter((cs) => cs.includes(x));
+        if (l.length === 1) { put(who[0], l[0]); done = true; }
+      }
+      if (!done) return false;
+    }
+    return true;
+  }
+
   function generate(rng, p) {
-    let fallback = null;
+    let fallback = null, unique = null;
     for (let t = 0; t < 150; t++) {
       const rects = partition(p.n, p.maxArea, rng);
       if (rects.some((rc) => rc.w * rc.h === 1)) continue; // une case isolée forcée : on recommence
@@ -106,13 +143,21 @@
           k.hidden = true;
           if (solveCount(p.n, clues, 2) === 1) hidden++; else k.hidden = false;
         }
-        return puzzle;
+        // premiers niveaux : on garde une grille qui se résout par déductions simples
+        if (!p.easy || simpleSolvable(p.n, clues)) return puzzle;
+        if (!unique) unique = puzzle;
       }
     }
-    return fallback;
+    return unique || fallback;
   }
 
   function params(level, variant) {
+    if (level <= 12) {
+      // débuts en douceur : 4×4 en petits pavés (2-3 cases), puis 5×5 et 6×6 ; toujours soluble par déductions simples
+      const n = Math.min(variant === 'mystere' ? 8 : 10, level <= 5 ? 4 : level <= 9 ? 5 : 6);
+      const maxArea = level <= 2 ? 3 : level <= 5 ? 4 : level <= 9 ? 4 + Math.floor((level - 6) / 2) : level - 5;
+      return { n, maxArea, mystery: variant === 'mystere' ? 1 + Math.floor(level / 3) : 0, easy: true };
+    }
     const n = Math.min(variant === 'mystere' ? 8 : 10, 4 + Math.floor((level - 1) / 5));
     return { n, maxArea: Math.min(12, 3 + Math.floor(level / 3)), mystery: variant === 'mystere' ? 2 + Math.floor(level / 4) : 0 };
   }

@@ -20,15 +20,30 @@
   function generate(rng, p) {
     const n = p.n;
     const pattern = PATTERNS[p.variant] || PATTERNS.classic;
-    for (;;) {
+    // premiers niveaux : des appuis dont les zones ne se chevauchent pas (chaque motif se lit à l'œil)
+    const area = (i) => {
+      const r = Math.floor(i / n), c = i % n, out = [];
+      pattern.forEach(([dr, dc]) => { const y = r + dr, x = c + dc; if (y >= 0 && x >= 0 && y < n && x < n) out.push(y * n + x); });
+      return out;
+    };
+    for (let t = 0; ; t++) {
       const state = new Uint8Array(n * n);
       const presses = rng.shuffle([...Array(n * n).keys()]).slice(0, p.presses);
+      if (p.apart && t < 200) {
+        const seen = new Set();
+        if (presses.some((i) => area(i).some((j) => seen.has(j) || !seen.add(j)))) continue;
+      }
       presses.forEach((i) => press(state, n, i, pattern));
       if (state.some((v) => v)) return { n, variant: p.variant, start: Array.from(state), presses };
     }
   }
 
   function params(level, variant) {
+    if (level <= 12) {
+      // débuts en douceur : 1 appui puis 2 et 3 sur 3×3 (zones séparées), 4×4 au niveau 6, 5×5 au niveau 10
+      const n = level <= 5 ? 3 : level <= 9 ? 4 : 5;
+      return { n, variant, presses: 1 + Math.floor((level - 1) * 7 / 11), apart: level <= 8 };
+    }
     const n = Math.min(7, 3 + Math.floor((level + 2) / 6)); // 3×3 pour commencer
     return { n, variant, presses: Math.min(Math.floor(n * n / 2), 2 + Math.floor(level / 2)) };
   }

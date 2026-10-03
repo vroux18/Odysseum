@@ -14,11 +14,14 @@
   // ------------------------------------------------------------------
   function params(level, variant) {
     level = Math.max(1, level || 1);
-    const n = level < 4 ? 3 : level < 12 ? 4 : level < 24 ? 5 : 6;
-    const colors = level < 3 ? 2 : level < 9 ? 3 : level < 18 ? 4 : 5;
+    // débuts en douceur (niveaux 1-12) : 3×3 plus longtemps, 4 quarts symétriques jusqu'au niveau 7,
+    // et un modèle affiché plus longtemps ; on rejoint la courbe au niveau 12
+    const easy = level <= 12;
+    const n = easy ? (level <= 5 ? 3 : level <= 11 ? 4 : 5) : level < 24 ? 5 : 6;
+    const colors = easy ? (level <= 3 ? 2 : level <= 9 ? 3 : 4) : level < 18 ? 4 : 5;
     // symétrie : quatre quarts → miroir vertical → miroir (axe au hasard) → libre (5×5) → miroir au hasard (6×6)
-    const sym = level < 6 ? 'quad' : level < 14 ? 'mirror' : level < 18 ? 'axis' : n <= 5 ? 'none' : 'axis';
-    const per = Math.max(95, 300 - level * 5); // ms par tesselle
+    const sym = easy ? (level <= 7 ? 'quad' : 'mirror') : level < 14 ? 'mirror' : level < 18 ? 'axis' : n <= 5 ? 'none' : 'axis';
+    const per = Math.max(95, 300 - level * 5, easy ? 420 - level * 15 : 0); // ms par tesselle
     return {
       variant: variant || 'classic', n, colors, sym,
       show: Math.round(1000 + n * n * per + colors * 150)

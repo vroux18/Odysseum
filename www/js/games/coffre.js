@@ -27,10 +27,22 @@
 
   function params(level, variant) {
     if (variant === 'cadenas') {
+      // débuts en douceur : 3 chiffres jusqu'au niveau 5, un essai de plus jusqu'au niveau 8
+      if (level <= 12) return { variant, len: level <= 5 ? 3 : level <= 9 ? 4 : 5, symbols: 10, repeats: true, tries: level <= 8 ? 7 : 6 };
       return { variant, len: Math.min(6, 3 + Math.floor((level + 2) / 6)), symbols: 10, repeats: true, tries: 6 };
     }
     if (variant === 'expert') { // Mastermind expert : code plus long, plus de symboles, répétitions
       return { variant: 'classic', len: 5, symbols: 7, repeats: true, tries: level < 20 ? 10 : 9 };
+    }
+    if (level <= 11) {
+      // débuts en douceur : code de 3 parmi 4 symboles et 10 essais, sans répétition jusqu'au niveau 10
+      return {
+        variant: 'classic',
+        len: level <= 7 ? 3 : 4,
+        symbols: level <= 4 ? 4 : level <= 10 ? 5 : 6,
+        repeats: level >= 11,
+        tries: level <= 4 ? 10 : 9
+      };
     }
     return {
       variant: 'classic',

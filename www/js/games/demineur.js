@@ -47,7 +47,7 @@
 
   // Une déduction sûre à partir de ce qui est visible (st : 0 inconnu, 1 ouvert, 2 écueil connu).
   // Règle simple (un seul nombre), puis règle d'inclusion (deux nombres qui partagent des cases).
-  function findMove(n, num, st) {
+  function findMove(n, num, st, singleOnly) {
     const nb = neighbors(n);
     const cons = [];
     for (let i = 0; i < n * n; i++) {
@@ -61,6 +61,7 @@
       if (k.r === 0) return { kind: 'safe', cells: k.U, src: [k.i], rule: 'single', r: 0 };
       if (k.r === k.U.length) return { kind: 'mine', cells: k.U, src: [k.i], rule: 'single', r: k.r };
     }
+    if (singleOnly) return null; // premiers niveaux : seulement la règle d'un seul nombre
     for (const a of cons) {
       for (const b of cons) {
         if (a === b || a.U.length >= b.U.length || !a.U.every((x) => b.U.includes(x))) continue;
@@ -74,10 +75,10 @@
 
   // déroule toutes les déductions ; renvoie l'état final
   // déroule toutes les déductions ; renvoie le nombre de recours à la règle d'inclusion (plus subtile)
-  function runSolver(n, num, st) {
+  function runSolver(n, num, st, singleOnly) {
     const nb = neighbors(n);
     let subtle = 0;
-    for (let mv = findMove(n, num, st); mv; mv = findMove(n, num, st)) {
+    for (let mv = findMove(n, num, st, singleOnly); mv; mv = findMove(n, num, st, singleOnly)) {
       if (mv.rule === 'subset') subtle++;
       if (mv.kind === 'safe') mv.cells.forEach((c) => flood(st, c, num, nb, 1));
       else mv.cells.forEach((c) => { st[c] = 2; });
@@ -99,7 +100,7 @@
       const num = numbers(n, mine);
       const st = new Uint8Array(N);
       const first = flood(st, start, num, nb, 1).length;
-      const subtle = runSolver(n, num, st);
+      const subtle = runSolver(n, num, st, p.single);
       const left = unresolved(st, mine);
       // on préfère une zone de départ modeste, pour qu'il reste à réfléchir,
       // et, passé les premiers niveaux, au moins une déduction croisée entre deux nombres
@@ -113,20 +114,27 @@
     const opens = [start];
     const st = new Uint8Array(N);
     flood(st, start, num, nb, 1);
-    runSolver(n, num, st);
+    runSolver(n, num, st, p.single);
     while (unresolved(st, mine)) {
       const edge = [];
       for (let i = 0; i < N; i++) if (!mine[i] && st[i] === 0 && nb[i].some((j) => st[j] === 1)) edge.push(i);
       const i = edge.length ? rng.pick(edge) : [...Array(N).keys()].find((j) => !mine[j] && st[j] === 0);
       opens.push(i);
       flood(st, i, num, nb, 1);
-      runSolver(n, num, st);
+      runSolver(n, num, st, p.single);
     }
     return { n, mines: mine, opens };
   }
 
   // 5×5 et 4 écueils au début, 9×9 et 15 écueils vers le niveau 33-40
   function params(level) {
+    // débuts en douceur : 5×5 avec 3 puis 4 écueils, puis 6×6 ; jusqu'au niveau 8,
+    // tout se résout avec la seule règle d'un nombre (jamais de déduction croisée)
+    if (level <= 12) {
+      const n = level <= 8 ? 5 : 6;
+      const mines = level <= 4 ? 3 : level <= 8 ? 4 : level <= 10 ? 5 : 6;
+      return { n, mines, subtle: level < 12 ? 0 : 1, single: level <= 8 };
+    }
     const n = Math.min(9, 5 + Math.floor((level - 1) / 8));
     const d = Math.min(0.2, 0.16 + 0.03 * (level - 1) / 39);
     return { n, mines: Math.round(n * n * d), subtle: level < 6 ? 0 : level < 20 ? 1 : 2 };

@@ -49,10 +49,12 @@
     return cur.map((v, i) => (canFill[i] && !canEmpty[i] ? 1 : !canFill[i] && canEmpty[i] ? 0 : v));
   }
 
-  function lineSolvable(n, rows, cols) {
+  // maxSweeps (facultatif) : nombre maximal de passages lignes + colonnes (premiers niveaux : peu de va-et-vient)
+  function lineSolvable(n, rows, cols, maxSweeps) {
     const g = new Array(n * n).fill(-1);
-    let changed = true;
+    let changed = true, sweeps = 0;
     while (changed) {
+      if (maxSweeps && ++sweeps > maxSweeps) return false;
       changed = false;
       for (let r = 0; r < n; r++) {
         const cur = g.slice(r * n, r * n + n);
@@ -103,13 +105,22 @@
       const cols = [...Array(n)].map((_, c) => cluesOf([...Array(n)].map((_, r) => g[r * n + c])));
       // méga : pas plus de p.maxGroups indices sur une ligne (la colonne d'indices reste étroite, cases ≥ 24 px)
       if (p.maxGroups && t < 250 && rows.some((r) => r.length > p.maxGroups)) continue;
-      last = { n, variant: p.variant, rows, cols, solution: Array.from(g) };
-      if (lineSolvable(n, rows, cols)) return last;
+      const cand = { n, variant: p.variant, rows, cols, solution: Array.from(g) };
+      if (!lineSolvable(n, rows, cols)) { if (!p.sweeps || !last) last = cand; continue; }
+      last = cand;
+      // premiers niveaux : on garde un dessin qui se résout en peu d'allers-retours
+      if (!p.sweeps || t >= 200 || lineSolvable(n, rows, cols, p.sweeps)) return cand;
     }
     return last;
   }
 
   function params(level, variant) {
+    if (level <= 12) {
+      // débuts en douceur : 5×5 bien rempli (gros blocs évidents), puis 6×6 ; peu d'allers-retours
+      // (Miroir garde sa taille de départ, avec la même aide)
+      const n = variant === 'miroir' ? 6 + Math.floor((level - 1) / 4) : level <= 8 ? 5 : 6;
+      return { n, variant, density: 0.68 - level * 0.009, sweeps: level <= 4 ? 2 : level <= 8 ? 3 : 4 };
+    }
     const n = Math.min(10, (variant === 'miroir' ? 6 : 4) + Math.floor((level - 1) / 4));
     return { n, variant, density: 0.55 + (level % 3) * 0.03 };
   }

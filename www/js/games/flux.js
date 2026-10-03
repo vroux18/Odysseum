@@ -122,6 +122,61 @@
   }
 
   function generate(rng, p) {
+    if (!p.easy) return generateOne(rng, p);
+    // premiers niveaux : on garde une grille qui se trace entièrement par passages forcés
+    // (les deux premières règles de l'indice), sans jamais de coup de pouce
+    let last = null;
+    for (let t = 0; t < 300; t++) { // (un essai coûte moins d'une milliseconde sur ces petites grilles)
+      last = generateOne(rng, p);
+      if (forcedSolvable(last)) return last;
+    }
+    return last;
+  }
+
+  // Simule les règles 1 et 2 de hint() depuis une grille vide : vrai si elles suffisent à tout tracer.
+  function forcedSolvable(pz) {
+    const g = buildGraph(pz.n, pz.bridges, pz.variant === 'tore');
+    const K = pz.endpoints.length;
+    const endpointColor = new Int16Array(g.nodeCount).fill(-1);
+    pz.endpoints.forEach(([a, b], k) => { endpointColor[a] = k; endpointColor[b] = k; });
+    const paths = Array.from({ length: K }, () => []);
+    const owner = new Int16Array(g.nodeCount).fill(-1);
+    const complete = (k) => { const p = paths[k]; return p.length > 1 && endpointColor[p[p.length - 1]] === k && p[0] !== p[p.length - 1]; };
+    const set = (k, list) => { paths[k].forEach((v) => { owner[v] = -1; }); paths[k] = list.slice(); list.forEach((v) => { owner[v] = k; }); };
+    const taken = (v, k) => (endpointColor[v] >= 0 && endpointColor[v] !== k) || (owner[v] >= 0 && owner[v] !== k);
+    for (let guard = 0; guard < g.nodeCount * 2; guard++) {
+      const todo = [...Array(K).keys()].filter((k) => !complete(k));
+      if (!todo.length) return true;
+      const two = todo.find((k) => pz.solution[k].length === 2);
+      if (two !== undefined) { set(two, pz.solution[two]); continue; }
+      // comme hint() : parmi tous les passages forcés, celui qui avance le plus
+      let best = null;
+      for (const k of todo) {
+        const sol = pz.solution[k];
+        const starts = paths[k].length ? [paths[k][0]] : pz.endpoints[k];
+        for (const start of starts) {
+          const ref = sol[0] === start ? sol : sol.slice().reverse();
+          const pre = paths[k].length ? paths[k] : [start];
+          const chain = pre.slice(), seen = new Set(pre);
+          for (;;) {
+            const v = chain[chain.length - 1];
+            const free = g.adj[v].filter((w) => !seen.has(w) && !taken(w, k));
+            if (free.length !== 1) break;
+            chain.push(free[0]); seen.add(free[0]);
+            if (endpointColor[free[0]] === k) break;
+          }
+          if (chain.length <= pre.length || chain.some((v, i) => ref[i] !== v)) continue;
+          const gain = chain.length - pre.length;
+          if (!best || gain > best.gain) best = { k, chain, gain };
+        }
+      }
+      if (!best) return false;
+      set(best.k, best.chain);
+    }
+    return false;
+  }
+
+  function generateOne(rng, p) {
     for (let tries = 0; tries < 40; tries++) {
       let bridges = chooseBridges(p.n, p.bridges, rng);
       // méga : le graphe est biparti (damier) et la seconde moitié d'un pont a la couleur de sa case ;
@@ -162,7 +217,7 @@
       };
     }
     // Repli : sans pont.
-    return generate(rng, Object.assign({}, p, { bridges: 0 }));
+    return generateOne(rng, Object.assign({}, p, { bridges: 0 }));
   }
 
   function cut(g, path, k, rng) {
@@ -195,6 +250,12 @@
     let bridges = level < 16 ? 0 : Math.min(3, 1 + Math.floor((level - 16) / 12));
     if (variant === 'tore') bridges = level < 16 ? 0 : 1;
     const colors = Math.max(3, Math.min(COLORS.length, n - 2 + (level % 2)));
+    // jusqu'au niveau 12 : grille entièrement traçable par passages forcés (voir forcedSolvable) ;
+    // des tuyaux courts (plus de couleurs) se laissent presque tous deviner de proche en proche
+    if (level <= 12) {
+      const small = level <= 6;
+      return { n: small ? 4 : 5, bridges: 0, colors: small ? (level <= 2 ? 5 : 4) : (level <= 8 ? 6 : 5), variant, easy: true };
+    }
     return { n, bridges, colors, variant };
   }
 

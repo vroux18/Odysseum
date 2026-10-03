@@ -82,6 +82,16 @@
   // ------------------------------------------------------------------
   function params(level, variant) {
     level = Math.max(1, level || 1);
+    if (level <= 12) {
+      // débuts en douceur : chants courts (4 notes au plus jusqu'au niveau 4), lents, sur 4 coquillages ;
+      // on rejoint la courbe au niveau 12 (4 notes minimum : les 3 perles d'étape restent distinctes)
+      return {
+        variant: variant || 'classic',
+        pads: level <= 11 ? 4 : 5,
+        target: 4 + Math.floor((level - 1) * 2 / 11),
+        step: 780 - level * 16
+      };
+    }
     return {
       variant: variant || 'classic',
       pads: level < 10 ? 4 : level < 25 ? 5 : 6,

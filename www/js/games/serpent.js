@@ -5,7 +5,66 @@
   'use strict';
   const C = window.Carnet;
 
+  // Rejoue les passages forcés de hint() depuis le départ (numéros, sans murs).
+  // Renvoie -1 si tout le chemin se déduit, sinon la position où l'on reste bloqué, avec les cases possibles.
+  function forcedRun(n, path, idx) {
+    const N = n * n, num = new Map();
+    [...idx].sort((a, b) => a - b).forEach((pos, k) => num.set(path[pos], k + 1));
+    const endCell = path[N - 1];
+    const nbs = (c) => {
+      const r = Math.floor(c / n), k = c % n, out = [];
+      if (r > 0) out.push(c - n); if (r < n - 1) out.push(c + n); if (k > 0) out.push(c - 1); if (k < n - 1) out.push(c + 1);
+      return out;
+    };
+    const used = new Set([path[0]]);
+    let need = 2;
+    for (let j = 1; j < N; j++) {
+      const head = path[j - 1];
+      const can = nbs(head).filter((d) => !used.has(d) && (!num.has(d) || num.get(d) === need) && (d !== endCell || j === N - 1));
+      let pick = -1;
+      if (can.length === 1) pick = can[0];
+      else {
+        for (const d of can) {
+          if (d === endCell) continue;
+          if (nbs(d).filter((e) => e !== head && !used.has(e)).length === 1) { pick = d; break; }
+        }
+      }
+      if (pick !== path[j]) return { at: j, can };
+      used.add(pick);
+      if (num.get(pick) === need) need++;
+    }
+    return { at: -1 };
+  }
+
   function generate(rng, p) {
+    if (!p.easy) return generateOne(rng, p);
+    // premiers niveaux : un chemin qui se trace entièrement par passages forcés (sans coup de pouce).
+    // Quand on bloque, on numérote une case voisine qui vient plus tard : elle n'est plus un choix possible.
+    let best = null, bestAt = -1;
+    for (let t = 0; t < 80; t++) {
+      const pz = generateOne(rng, p);
+      const path = pz.solution;
+      const posOf = new Map(path.map((c, i) => [c, i]));
+      const idx = new Set(pz.checkpoints.map(([c]) => posOf.get(c)));
+      let res = forcedRun(p.n, path, idx);
+      // d'abord sans numéro ajouté, puis on en tolère un de plus tous les 10 essais
+      const allowed = Math.min(p.extraMax, Math.floor(t / 10));
+      for (let add = 0; res.at >= 0 && add < allowed; add++) {
+        const nextCk = Math.min(...[...idx].filter((q) => q >= res.at));
+        const fix = res.can.map((d) => posOf.get(d)).filter((q) => q > nextCk && !idx.has(q));
+        if (!fix.length) break;
+        idx.add(fix[0]);
+        res = forcedRun(p.n, path, idx);
+      }
+      const checkpoints = [...idx].sort((a, b) => a - b).map((pos, k) => [path[pos], k + 1]);
+      const out = Object.assign({}, pz, { checkpoints });
+      if (res.at < 0) return out;
+      if (res.at > bestAt) { best = out; bestAt = res.at; }
+    }
+    return best;
+  }
+
+  function generateOne(rng, p) {
     const n = p.n;
     const path = C.gridPath(n, n, rng);
     const L = path.length;
@@ -34,6 +93,11 @@
   }
 
   function params(level, variant) {
+    if (level <= 12 && variant !== 'laby') {
+      // débuts en douceur : 4×4 puis 5×5, beaucoup de numéros, et un tracé entièrement forcé
+      const n = level <= 6 ? 4 : 5;
+      return { n, variant, k: Math.max(4, Math.round(n * n * (0.42 - level * 0.012))), easy: true, extraMax: level <= 6 ? 4 : 7 };
+    }
     const n = Math.min(8, 4 + Math.floor((level - 1) / 6));
     if (variant === 'laby') return { n, variant, wallRate: Math.max(0.45, 0.85 - level * 0.01) };
     const k = Math.max(4, Math.round(n * n * Math.max(0.12, 0.32 - level * 0.006)));

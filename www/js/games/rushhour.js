@@ -255,10 +255,16 @@
   // niveau 1 : 3-4 coups ; niveau 40 : 17-21 coups
   function params(level) {
     const t = Math.max(0, Math.min(1, (level - 1) / 39));
-    const lo = Math.round(3 + 14 * t);
+    let lo = Math.round(3 + 14 * t), hi = lo + 1 + Math.round(3 * t), count = Math.round(5 + 6 * t);
+    if (level <= 12) {
+      // débuts en douceur : 2-3 coups et 3 barques au niveau 1, puis on rejoint la courbe au niveau 12
+      lo = Math.min(lo, 2 + Math.floor((level - 1) * 5 / 11));
+      hi = Math.min(hi, lo + 1 + (level >= 9 ? 1 : 0));
+      count = Math.min(count, 3 + Math.floor(level / 3));
+    }
     return {
-      band: [lo, lo + 1 + Math.round(3 * t)],
-      count: Math.round(5 + 6 * t),       // nombre de barques autour du navire au départ
+      band: [lo, hi],
+      count,                              // nombre de barques autour du navire au départ
       p3: 0.2 + 0.2 * t,                  // part des grandes barques (3 cases)
       evals: 320                          // budget d'évaluations (borne de temps)
     };

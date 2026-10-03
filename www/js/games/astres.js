@@ -109,12 +109,59 @@
     // niveaux faciles : quelques indices en plus
     const empties = rng.shuffle([...Array(n * n).keys()].filter((i) => !givens[i]));
     empties.slice(0, p.extra).forEach((i) => { givens[i] = full[i]; });
+    // premiers niveaux : la grille doit se finir avec les seules règles simples de l'indice
+    // (trois à la suite, signe, moitié pleine) ; sinon on dévoile une case bloquante et on recommence
+    if (p.easy) {
+      for (let guard = 0; guard < n * n; guard++) {
+        const stuck = simpleFill(n, givens, edges, diag, full);
+        if (!stuck.length) break;
+        const i = stuck[Math.floor(rng() * stuck.length)];
+        givens[i] = full[i];
+      }
+    }
     return { n, variant: p.variant, givens: Array.from(givens), edges, solution: Array.from(full) };
   }
 
+  // Remplit la grille avec les règles simples (celles de hint()) ; renvoie les cases restées vides.
+  function simpleFill(n, givens, edges, diag, sol) {
+    const g = Uint8Array.from(givens), half = n / 2;
+    const row = (r) => [...Array(n)].map((_, k) => r * n + k), col = (c) => [...Array(n)].map((_, k) => k * n + c);
+    const deducible = (i) => {
+      const v = sol[i], o = v === SUN ? MOON : SUN, r = Math.floor(i / n), c = i % n;
+      const lines = [row(r), col(c)];
+      if (diag) diagTriples(n, i).forEach((t) => lines.push(t));
+      for (const line of lines) {
+        const k = line.indexOf(i), at = (d) => (k + d >= 0 && k + d < line.length ? g[line[k + d]] : 0);
+        if ((at(-1) === o && at(-2) === o) || (at(1) === o && at(2) === o) || (at(-1) === o && at(1) === o)) return true;
+      }
+      for (const e of edges) {
+        const other = e.a === i ? e.b : e.b === i ? e.a : -1;
+        if (other >= 0 && g[other]) return true;
+      }
+      return row(r).filter((j) => g[j] === o).length === half || col(c).filter((j) => g[j] === o).length === half;
+    };
+    for (let moved = true; moved;) {
+      moved = false;
+      for (let i = 0; i < n * n; i++) if (!g[i] && deducible(i)) { g[i] = sol[i]; moved = true; }
+    }
+    const out = [];
+    for (let i = 0; i < n * n; i++) if (!g[i]) out.push(i);
+    return out;
+  }
+
   function params(level, variant) {
+    if (level <= 12) {
+      // débuts en douceur : 4×4 bien garni et beaucoup de signes, puis 6×6 avec des indices qui diminuent
+      const small = level <= 5;
+      return {
+        n: small ? 4 : 6, variant,
+        edges: (variant === 'diagonales' ? 2 : 4) + (small ? 3 : 2) + (level % 3),
+        extra: small ? 6 - Math.floor(level / 4) : Math.max(2, 8 - Math.floor(level / 2)),
+        easy: true
+      };
+    }
     return {
-      n: level < 4 ? 4 : 6, variant, // 4×4 pour commencer
+      n: 6, variant,
       edges: (variant === 'diagonales' ? 2 : 4) + (level % 4) + Math.min(4, Math.floor(level / 10)),
       extra: Math.max(0, 6 - Math.floor(level / 3))
     };

@@ -17,6 +17,19 @@
 
   // arbre couvrant aléatoire (Prim) : un réseau sans boucle qui passe par toutes les cases
   function generate(rng, p) {
+    if (!p.easy) return generateOne(rng, p);
+    // premiers niveaux : on garde un réseau où chaque pièce se déduit (aucun coup de pouce nécessaire)
+    let best = null, bestFixed = -1;
+    for (let t = 0; t < 80; t++) {
+      const pz = generateOne(rng, p);
+      const fixed = deduceShapes(pz.n, pz.wrap, pz.solution).fixedAt.filter((v) => v >= 0).length;
+      if (fixed === pz.n * pz.n) return pz;
+      if (fixed > bestFixed) { best = pz; bestFixed = fixed; }
+    }
+    return best;
+  }
+
+  function generateOne(rng, p) {
     const n = p.n, wrap = p.variant === 'tore';
     const mask = new Uint8Array(n * n);
     const src = Math.floor(n / 2) * n + Math.floor(n / 2);
@@ -51,8 +64,50 @@
   }
 
   function params(level, variant) {
+    if (level <= 12) {
+      // débuts en douceur : 3×3, puis 4×4 et 5×5 (Tore : une taille de plus) ; chaque pièce se déduit
+      const n = (variant === 'tore' ? 1 : 0) + (level <= 3 ? 3 : level <= 7 ? 4 : level <= 11 ? 5 : 6);
+      return { n, variant, easy: true };
+    }
     const n = Math.min(9, (variant === 'tore' ? 5 : 4) + Math.floor((level - 1) / 5));
     return { n, variant };
+  }
+
+  // Déductions sur les orientations, comme le ferait un joueur : une sortie ne donne jamais dans le vide,
+  // une pièce se raccorde à une voisine qui pointe vers elle, ne vise pas une voisine qui lui tourne le dos,
+  // et deux bouts ne se branchent pas l'un sur l'autre. fixedAt : ordre dans lequel chaque pièce se fixe.
+  function deduceShapes(n, wrap, shapes) {
+    const N = n * n;
+    const deg = (m) => [1, 2, 4, 8].filter((b) => m & b).length;
+    const cand = shapes.map((m) => { const out = []; let x = m; for (let t = 0; t < 4; t++) { if (!out.includes(x)) out.push(x); x = rot(x); } return out; });
+    const fixedAt = new Int32Array(N).fill(-1);
+    const acc = Array.from({ length: N }, () => ({ borders: new Set(), open: new Set(), closed: new Set(), leaf: new Set() }));
+    const side = (j, bit) => { let a = 0, b = 0; cand[j].forEach((m) => { if (m & bit) a++; else b++; }); return b === 0 ? 1 : a === 0 ? 0 : -1; };
+    let step = 0;
+    for (let i = 0; i < N; i++) if (cand[i].length === 1) fixedAt[i] = step++;
+    let changed = true, guard = 0;
+    while (changed && guard++ < 200) {
+      changed = false;
+      for (let i = 0; i < N; i++) {
+        if (cand[i].length === 1) continue;
+        const used = acc[i];
+        const keep = cand[i].filter((m) => DIRS.every(([bit, dr, dc, opp]) => {
+          const j = neighbor(n, wrap, i, dr, dc);
+          if (j < 0) { if (m & bit) { used.borders.add(bit); return false; } return true; }
+          const s = side(j, opp);
+          if (s === 1 && !(m & bit)) { used.open.add(j); return false; }
+          if (s === 0 && (m & bit)) { used.closed.add(j); return false; }
+          if ((m & bit) && N > 2 && deg(shapes[i]) === 1 && deg(shapes[j]) === 1) { used.leaf.add(j); return false; }
+          return true;
+        }));
+        if (keep.length && keep.length < cand[i].length) {
+          cand[i] = keep; changed = true;
+          if (keep.length === 1) fixedAt[i] = step++;
+        }
+      }
+    }
+    const reasons = acc.map((a) => ({ borders: [...a.borders], open: [...a.open], closed: [...a.closed], leaf: [...a.leaf] }));
+    return { fixedAt, reasons };
   }
 
   function create(host, puzzle, api) {
@@ -252,42 +307,8 @@
     // la bonne orientation d'une pièce (les pièces symétriques ont plusieurs bonnes positions)
     const correct = (i) => cur[i] === puzzle.solution[i];
 
-    // Déductions sur les orientations, comme le ferait un joueur : une sortie ne donne jamais dans le vide,
-    // une pièce se raccorde à une voisine qui pointe vers elle, ne vise pas une voisine qui lui tourne le dos,
-    // et deux bouts ne se branchent pas l'un sur l'autre. fixedAt : ordre dans lequel chaque pièce se fixe.
-    function deduce() {
-      const N = n * n, shapes = puzzle.solution;
-      const deg = (m) => [1, 2, 4, 8].filter((b) => m & b).length;
-      const cand = shapes.map((m) => { const out = []; let x = m; for (let t = 0; t < 4; t++) { if (!out.includes(x)) out.push(x); x = rot(x); } return out; });
-      const fixedAt = new Int32Array(N).fill(-1);
-      const acc = Array.from({ length: N }, () => ({ borders: new Set(), open: new Set(), closed: new Set(), leaf: new Set() }));
-      const side = (j, bit) => { let a = 0, b = 0; cand[j].forEach((m) => { if (m & bit) a++; else b++; }); return b === 0 ? 1 : a === 0 ? 0 : -1; };
-      let step = 0;
-      for (let i = 0; i < N; i++) if (cand[i].length === 1) fixedAt[i] = step++;
-      let changed = true, guard = 0;
-      while (changed && guard++ < 200) {
-        changed = false;
-        for (let i = 0; i < N; i++) {
-          if (cand[i].length === 1) continue;
-          const used = acc[i];
-          const keep = cand[i].filter((m) => DIRS.every(([bit, dr, dc, opp]) => {
-            const j = neighbor(n, wrap, i, dr, dc);
-            if (j < 0) { if (m & bit) { used.borders.add(bit); return false; } return true; }
-            const s = side(j, opp);
-            if (s === 1 && !(m & bit)) { used.open.add(j); return false; }
-            if (s === 0 && (m & bit)) { used.closed.add(j); return false; }
-            if ((m & bit) && N > 2 && deg(shapes[i]) === 1 && deg(shapes[j]) === 1) { used.leaf.add(j); return false; }
-            return true;
-          }));
-          if (keep.length && keep.length < cand[i].length) {
-            cand[i] = keep; changed = true;
-            if (keep.length === 1) fixedAt[i] = step++;
-          }
-        }
-      }
-      const reasons = acc.map((a) => ({ borders: [...a.borders], open: [...a.open], closed: [...a.closed], leaf: [...a.leaf] }));
-      return { fixedAt, reasons };
-    }
+    // (déductions partagées avec le générateur : voir deduceShapes)
+    const deduce = () => deduceShapes(n, wrap, puzzle.solution);
 
     return {
       status() { return ''; },
