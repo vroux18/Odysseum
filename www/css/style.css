@@ -1629,3 +1629,22 @@ svg.ic.ic-solid { --duo-o: 1; }
 .island-name .lock { opacity: .6; }
 /* le libellé du niveau remonte un peu pour laisser la place */
 #home .go-label { bottom: calc(19vh - 34px + env(safe-area-inset-bottom, 0px)); }
+
+/* croix de fermeture des feuilles */
+.sheet { position: relative; }
+.sheet-close { position: absolute; top: 14px; right: 14px; z-index: 3; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); border: 0; padding: 0; }
+.sheet-close svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.sheet-close:active { transform: scale(.9); }
+#library .sheet { max-height: calc(100dvh - 40px); overflow-y: auto; }
+
+/* liste des mini-jeux rangée par capacité, cartes plus basses */
+#game-list { display: flex !important; flex-direction: column; gap: 8px; }
+.lib-cat { margin: 10px 4px 0; font-family: 'Cinzel', serif; font-size: 12px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--game); display: flex; align-items: center; gap: 10px; }
+.lib-cat::after { content: ''; flex: 1; height: 1px; background: linear-gradient(to right, color-mix(in srgb, var(--game) 50%, transparent), transparent); }
+.lib-group { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+#library .tile { min-height: 0 !important; height: auto !important; padding: 12px 6px 10px !important; gap: 4px !important; }
+#library .tile .tile-icon { width: 44px !important; height: 44px !important; }
+#library .tile .tile-icon svg { width: 22px !important; height: 22px !important; }
+#library .tile .tile-name { font-size: 15px !important; line-height: 1.15; }
+#library .tile .tile-lvl { font-size: 11px !important; padding: 2px 8px !important; }

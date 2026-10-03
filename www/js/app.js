@@ -510,7 +510,24 @@
     document.querySelectorAll('.lib-mode button').forEach((b) => b.classList.toggle('on', b.dataset.mode === libMode));
     const gl = $('#game-list');
     gl.innerHTML = '';
-    C.games.forEach((g) => {
+    // rangés par capacité : un petit titre coloré, puis les cartes de ses mini-jeux
+    let group = null;
+    const byCat = [];
+    SKILLS.forEach((sk) => sk.games.forEach((id) => byCat.push([sk, game(id)])));
+    C.games.forEach((g) => { if (!byCat.some(([, x]) => x === g)) byCat.push([null, g]); });
+    let lastSk;
+    byCat.forEach(([sk, g]) => {
+      if (sk !== lastSk) {
+        lastSk = sk;
+        const h = document.createElement('h3');
+        h.className = 'lib-cat';
+        h.style.setProperty('--game', ACCENT[(sk || { games: [g.id] }).games[0]]);
+        h.textContent = sk ? sk.name : 'Autres';
+        gl.appendChild(h);
+        group = document.createElement('div');
+        group.className = 'lib-group';
+        gl.appendChild(group);
+      }
       const v = VARIANTS_ON && libMode === 'variant' && g.variants && g.variants[1] ? g.variants[1].id : 'classic';
       const b = document.createElement('button');
       b.className = 'tile';
@@ -518,7 +535,7 @@
       b.innerHTML = '<span class="tile-icon">' + icon(g.id) + '</span><span class="tile-name">' + g.name + '</span>' +
         '<span class="tile-lvl">niv. ' + gameLvl(g.id) + '</span>';
       b.addEventListener('click', () => openLevels(g.id));
-      gl.appendChild(b);
+      group.appendChild(b);
     });
   }
 
@@ -1126,7 +1143,25 @@
 
   // Les navigateurs n'autorisent le son qu'après un premier geste.
   document.addEventListener('pointerdown', () => C.audio.unlock(), { once: true });
-  document.addEventListener('backbutton', () => { if (!screens.play.hidden) goHome(); });
+  // chaque feuille a sa croix de fermeture (en plus du toucher sur le fond) ; le bouton retour Android ferme d'abord la feuille ouverte
+  const SHEETS = ['library', 'levels', 'brain', 'settings', 'wardrobe', 'rules'];
+  SHEETS.forEach((id) => {
+    const ov = document.getElementById(id), sheet = ov && ov.querySelector('.sheet');
+    if (!sheet || sheet.querySelector('.sheet-close')) return;
+    const x = document.createElement('button');
+    x.className = 'sheet-close';
+    x.setAttribute('aria-label', 'Fermer');
+    x.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>';
+    x.addEventListener('click', (e) => { e.stopPropagation(); ov.hidden = true; C.sfx.tap(); });
+    sheet.prepend(x);
+  });
+  const openSheet = () => SHEETS.map((id) => document.getElementById(id)).filter((o) => o && !o.hidden).pop();
+  document.addEventListener('backbutton', () => {
+    const o = openSheet();
+    if (o) { o.hidden = true; return; }
+    if (!screens.play.hidden) goHome();
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const o = openSheet(); if (o) o.hidden = true; } });
 
   // exposé pour les tests
   window.Odysseum = { levelInfo, journey: J };
