@@ -61,3 +61,12 @@
 .credits-ov { z-index: 60 !important; }
 .cr-title, .cr-list b { color: var(--ink, #3a3550) !important; }
 .cr-list { color: var(--muted, #8a83a3) !important; }
+
+/* étiquette sous Play : les mini-jeux du niveau en grosses pastilles, puis le numéro */
+#home .go-label { display: inline-flex !important; align-items: center; gap: 10px; padding: 6px 14px 6px 6px !important; height: auto !important; }
+.gl-games { display: inline-flex; gap: 5px; }
+.gl-games i { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--c);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .14), inset 0 2px 0 rgba(255, 255, 255, .35); }
+.gl-games svg { width: 20px; height: 20px; fill: none; stroke: #fff; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
+.gl-games svg .f { fill: #fff; }
+.gl-num { white-space: nowrap; }

@@ -222,7 +222,10 @@
     // bouton play ; le numéro du niveau en petite étiquette dessous
     b.innerHTML = UI('play');
     const lab = $('#go-label');
-    lab.textContent = (info.boss ? 'épreuve · ' : 'niveau ') + (selected + 1);
+    // les mini-jeux qui attendent sur cette pierre, en pastilles de couleur, puis le numéro du niveau
+    const ids = info.steps.map((s) => s.id).filter((id, i, a) => a.indexOf(id) === i);
+    lab.innerHTML = '<span class="gl-games">' + ids.map((id) => '<i style="--c:' + ACCENT[id] + '"><svg viewBox="0 0 24 24">' + (ICON[id] || '') + '</svg></i>').join('') + '</span>' +
+      '<span class="gl-num">' + (info.boss ? 'épreuve · ' : 'niveau ') + (selected + 1) + '</span>';
     lab.hidden = b.hidden;
     // flèches : revenir au niveau d'avant, ou avancer jusqu'au niveau en cours
     $('#prev-level').hidden = b.hidden || selected <= 0;
