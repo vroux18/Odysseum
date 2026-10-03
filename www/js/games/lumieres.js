@@ -94,6 +94,12 @@
         state = Uint8Array.from(puzzle.start); mine = new Uint8Array(n * n); moves = 0;
         render(); api.onChange();
       },
+      // résolution directe (outil de test) : on joue tous les appuis restants
+      solve() {
+        const need = new Uint8Array(n * n);
+        puzzle.presses.forEach((i) => { need[i] ^= 1; });
+        for (let i = 0; i < n * n; i++) if (need[i] ^ mine[i]) doPress(i);
+      },
       hint() {
         // les appuis restants = appuis du puzzle XOR appuis du joueur
         const need = new Uint8Array(n * n);

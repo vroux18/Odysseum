@@ -186,6 +186,12 @@
         for (let i = L - 1; i >= 0; i--) if (cur[i] != null) { cur[i] = undefined; render(); api.onChange(); return; }
       },
       reset() { cur = []; render(); api.onChange(); },
+      // résolution directe (outil de test) : on tape le bon code
+      solve() {
+        if (over) newCode();
+        cur = code.slice();
+        submit();
+      },
       hint() {
         if (over) return false;
         for (let i = 0; i < L; i++) {

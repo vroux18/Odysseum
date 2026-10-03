@@ -178,19 +178,37 @@
         tools.hidden = false;
       }
 
-      session = { g, variant, inst, info, hint() { if (!won) inst.hint(); }, stop() { clearInterval(tick); inst.destroy(); } };
+      session = {
+        g, variant, inst, info,
+        hint() { if (!won) inst.hint(); },
+        // outil de test temporaire : résout la grille d'un coup
+        solve() {
+          if (won) return;
+          if (inst.solve) { inst.solve(); return; }
+          for (let i = 0; i < 400 && !won; i++) if (!inst.hint()) break;
+        },
+        stop() { clearInterval(tick); inst.destroy(); }
+      };
     }, 60);
   }
 
   let pendingProgress = false;
+  // Niveau réussi : la grille s'illumine, puis le niveau suivant s'enchaîne tout seul.
+  // La carte rattrapera la progression au retour (Ulysse avancera jusqu'à la bonne pierre).
   function finishLevel(info) {
     if (info.L === J.done) {
       J.done++;
       pendingProgress = true;
     }
+    const next = info.L + 1;
+    selected = next;
+    J.selected = next;
     C.save();
     $('#play').classList.add('done');
-    setTimeout(() => { $('#win').hidden = false; }, 900);
+    clearTimeout(finishLevel.timer);
+    finishLevel.timer = setTimeout(() => {
+      if (!screens.play.hidden) startLevel(next);
+    }, 1600);
   }
 
   function openRules(g, variant) {
@@ -208,6 +226,7 @@
 
   // Retour au sentier : si un niveau vient d'être franchi, le voyageur avance.
   function goHome() {
+    clearTimeout(finishLevel.timer);
     if (session) session.stop();
     session = null;
     show('home');
@@ -230,6 +249,7 @@
   $('#btn-undo').addEventListener('click', () => session && session.inst.undo());
   $('#btn-reset').addEventListener('click', () => session && session.inst.reset());
   $('#btn-hint').addEventListener('click', () => session && session.hint());
+  $('#btn-autosolve').addEventListener('click', () => session && session.solve());
   $('#btn-rules').addEventListener('click', () => session && openRules(session.g, session.variant));
   $('#rules-close').addEventListener('click', () => { $('#rules').hidden = true; });
   $('#rules').addEventListener('click', (e) => { if (e.target.id === 'rules') $('#rules').hidden = true; });

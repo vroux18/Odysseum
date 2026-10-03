@@ -150,7 +150,14 @@ svg .f { fill: currentColor; stroke: none; }
 .loading span { width: 10px; height: 10px; border-radius: 50%; background: var(--game); animation: breathe 1.6s ease-in-out infinite; }
 
 .actions { display: flex; justify-content: center; gap: 28px; margin-top: auto; transition: opacity .6s; }
-#play.done .actions, #play.done .tools { opacity: 0; pointer-events: none; }
+#play.done .actions, #play.done .tools, #play.done .autosolve { opacity: 0; pointer-events: none; }
+/* TEMPORAIRE : bouton de test */
+.autosolve {
+  align-self: center; margin-top: -14px; padding: 6px 16px; border-radius: 999px;
+  font-size: 13px; letter-spacing: .08em; color: var(--muted);
+  border: 1px dashed var(--faint); transition: opacity .6s;
+}
+.autosolve:active { color: var(--ink); }
 
 /* grilles en cases */
 .cell-grid {
