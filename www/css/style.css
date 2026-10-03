@@ -1118,3 +1118,16 @@ svg .f { fill: currentColor; stroke: none; }
   background: color-mix(in srgb, var(--game) 22%, transparent); color: var(--game); }
 .skill-go svg { width: 14px; height: 14px; fill: currentColor; stroke: none; margin-left: 2px; }
 .skill .skill-head, .skill .skill-bar { margin-right: 38px; }
+
+/* accueil : tous les jeux en bas à droite ; pastille cerveau lisible */
+#home #open-library { top: auto; left: auto; right: 14px; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); width: 52px; height: 52px;
+  background: var(--surface); color: var(--ink); box-shadow: 0 6px 18px -8px rgba(0, 0, 0, .45); }
+#home #open-library svg { width: 24px; height: 24px; }
+#home #open-brain { height: 52px; padding: 0 16px 0 8px; gap: 8px; border-radius: 26px; background: var(--surface); color: var(--ink);
+  box-shadow: 0 6px 18px -8px rgba(0, 0, 0, .45); backdrop-filter: none; -webkit-backdrop-filter: none; }
+#home #open-brain .brain-glyph { width: 36px; height: 36px; border-radius: 50%; display: grid !important; place-items: center; background: color-mix(in srgb, #d98aa6 20%, transparent); }
+#home #open-brain .brain-glyph svg { width: 24px; height: 24px; stroke-width: 1.7; }
+#home #open-brain .brain-txt { display: flex; flex-direction: column; align-items: flex-start; line-height: 1; gap: 2px; }
+#home #open-brain .brain-txt small { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+#home #open-brain #level-num { font-size: 20px; font-weight: 500; }
+#home #open-brain .brain-xp { left: 52px; right: 16px; bottom: 7px; height: 3px; }

@@ -62,7 +62,7 @@
       </svg>
       <!-- petit cerveau dessiné : on comprend que ce bouton ouvre la carte des capacités -->
       <span class="brain-glyph"><svg viewBox="0 0 24 24"><path d="M11.4 4.2C9.6 3 6.6 3.6 6 6c-2.2.4-3.2 2.8-2.2 4.6-1.4 1.6-.8 4.2 1.2 4.9.2 2.4 2.6 3.8 4.6 3 .8 1.2 1.8 1.6 1.8 1.6zM12.6 4.2c1.8-1.2 4.8-.6 5.4 1.8 2.2.4 3.2 2.8 2.2 4.6 1.4 1.6.8 4.2-1.2 4.9-.2 2.4-2.6 3.8-4.6 3-.8 1.2-1.8 1.6-1.8 1.6z"/><path d="M8.2 8.6c1 .2 1.6 1 1.6 2M7 13.4c1.2-.4 2.4.2 2.8 1.2M15.8 8.6c-1 .2-1.6 1-1.6 2M17 13.4c-1.2-.4-2.4.2-2.8 1.2"/></svg></span>
-      <span id="level-num">1</span>
+      <span class="brain-txt"><small>niveau</small><span id="level-num">1</span></span>
       <i class="brain-xp"><b id="brain-xp-mini"></b></i>
     </button>
     <button id="open-settings" class="ghost-icon corner" aria-label="Réglages">
@@ -240,6 +240,7 @@
 
 <script src="vendor/three.min.js"></script>
 <script src="vendor/GLTFLoader.js"></script>
+<script src="vendor/RGBELoader.js"></script>
 <script src="js/core.js"></script>
 <script src="js/games/flux.js"></script>
 <script src="js/games/reines.js"></script>
