@@ -101,11 +101,13 @@
     // on n'affiche que les essais joués et l'essai en cours ; les essais restants sont de petits points
     function render() {
       board.innerHTML = '';
-      const shown = over ? rows.length : rows.length + 1;
+      // plateau fixe, comme le vrai Mastermind : toutes les rangées d'essais sont là dès le départ,
+      // rien ne bouge quand on joue (les rangées à venir restent en pointillés)
+      const shown = over ? rows.length : puzzle.tries;
       for (let r = 0; r < shown; r++) {
         const row = document.createElement('div');
-        row.className = 'coffre-row' + (r === rows.length && !over ? ' current' : '') + (freshRow && r === rows.length - 1 ? ' fresh' : '');
-        const guess = r < rows.length ? rows[r] : cur;
+        row.className = 'coffre-row' + (r === rows.length && !over ? ' current' : '') + (r > rows.length ? ' future' : '') + (freshRow && r === rows.length - 1 ? ' fresh' : '');
+        const guess = r < rows.length ? rows[r] : r === rows.length ? cur : [];
         let slots = '';
         for (let i = 0; i < L; i++) {
           const v = r === rows.length && locked.has(i) && guess[i] == null ? locked.get(i) : guess[i];
@@ -116,7 +118,7 @@
           '<div class="fb">' + (r < rows.length ? feedbackHTML(rows[r]) : '') + '</div>';
         board.appendChild(row);
       }
-      const left = puzzle.tries - rows.length - (over ? 0 : 1);
+      const left = 0; // les essais restants sont les rangées en pointillés
       if (left > 0) {
         const rest = document.createElement('div');
         rest.className = 'coffre-left';
@@ -134,7 +136,7 @@
       }
       fresh = -1; freshRow = false;
       const curRow = board.querySelector('.coffre-row.current');
-      if (curRow) curRow.scrollIntoView({ block: 'nearest' });
+
     }
 
     function renderPad() {

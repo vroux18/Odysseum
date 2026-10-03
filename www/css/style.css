@@ -1060,3 +1060,22 @@ svg .f { fill: currentColor; stroke: none; }
   box-shadow: 0 1px 3px rgba(20, 25, 35, .22); display: grid; place-items: center; font-size: 0; z-index: 2; }
 .astres .edge-mark svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; animation: none; filter: none; }
 .astres .edge-mark.bad { background: var(--bad, #c4553f); color: #fff; }
+
+/* Coffre : plateau fixe et compact, jetons plus petits */
+.coffre { --slot: 30px; gap: 16px; max-width: 340px; }
+.coffre-rows { gap: 4px; }
+.coffre-row { gap: 12px; padding: 4px 10px; border-radius: 14px; }
+.coffre .slots { gap: 6px; }
+.coffre .slot, .coffre .slot .chip { width: var(--slot); height: var(--slot); }
+.coffre .slot .chip { font-size: 14px; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .18), inset 0 1.5px 0 rgba(255, 255, 255, .25); }
+.coffre .slot.empty { border-width: 1.5px; }
+.coffre-row.future .slot.empty { border-style: solid; border-color: transparent; background: color-mix(in srgb, var(--faint) 35%, transparent); }
+.coffre-row.future .fb { opacity: .35; }
+.coffre .fb { grid-template-columns: repeat(3, 8px); gap: 3px; min-width: 30px; }
+.coffre .peg { width: 8px; height: 8px; }
+.coffre-pad { gap: 8px; max-width: 300px; }
+.coffre .key, .coffre .key .chip { width: 40px; height: 40px; }
+.coffre .key .chip { font-size: 18px; }
+.coffre .key.tool-key { border-radius: 12px; }
+.coffre .key.tool-key svg { width: 18px; height: 18px; }
+.coffre-left { display: none; }
