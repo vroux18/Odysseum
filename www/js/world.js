@@ -1538,8 +1538,55 @@
     return numCache[key];
   }
 
+  // Bulle au-dessus de la pierre : les symboles des mini-jeux du niveau, sans texte
+  const bubbleCache = {};
+  function bubbleTexture(info) {
+    const ids = info.steps.map((s) => s.id);
+    const key = ids.join('+') + (info.boss ? ':boss' : '');
+    if (bubbleCache[key]) return bubbleCache[key];
+    const W = 96 * ids.length + 48, H = 150;
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const g = c.getContext('2d');
+    const tex = new THREE.CanvasTexture(c);
+    const imgs = [];
+    const paint = () => {
+      g.clearRect(0, 0, W, H);
+      // bulle arrondie avec une petite pointe vers la pierre
+      g.fillStyle = 'rgba(255,250,240,.96)';
+      const r = 46, h = 112;
+      g.beginPath();
+      g.moveTo(r, 0); g.lineTo(W - r, 0); g.arcTo(W, 0, W, r, r); g.lineTo(W, h - r); g.arcTo(W, h, W - r, h, r);
+      g.lineTo(W / 2 + 16, h); g.lineTo(W / 2, h + 22); g.lineTo(W / 2 - 16, h);
+      g.lineTo(r, h); g.arcTo(0, h, 0, h - r, r); g.lineTo(0, r); g.arcTo(0, 0, r, 0, r); g.closePath();
+      g.fill();
+      if (info.boss) { g.strokeStyle = '#d9a441'; g.lineWidth = 6; g.stroke(); }
+      imgs.forEach((im, i) => { if (im.complete && im.naturalWidth) g.drawImage(im, 24 + i * 96 + 12, 20, 72, 72); });
+      tex.needsUpdate = true;
+    };
+    info.steps.forEach((s) => {
+      const accent = s.accent || opts.accentOf(s.id);
+      const inner = (opts.iconSvg(s.id) || '').replace(/class="f"/g, 'fill="' + accent + '" stroke="none"');
+      const img = new Image();
+      img.onload = paint;
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="72" height="72" fill="none" stroke="' +
+        accent + '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>');
+      imgs.push(img);
+    });
+    paint();
+    tex.userData = { aspect: W / H };
+    bubbleCache[key] = tex;
+    return tex;
+  }
+
   function setMarker() {
     const info = opts.levelInfo(selected);
+    marker.material.map = bubbleTexture(info);
+    marker.material.needsUpdate = true;
+    const a = marker.material.map.userData.aspect || 2;
+    marker.scale.set(0.82 * a, 0.82, 1);
+    return;
+    // (ancienne pastille numérotée)
     marker.material.map = numberTexture(selected + 1, info.accent, info.boss);
     marker.material.needsUpdate = true;
     marker.scale.setScalar(info.boss ? 0.95 : 0.75);
