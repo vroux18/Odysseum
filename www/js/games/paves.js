@@ -5,7 +5,7 @@
   const C = window.Carnet;
 
   // Teintes semi-transparentes : lisibles sur fond clair comme sombre.
-  const FILLS = ['#f3dcd7', '#d9e6ef', '#e2ecd8', '#ebe2f1', '#f4ead2', '#d6ebe7', '#f1dfe7', '#dee3f3'];
+  const FILLS = ['#8fcfc6', '#f2a99b', '#f5cf73', '#a9c8f0', '#c3aef0', '#a8d59a', '#f7b98a', '#f0a8c8'];
 
   function partition(n, maxArea, rng) {
     const owner = new Int16Array(n * n).fill(-1);
@@ -150,6 +150,7 @@
       d.style.gridColumn = (k.cell % n) + 1;
       d.textContent = k.hidden ? '?' : k.value;
       if (k.hidden) d.classList.add('mystery');
+      d.dataset.cell = k.cell;
       clueLayer.appendChild(d);
     });
 
@@ -169,6 +170,11 @@
     let preview = null;
     function render() {
       layer.innerHTML = '';
+      // un chiffre posé sur un rectangle coloré passe en foncé, pour rester lisible
+      clueLayer.querySelectorAll('.clue').forEach((d) => {
+        const c = +d.dataset.cell, r = Math.floor(c / n), col = c % n;
+        d.classList.toggle('on-fill', rects.some((rc) => valid(rc) && r >= rc.r && r < rc.r + rc.h && col >= rc.c && col < rc.c + rc.w));
+      });
       let color = 0;
       rects.forEach((rc) => {
         const d = document.createElement('div');

@@ -7,8 +7,8 @@
 
   // Teintes douces propres à chaque jeu.
   const ACCENT = {
-    flux: '#8fb3cf', reines: '#d4a59c', astres: '#d6bb84', paves: '#9dbea4',
-    pixels: '#b4aad4', serpent: '#8cbfb8', lumieres: '#dcc283', coffre: '#a6b2c1'
+    flux: '#5f9fd8', reines: '#e8887a', astres: '#eeb043', paves: '#5fb8a5',
+    pixels: '#9b84e0', serpent: '#4fb5a6', lumieres: '#efbd45', coffre: '#7f95c4'
   };
   // Icônes au trait, toutes sur la même grille 24×24.
   const ICON = {
@@ -139,6 +139,7 @@
     $('#play').style.setProperty('--game', ACCENT[g.id]);
     $('#play').classList.remove('done');
     $('#play-icon').innerHTML = icon(g.id);
+    $('#play-name').textContent = g.name + (variant !== 'classic' ? ' · ' + variantsOf(g).find((v) => v.id === variant).name : '');
     $('#tools').hidden = true;
     $('#win').hidden = true;
     // boss : trois petits points indiquent l'épreuve en cours

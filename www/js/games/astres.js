@@ -7,8 +7,8 @@
   const SUN = 1, MOON = 2;
 
   // soleil : disque sable ; lune : croissant bleu brume
-  const SUN_SVG = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5" fill="#e6c98c" stroke="none"/></svg>';
-  const MOON_SVG = '<svg viewBox="0 0 24 24"><path d="M15 4.2a8 8 0 1 0 4.8 13.7A6.6 6.6 0 0 1 15 4.2z" fill="#9db8d4" stroke="none"/></svg>';
+  const SUN_SVG = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5" fill="#f2b33d" stroke="none"/></svg>';
+  const MOON_SVG = '<svg viewBox="0 0 24 24"><path d="M15 4.2a8 8 0 1 0 4.8 13.7A6.6 6.6 0 0 1 15 4.2z" fill="#6f9fd8" stroke="none"/></svg>';
 
   // triples alignés en diagonale passant par la case i
   function diagTriples(n, i) {

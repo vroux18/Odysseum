@@ -5,8 +5,8 @@
   const C = window.Carnet;
 
   // pastels posés, assez distincts les uns des autres
-  const COLORS = ['#e59a9a', '#7fa9cc', '#e2bf74', '#8fbf8a', '#b39ddb', '#eda77c',
-    '#6fb5ad', '#d595bd', '#a9b878', '#8f9fd9', '#d9c46a', '#b3a08f'];
+  const COLORS = ['#e8705f', '#4f9de0', '#f2b33d', '#5cb86a', '#9a7be0', '#f08c3c',
+    '#3fb8ad', '#e06aa6', '#8bb04a', '#6c7fe0', '#d9b23a', '#a08470'];
 
   const GLYPHS = ['●', '▲', '■', '◆', '★', '✚', '♥', '✿', '◐', '✕', '☾', '◇'];
   const DIRS =[[-1, 0], [1, 0], [0, -1], [0, 1]]; // haut, bas, gauche, droite
@@ -359,30 +359,30 @@
     }
 
     function css(name) { return getComputedStyle(document.body).getPropertyValue(name).trim(); }
+    function roundRect(c, x, y, w, h, r) {
+      c.beginPath();
+      c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
+      c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+    }
 
     function draw() {
-      const bg = css('--board') || '#fbf7ef';
-      const line = css('--grid-line') || '#e2d9c8';
+      const bg = css('--bg') || '#f5f2ec';
+      const tile = css('--tile') || '#e8e2d8';
       ctx.clearRect(0, 0, size, size);
-      ctx.fillStyle = bg;
-      ctx.fillRect(0, 0, size, size);
 
       const own = owners();
-      // teinte des cases remplies
+      // cases en tuiles arrondies ; les cases traversées prennent la teinte du tuyau
+      const gap = Math.max(2, cell * 0.06), rad = cell * 0.18;
       for (let c = 0; c < n * n; c++) {
-        if (g.bridgeIdx.has(c)) continue;
-        if (own[c] >= 0) {
-          ctx.fillStyle = COLORS[own[c]] + '22';
-          ctx.fillRect((c % n) * cell, Math.floor(c / n) * cell, cell, cell);
+        const x = (c % n) * cell + gap / 2, y = Math.floor(c / n) * cell + gap / 2;
+        ctx.fillStyle = tile;
+        roundRect(ctx, x, y, cell - gap, cell - gap, rad);
+        ctx.fill();
+        if (!g.bridgeIdx.has(c) && own[c] >= 0) {
+          ctx.fillStyle = COLORS[own[c]] + '3a';
+          roundRect(ctx, x, y, cell - gap, cell - gap, rad);
+          ctx.fill();
         }
-      }
-      // grille
-      ctx.strokeStyle = line;
-      ctx.lineWidth = 1;
-      for (let i = 0; i <= n; i++) {
-        const x = Math.round(i * cell) + 0.5;
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, size); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(0, x); ctx.lineTo(size, x); ctx.stroke();
       }
       // ponts vides : petits rails
       puzzle.bridges.forEach((b) => {

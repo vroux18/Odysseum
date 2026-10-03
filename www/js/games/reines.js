@@ -5,8 +5,8 @@
   const C = window.Carnet;
 
   // voiles pastel très légers
-  const REGION_COLORS = ['#f3dcd7', '#d9e6ef', '#e2ecd8', '#ebe2f1', '#f4ead2',
-    '#d6ebe7', '#f1dfe7', '#e7e7de', '#dee3f3', '#f0e3d6'];
+  const REGION_COLORS = ['#f2a99b', '#8fc6e8', '#f5cf73', '#a8d59a', '#c3aef0',
+    '#f7b98a', '#86d1c4', '#f0a8c8', '#b8c3d6', '#e4d08a'];
   const CROWN = '<span class="queen"></span>';
 
   // Interdit entre deux couronnes de lignes voisines (hors même colonne) :

@@ -128,21 +128,27 @@
     canvas.addEventListener('pointercancel', up);
 
     const css = (v) => getComputedStyle(document.body).getPropertyValue(v).trim();
+    function roundRect(c, x, y, w, h, r) {
+      c.beginPath();
+      c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
+      c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+    }
     const ctr = (c) => [(c % n + 0.5) * cell, (Math.floor(c / n) + 0.5) * cell];
 
     function draw() {
-      const bg = css('--board'), line = css('--grid-line'), ink = css('--ink'), muted = css('--muted'), accent = '#8cbfb8';
-      ctx.fillStyle = bg; ctx.fillRect(0, 0, size, size);
-      // cases visitées
-      path.forEach((c, i) => {
-        ctx.fillStyle = accent + (i === path.length - 1 ? '55' : '22');
-        ctx.fillRect((c % n) * cell, Math.floor(c / n) * cell, cell, cell);
-      });
-      ctx.strokeStyle = line; ctx.lineWidth = 1;
-      for (let i = 0; i <= n; i++) {
-        const x = Math.round(i * cell) + 0.5;
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, size); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(0, x); ctx.lineTo(size, x); ctx.stroke();
+      const bg = css('--bg'), tile = css('--tile'), ink = css('--ink'), muted = css('--muted'), accent = '#4fb5a6';
+      ctx.clearRect(0, 0, size, size);
+      // cases en tuiles arrondies ; les cases visitées prennent la teinte du chemin
+      const gap = Math.max(2, cell * 0.06), rad = cell * 0.18;
+      const visited = new Map(path.map((c, i) => [c, i]));
+      for (let c = 0; c < n * n; c++) {
+        const x = (c % n) * cell + gap / 2, y = Math.floor(c / n) * cell + gap / 2;
+        ctx.fillStyle = tile;
+        roundRect(ctx, x, y, cell - gap, cell - gap, rad); ctx.fill();
+        if (visited.has(c)) {
+          ctx.fillStyle = accent + (visited.get(c) === path.length - 1 ? '66' : '33');
+          roundRect(ctx, x, y, cell - gap, cell - gap, rad); ctx.fill();
+        }
       }
       // chemin pixel (angles droits)
       if (path.length > 1) {

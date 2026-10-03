@@ -114,7 +114,7 @@
       sun: ['#b8c8ff', 0.45], cloud: ['#46515a', 0.55], mtn: '#222b31', motes: ['#ffe2a0', 1, 0.17], night: 1 },
     aube: { sky: ['#c6cde0', '#f2d8cf', '#f4e2d6'], fog: '#f1e2d8', sea: '#c6ced6', hemi: ['#ffe9dc', '#b6b4c4', 0.46],
       sun: ['#ffcfb0', 0.58], cloud: ['#fbe9e2', 0.9], mtn: '#e6dcdc', motes: ['#ffffff', 0.8, 0.12], night: 0 },
-    jour: { sky: ['#d3e1e7', '#eef2f1', FOG], fog: FOG, sea: '#cbdadd', hemi: ['#ffffff', '#b9c6ca', 0.52],
+    jour: { sky: ['#c4dbe8', '#e8f1f2', FOG], fog: FOG, sea: '#b5d2da', hemi: ['#ffffff', '#b9c6ca', 0.52],
       sun: ['#fff2e2', 0.64], cloud: ['#ffffff', 0.92], mtn: '#dfe6e6', motes: ['#ffffff', 0.8, 0.12], night: 0 },
     crepuscule: { sky: ['#b6c1d8', '#f1ccb6', '#f3d8c3'], fog: '#efd9c9', sea: '#c1cbd2', hemi: ['#ffe1c6', '#a9afc0', 0.46],
       sun: ['#ffc596', 0.62], cloud: ['#fae0cf', 0.9], mtn: '#e2d6d2', motes: ['#ffe9c4', 0.85, 0.13], night: 0 }
@@ -618,8 +618,8 @@
     }
 
     const colors = {
-      low: theme === 'dunes' ? new THREE.Color('#efe3cc') : tint('#a9c6a6', 0.75).lerp(new THREE.Color(accent), 0.12),
-      high: theme === 'dunes' ? new THREE.Color('#f6eedf') : tint('#a9c6a6', 0.45),
+      low: theme === 'dunes' ? new THREE.Color('#ecd7b0') : tint('#8fc184', 0.62).lerp(new THREE.Color(accent), 0.1),
+      high: theme === 'dunes' ? new THREE.Color('#f4e6c8') : tint('#b9d99c', 0.45),
       sand: new THREE.Color('#f2ebde')
     };
     const groundMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, transparent: true });
