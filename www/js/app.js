@@ -1580,22 +1580,27 @@
   }
 
   // ------------------------------ Thème ------------------------------
-  // « auto » suit l'heure : l'interface passe en sombre la nuit, comme l'archipel.
+  // Interface : « auto » suit le réglage clair / sombre du téléphone ; « clair » / « sombre » le forcent.
+  // La 3D, elle, suit l'heure réelle (aube, jour, heure dorée, crépuscule, nuit), sauf si
+  // « Toujours le jour » est coché.
   const hourNow = () => { const d = new Date(); return d.getHours() + d.getMinutes() / 60; };
-  const isNightHour = (h) => h < 6 || h >= 20.5;
+  const osDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
   function resolvedTheme() {
     const s = C.store.settings.theme || 'auto';
-    return s === 'auto' ? (isNightHour(hourNow()) ? 'dark' : 'light') : s;
+    return s === 'auto' ? (osDark && osDark.matches ? 'dark' : 'light') : s;
   }
   function applyTheme() {
-    // interface cartoon : toujours claire, même la nuit ou en mode sombre (seule la 3D suit l'heure)
-    document.documentElement.dataset.theme = 'light';
-    // la 3D suit l'heure réelle ; le mode sombre choisi force la nuit
-    if (worldReady && C.world.setTime) C.world.setTime(hourNow(), (C.store.settings.theme || 'auto') === 'dark');
+    const th = resolvedTheme();
+    document.documentElement.dataset.theme = th;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', th === 'dark' ? '#262d74' : '#5ec3f2');
+    if (worldReady && C.world.setTime) C.world.setTime(hourNow(), C.store.settings.dayLock ? 'day' : false);
     if (session && session.inst.redraw) session.inst.redraw();
     document.querySelectorAll('.theme-mode button').forEach((b) => b.classList.toggle('on', b.dataset.themeChoice === (C.store.settings.theme || 'auto')));
   }
-  setInterval(applyTheme, 5 * 60 * 1000); // la lumière avance avec l'heure
+  if (osDark) { const onOs = () => { if ((C.store.settings.theme || 'auto') === 'auto') applyTheme(); }; if (osDark.addEventListener) osDark.addEventListener('change', onOs); else if (osDark.addListener) osDark.addListener(onOs); }
+  { const dl = document.getElementById('opt-daylock'); if (dl) dl.addEventListener('change', (e) => { C.store.settings.dayLock = e.target.checked; C.save(); applyTheme(); }); }
+  setInterval(applyTheme, 5 * 60 * 1000); // (la 3D relit aussi l'horloge d'elle-même)
   applyTheme(); // avant le premier affichage, pour éviter un flash
 
   // --------------------------- Événements ---------------------------
@@ -1606,6 +1611,8 @@
     C.sfx.tap();
   }));
   renderPlayMode();
+    const dl = document.getElementById('opt-daylock');
+    if (dl) dl.checked = !!C.store.settings.dayLock;
   function stepLevel(d) {
     const L = Math.max(0, Math.min(J.done, selected + d));
     if (L === selected) return;
@@ -1618,8 +1625,11 @@
 
   // Le voyage : toutes les pierres déjà atteintes, île par île (étoiles, épreuves) ;
   // toucher une pierre y téléporte Ulysse pour la rejouer.
-  const VOYAGE_ISLANDS = ['Troie', 'Le Marché', 'Les Lotus', 'Le Cyclope', 'Les Vents', 'Les Falaises',
-    'Circé', 'Les Brumes', 'Les Sirènes', 'Le Tourbillon', 'Le Soleil', 'Calypso', 'Le Palais', 'Ithaque'];
+  // (mêmes noms que ISLAND_NAMES dans world.js : le voyage d'Ulysse, dans l'ordre d'Homère)
+  const VOYAGE_ISLANDS = ['Troie', 'Ismaros', 'Cap Malée', 'Les Lotus', 'Les Chèvres', 'Le Cyclope', 'Éolie', 'Ithaque en vue',
+    'Lestrygons', 'Circé', 'Les Ombres', 'Elpénor', 'Les Sirènes', 'Roches Errantes', 'Charybde', 'Thrinacie', 'Le Naufrage',
+    'Ogygie', 'Le Radeau', 'La Tempête', 'Nausicaa', 'Alcinoos', 'Les Jeux', 'Le Navire', 'Phorkys', 'Eumée', 'Le Palais',
+    'L\'Arc', 'Le Lit d\'olivier', 'Laërte'];
   const voyageName = (c) => VOYAGE_ISLANDS[c % VOYAGE_ISLANDS.length] + (c >= VOYAGE_ISLANDS.length ? ' ' + (Math.floor(c / VOYAGE_ISLANDS.length) + 1) : '');
   function renderVoyage() {
     const box = $('#vy-list');

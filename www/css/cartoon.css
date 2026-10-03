@@ -1,8 +1,9 @@
 /* =====================================================================
    Odysseus — peau « cartoon ensoleillé » de toute l'interface.
    Chargée APRÈS toutes les autres feuilles (style.css, games/*.css) : elle gagne.
-   Toujours claire : l'interface reste gaie même la nuit ou en mode sombre
-   (app.js force data-theme="light" ; on neutralise aussi les variables sombres ici).
+   Deux thèmes, mêmes jetons : clair (jour ensoleillé) et sombre (la nuit de l'archipel,
+   bleu-violet doux, jamais noir) — voir « Thème sombre » en fin de feuille.
+   app.js pose data-theme="light" | "dark" (« auto » suit le réglage du téléphone).
 
    Règle d'or : on n'utilise QUE les jetons ci-dessous.
    - palette reprise de la 3D (js/world.js) : ciel, lagon, mer, herbe, sable, toits, fleurs
@@ -20,7 +21,9 @@
   /* palette du monde 3D */
   --k-sky: #5ec3f2;        /* ciel (world.js, jour) */
   --k-sky-lt: #a9e3fb;     /* haut de l'horizon */
-  --k-mist: #e4f6ff;       /* brume claire, fond des écrans */
+  --k-mist: #f6f1e7;       /* fond des écrans : ivoire doux, reposant (le bleu ciel reste un accent) */
+  --k-paper: #fbf7ef;      /* haut du fond des écrans */
+  --k-paper-dk: #f4efe4;   /* bas du fond des écrans */
   --k-sea: #1d9be0;        /* mer profonde */
   --k-lagoon: #3fe0d0;     /* lagon turquoise */
   --k-grass: #5cc93b;      /* herbe */
@@ -36,6 +39,11 @@
   --k-ink-soft: #8a83a3;   /* texte secondaire */
   --k-edge: #d9cfe8;       /* bord épais lilas sous les bulles blanches */
   --k-well: #f1ecf8;       /* creux (pistes, onglets éteints) */
+  /* surfaces (repris par le thème sombre) */
+  --k-bubble: #ffffff;     /* bulles, pastilles, tuiles */
+  --k-rim: #ffffff;        /* liseré épais autour des bulles et des pastilles */
+  --k-tint: #ffffff;       /* teinte de fond des étiquettes pâles (mélangée à la couleur du jeu) */
+  --k-tint-ink: #2a1f3d;   /* encre des textes teintés (mélangée à la couleur du jeu) */
   /* une teinte par capacité */
   --sk-logique: #f2773f; --sk-espace: #4cb82e; --sk-anticipation: #3d8ee8; --sk-raisonnement: #8f7cf0; --sk-memoire: #ff6fb5;
   /* police, rayons, tailles */
@@ -50,11 +58,11 @@
 
   /* anciennes variables ramenées à la palette (UI + plateaux), en clair seulement */
   --font: var(--k-font); --display: var(--k-font); --caps: var(--k-font);
-  --bg: var(--k-mist); --surface: #ffffff; --surface-hi: #ffffff; --ink: var(--k-ink); --muted: var(--k-ink-soft);
-  --faint: var(--k-edge); --line: var(--k-well); --glow: #ffffff;
-  --glass: #ffffff; --glass-edge: #ffffff; --glass-shadow: 0 5px 0 var(--k-edge), var(--k-drop);
-  --scrim: rgba(94, 195, 242, .32); --shade: rgba(80, 60, 140, .3); --hover: transparent;
-  --well: var(--k-well); --ring: transparent; --sheet-edge: #fff; --lift: var(--k-drop);
+  --bg: var(--k-mist); --surface: var(--k-bubble); --surface-hi: var(--k-bubble); --ink: var(--k-ink); --muted: var(--k-ink-soft);
+  --faint: var(--k-edge); --line: var(--k-well); --glow: var(--k-bubble);
+  --glass: var(--k-bubble); --glass-edge: var(--k-rim); --glass-shadow: 0 5px 0 var(--k-edge), var(--k-drop);
+  --scrim: rgba(70, 58, 44, .2); --shade: rgba(80, 60, 140, .3); --hover: transparent;
+  --well: var(--k-well); --ring: transparent; --sheet-edge: var(--k-rim); --lift: var(--k-drop);
   --p2: var(--k-grass); --gold: var(--k-sun); --terracotta: var(--k-roof); --aegean: var(--k-sea); --olive: var(--k-grass);
   --grain: none; --marble: none; --pastel: none;
   --tile: #f6eedd; --tile-hi: #fbf5e8; --tile-edge: #e6d6b4; --given: #ecdcbb; --frame: var(--k-ink); --grid-line: #eadfca;
@@ -66,8 +74,8 @@
 /* ---------- Socle ---------- */
 body {
   font: 500 17px/1.5 var(--k-font); color: var(--k-ink);
-  background: linear-gradient(180deg, var(--k-sky-lt) 0%, var(--k-mist) 45%, #ffffff 100%) fixed;
-  background-image: linear-gradient(180deg, var(--k-sky-lt) 0%, var(--k-mist) 45%, #ffffff 100%);
+  background: linear-gradient(180deg, var(--k-paper) 0%, var(--k-paper-dk) 100%) fixed;
+  background-image: linear-gradient(180deg, var(--k-paper) 0%, var(--k-paper-dk) 100%);
 }
 button, input { font-family: var(--k-font); }
 button:focus-visible, input:focus-visible { outline: 3px solid var(--k-sky); outline-offset: 3px; }
@@ -77,7 +85,7 @@ svg.ic use { stroke: currentColor; stroke-width: 9px; stroke-linejoin: round; st
 
 /* ---------- Bulle blanche « bombée » : base de tous les boutons ronds ---------- */
 #home .ghost-icon, #home .level-arrow, #play .topbar .ghost-icon, #play .actions .ghost-icon, .brain-back, .sheet-close {
-  background: #fff !important; color: var(--k-ink); border: 3px solid #fff !important;
+  background: var(--k-bubble) !important; color: var(--k-ink); border: 3px solid var(--k-rim) !important;
   -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
   box-shadow: 0 5px 0 var(--k-edge), var(--k-drop) !important;
   transition: transform .15s ease, box-shadow .15s ease !important; opacity: 1;
@@ -97,7 +105,7 @@ svg.ic use { stroke: currentColor; stroke-width: 9px; stroke-linejoin: round; st
 #home #open-wardrobe svg path:last-child { stroke-width: 2.2; }
 #home #open-library { width: 58px; height: 58px; right: 14px; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); color: var(--k-ink); --duo: var(--k-edge); --duo-o: .9; }
 #home #cam-mode { width: var(--k-btn); height: var(--k-btn); left: 14px; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); color: var(--k-ink); --duo: var(--k-edge); --duo-o: .9; }
-#home #cam-mode.on { background: var(--k-sea) !important; border-color: #fff !important; color: #fff; --duo: #fff; --duo-o: .35;
+#home #cam-mode.on { background: var(--k-sea) !important; border-color: var(--k-rim) !important; color: #fff; --duo: #fff; --duo-o: .35;
   box-shadow: 0 5px 0 #0f6fa8, var(--k-drop) !important; }
 #home #open-settings svg.ic, #home #open-wardrobe svg, #home #cam-mode svg.ic { width: 26px !important; height: 26px !important; }
 #home #open-library svg.ic { width: 28px; height: 28px; }
@@ -106,7 +114,7 @@ svg.ic use { stroke: currentColor; stroke-width: 9px; stroke-linejoin: round; st
 #home .go, .go {
   width: var(--k-btn-lg); height: var(--k-btn-lg); color: #fff; --duo: #fff; --duo-o: 1;
   background: radial-gradient(circle at 38% 30%, #8be45f, var(--k-grass) 70%) !important;
-  border: 4px solid #fff;
+  border: 4px solid var(--k-rim);
   box-shadow: 0 7px 0 #3a9a26, 0 12px 24px rgba(60, 140, 40, .35), var(--k-shine) !important;
   transition: transform .15s ease, box-shadow .15s ease;
 }
@@ -122,7 +130,7 @@ svg.ic use { stroke: currentColor; stroke-width: 9px; stroke-linejoin: round; st
 #home .go-label {
   bottom: calc(19vh - 40px + env(safe-area-inset-bottom, 0px)); padding: 5px 14px; border-radius: var(--k-r-pill);
   font: 600 14px/1.2 var(--k-font); letter-spacing: 0; text-transform: none; color: var(--k-ink);
-  background: #fff; border: 2px solid #fff; box-shadow: 0 3px 0 var(--k-edge), var(--k-drop-sm);
+  background: var(--k-bubble); border: 2px solid var(--k-rim); box-shadow: 0 3px 0 var(--k-edge), var(--k-drop-sm);
   -webkit-backdrop-filter: none; backdrop-filter: none;
 }
 #home .go-label:empty { display: none; }
@@ -132,12 +140,14 @@ svg.ic use { stroke: currentColor; stroke-width: 9px; stroke-linejoin: round; st
 #home .level-arrow.next { left: calc(50% + 42px + 18px); }
 
 /* navigation d'île en île : pilule blanche bombée */
-.island-nav { background: #fff; border: 3px solid #fff; padding: 2px; gap: 2px; -webkit-backdrop-filter: none; backdrop-filter: none;
+.island-nav { background: var(--k-bubble); border: 3px solid var(--k-rim); padding: 2px; gap: 2px; -webkit-backdrop-filter: none; backdrop-filter: none;
   box-shadow: 0 5px 0 var(--k-edge), var(--k-drop); }
 .island-nav button { height: 40px; color: var(--k-ink); }
 #island-prev, #island-next { width: 40px; background: var(--k-well); }
 #island-prev svg, #island-next svg { stroke-width: 3; }
-.island-name { font: 700 16px/1.05 var(--k-font) !important; color: var(--k-ink); }
+.island-name { font: 700 16px/1.05 var(--k-font) !important; color: var(--k-ink); justify-content: center; align-items: center; text-align: center; }
+.island-nav { align-items: center; }
+#island-prev, #island-next { display: grid; place-items: center; padding: 0; }
 .island-name small { font: 600 11px/1.2 var(--k-font) !important; color: var(--k-ink-soft); letter-spacing: 0; }
 
 /* ---------- Écran de jeu ---------- */
@@ -152,19 +162,19 @@ svg.ic use { stroke: currentColor; stroke-width: 9px; stroke-linejoin: round; st
 .play-mid .play-icon, .play-icon {
   width: 34px; height: 34px; padding: 6px; color: #fff; border-radius: 50%;
   background: radial-gradient(circle at 38% 30%, color-mix(in srgb, var(--game) 65%, #fff), var(--game) 75%);
-  border: 2px solid #fff; box-shadow: 0 3px 0 color-mix(in srgb, var(--game) 70%, #2a1f3d);
+  border: 2px solid var(--k-rim); box-shadow: 0 3px 0 color-mix(in srgb, var(--game) 70%, #2a1f3d);
 }
 .play-icon svg { stroke-width: 2.6; }
 .play-icon svg .f { fill: #fff; }
 .play-name { font: 700 22px/1.15 var(--k-font); letter-spacing: 0; color: var(--k-ink); }
 .play-timer { font: 700 16px/1 var(--k-font); color: var(--k-ink); }
 .steps { gap: 6px; }
-.steps i { width: 10px; height: 10px; border-radius: 5px; background: #fff; box-shadow: 0 2px 0 var(--k-edge); }
-.steps i.past { background: color-mix(in srgb, var(--game) 55%, #fff); box-shadow: 0 2px 0 color-mix(in srgb, var(--game) 60%, var(--k-edge)); }
+.steps i { width: 10px; height: 10px; border-radius: 5px; background: var(--k-bubble); box-shadow: 0 2px 0 var(--k-edge); }
+.steps i.past { background: color-mix(in srgb, var(--game) 55%, var(--k-tint)); box-shadow: 0 2px 0 color-mix(in srgb, var(--game) 60%, var(--k-edge)); }
 .steps i.now { width: 24px; background: var(--game); box-shadow: 0 2px 0 color-mix(in srgb, var(--game) 70%, #2a1f3d); }
 
 /* outils (remplir / croix) : pilule blanche, outil actif en couleur pleine */
-.tools { background: #fff !important; border: 3px solid #fff !important; padding: 3px; -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+.tools { background: var(--k-bubble) !important; border: 3px solid var(--k-rim) !important; padding: 3px; -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
   box-shadow: 0 4px 0 var(--k-edge), var(--k-drop-sm) !important; }
 .tools .tool { color: var(--k-ink-soft); }
 .tools .tool.on { color: #fff; --duo: #fff; background: var(--game); box-shadow: 0 3px 0 color-mix(in srgb, var(--game) 70%, #2a1f3d); }
@@ -177,17 +187,17 @@ svg.ic use { stroke: currentColor; stroke-width: 9px; stroke-linejoin: round; st
 .hint-left {
   top: -6px; right: -6px; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px;
   font: 700 13px/20px var(--k-font); color: #7a4a00; background: linear-gradient(var(--k-sun-lt), #ffb31f);
-  border: 2px solid #fff; box-shadow: 0 2px 0 var(--k-sun-dk);
+  border: 2px solid var(--k-rim); box-shadow: 0 2px 0 var(--k-sun-dk);
 }
 #btn-hint.empty .hint-left { background: var(--k-well); color: var(--k-ink-soft); box-shadow: 0 2px 0 var(--k-edge); }
-.hint-tip { background: #fff; border: 3px solid var(--k-sun); border-radius: var(--k-r-md); color: var(--k-ink); font: 500 15px/1.4 var(--k-font);
+.hint-tip { background: var(--k-bubble); border: 3px solid var(--k-sun); border-radius: var(--k-r-md); color: var(--k-ink); font: 500 15px/1.4 var(--k-font);
   -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: 0 4px 0 var(--k-sun-dk), var(--k-drop-sm); }
 .hint-tip::before { background: var(--k-sun-dk); }
 #play .autosolve { font: 600 11px/1 var(--k-font); letter-spacing: .04em; border-radius: var(--k-r-pill); }
 
 /* bouton suivant (fin de grille, fin de niveau, tutoriel) : pastille pleine à la couleur du jeu */
 .next-btn {
-  width: 68px; height: 68px; color: #fff; --duo: #fff; --duo-o: .35; border: 4px solid #fff;
+  width: 68px; height: 68px; color: #fff; --duo: #fff; --duo-o: .35; border: 4px solid var(--k-rim);
   background: radial-gradient(circle at 38% 30%, color-mix(in srgb, var(--game) 60%, #fff), var(--game) 72%) !important;
   box-shadow: 0 6px 0 color-mix(in srgb, var(--game) 68%, #2a1f3d), var(--k-drop), var(--k-shine) !important;
   transition: transform .15s ease, box-shadow .15s ease;
@@ -198,12 +208,12 @@ svg.ic use { stroke: currentColor; stroke-width: 9px; stroke-linejoin: round; st
 
 /* ---------- Feuilles ---------- */
 .overlay {
-  background: linear-gradient(180deg, rgba(169, 227, 251, .35), rgba(94, 195, 242, .4)) !important;
+  background: linear-gradient(180deg, rgba(90, 76, 58, .14), rgba(70, 58, 44, .26)) !important;
   -webkit-backdrop-filter: blur(4px) saturate(1.1); backdrop-filter: blur(4px) saturate(1.1);
 }
 .sheet {
   background: var(--k-cream) !important; background-image: none !important; color: var(--k-ink);
-  border-radius: var(--k-r-lg); border: 3px solid #fff;
+  border-radius: var(--k-r-lg); border: 3px solid var(--k-rim);
   box-shadow: 0 6px 0 var(--k-edge), 0 18px 40px rgba(60, 80, 160, .25) !important;
 }
 .levels-sheet, .brain-sheet, .wardrobe-sheet { border-radius: var(--k-r-lg) var(--k-r-lg) 0 0; border-bottom: 0; box-shadow: 0 -8px 30px rgba(60, 80, 160, .22) !important; }
@@ -238,48 +248,48 @@ svg.ic use { stroke: currentColor; stroke-width: 9px; stroke-linejoin: round; st
 .lib-group { gap: 10px; }
 #library .tile, .library .tile {
   padding: 12px 6px 10px !important; gap: 6px !important; border-radius: var(--k-r-md);
-  background: #fff !important; border: 0; box-shadow: 0 4px 0 var(--k-edge), var(--k-drop-sm) !important;
+  background: var(--k-bubble) !important; border: 0; box-shadow: 0 4px 0 var(--k-edge), var(--k-drop-sm) !important;
   transition: transform .15s ease, box-shadow .15s ease;
 }
 #library .tile:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--k-edge), var(--k-drop-sm) !important; }
 #library .tile .tile-icon, .library .tile-icon {
   width: 50px !important; height: 50px !important; color: #fff; border-radius: 50%;
   background: radial-gradient(circle at 38% 30%, color-mix(in srgb, var(--game) 60%, #fff), var(--game) 72%) !important;
-  border: 3px solid #fff; box-shadow: 0 3px 0 color-mix(in srgb, var(--game) 68%, #2a1f3d), var(--k-shine) !important;
+  border: 3px solid var(--k-rim); box-shadow: 0 3px 0 color-mix(in srgb, var(--game) 68%, #2a1f3d), var(--k-shine) !important;
 }
 #library .tile .tile-icon svg { width: 24px !important; height: 24px !important; stroke-width: 2.6; }
 #library .tile .tile-icon svg .f { fill: #fff; }
 #library .tile .tile-name { font: 600 15px/1.15 var(--k-font) !important; letter-spacing: 0; color: var(--k-ink); text-transform: none; }
 #library .tile .tile-lvl {
   font: 700 12px/1.3 var(--k-font) !important; padding: 2px 9px !important; border-radius: var(--k-r-pill);
-  color: color-mix(in srgb, var(--game) 55%, #2a1f3d); background: color-mix(in srgb, var(--game) 22%, #fff);
+  color: color-mix(in srgb, var(--game) 55%, var(--k-tint-ink)); background: color-mix(in srgb, var(--game) 22%, var(--k-tint));
 }
 #library .tile.locked { opacity: .55; }
 
 /* ---------- Niveaux d'un mini-jeu ---------- */
-.lv-head .lv-icon { width: 48px; height: 48px; padding: 10px; color: #fff; border: 3px solid #fff;
+.lv-head .lv-icon { width: 48px; height: 48px; padding: 10px; color: #fff; border: 3px solid var(--k-rim);
   background: radial-gradient(circle at 38% 30%, color-mix(in srgb, var(--game) 60%, #fff), var(--game) 72%);
   box-shadow: 0 3px 0 color-mix(in srgb, var(--game) 68%, #2a1f3d), var(--k-shine); }
 .lv-head .lv-icon svg { stroke-width: 2.6; }
 .lv-head .lv-icon svg .f { fill: #fff; }
 .lv-head b { font: 700 25px/1.1 var(--k-font); letter-spacing: 0; color: var(--k-ink); }
-.lv-head small { font: 700 13px/1.2 var(--k-font); color: color-mix(in srgb, var(--game) 55%, #2a1f3d); background: color-mix(in srgb, var(--game) 20%, #fff); margin-right: 44px; }
+.lv-head small { font: 700 13px/1.2 var(--k-font); color: color-mix(in srgb, var(--game) 55%, var(--k-tint-ink)); background: color-mix(in srgb, var(--game) 20%, var(--k-tint)); margin-right: 44px; }
 .lv-tabs { background: transparent; box-shadow: none; padding: 0 0 4px; gap: 8px; }
-.lv-tabs button { background: #fff; border-radius: var(--k-r-sm); color: var(--k-ink); padding: 8px 4px; box-shadow: 0 4px 0 var(--k-edge); transition: transform .15s ease, box-shadow .15s ease; }
+.lv-tabs button { background: var(--k-bubble); border-radius: var(--k-r-sm); color: var(--k-ink); padding: 8px 4px; box-shadow: 0 4px 0 var(--k-edge); transition: transform .15s ease, box-shadow .15s ease; }
 .lv-tabs button span { font: 700 15px/1.2 var(--k-font); letter-spacing: 0; }
 .lv-tabs button small { font: 600 12px/1.2 var(--k-font); color: var(--k-ink-soft); }
 .lv-tabs button.on { background: var(--game); color: #fff; box-shadow: 0 4px 0 color-mix(in srgb, var(--game) 68%, #2a1f3d); text-shadow: 0 1px 0 rgba(0, 0, 0, .18); }
 .lv-tabs button.on small { color: #fff; opacity: .95; }
 .lv-tabs button:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--k-edge); }
 .lv-note { font: 600 13px/1.3 var(--k-font); color: var(--k-ink-soft); }
-.lv { font: 700 17px/1 var(--k-font); background: #fff; color: var(--k-ink); box-shadow: 0 3px 0 var(--k-edge); }
+.lv { font: 700 17px/1 var(--k-font); background: var(--k-bubble); color: var(--k-ink); box-shadow: 0 3px 0 var(--k-edge); }
 .lv.done { color: #fff; background: radial-gradient(circle at 38% 30%, color-mix(in srgb, var(--game) 60%, #fff), var(--game) 72%);
   box-shadow: 0 3px 0 color-mix(in srgb, var(--game) 68%, #2a1f3d), var(--k-shine); text-shadow: 0 1px 0 rgba(0, 0, 0, .2); }
-.lv.next { background: #fff; color: var(--k-ink); box-shadow: inset 0 0 0 3px var(--game), 0 3px 0 color-mix(in srgb, var(--game) 68%, #2a1f3d); }
+.lv.next { background: var(--k-bubble); color: var(--k-ink); box-shadow: inset 0 0 0 3px var(--game), 0 3px 0 color-mix(in srgb, var(--game) 68%, #2a1f3d); }
 @keyframes lv-breathe { 50% { box-shadow: inset 0 0 0 3px var(--game), 0 3px 0 color-mix(in srgb, var(--game) 68%, #2a1f3d), 0 0 0 6px color-mix(in srgb, var(--game) 25%, transparent); } }
 .lv.locked { background: var(--k-well); color: var(--k-ink-soft); box-shadow: none; opacity: .8; }
 .lv-focus, .zp-go {
-  border-radius: var(--k-r-pill); padding: 14px; font: 700 16px/1.2 var(--k-font); color: #fff; border: 3px solid #fff;
+  border-radius: var(--k-r-pill); padding: 14px; font: 700 16px/1.2 var(--k-font); color: #fff; border: 3px solid var(--k-rim);
   background: var(--game) !important; text-shadow: 0 1px 0 rgba(0, 0, 0, .2);
   box-shadow: 0 5px 0 color-mix(in srgb, var(--game) 68%, #2a1f3d), var(--k-drop-sm), var(--k-shine) !important;
   transition: transform .15s ease, box-shadow .15s ease;
@@ -289,21 +299,21 @@ svg.ic use { stroke: currentColor; stroke-width: 9px; stroke-linejoin: round; st
 
 /* ---------- Carte du cerveau ---------- */
 .level-band {
-  background: #fff !important; border: 3px solid #fff; border-radius: var(--k-r-pill); padding: 8px 16px 8px 8px;
+  background: var(--k-bubble) !important; border: 3px solid var(--k-rim); border-radius: var(--k-r-pill); padding: 8px 16px 8px 8px;
   box-shadow: 0 5px 0 var(--k-edge), var(--k-drop) !important; margin-right: 46px; width: calc(100% - 46px);
 }
 .lb-label { font: 600 13px/1 var(--k-font); letter-spacing: 0; text-transform: none; color: var(--k-ink-soft); align-items: center; }
 .lb-label b {
   font: 700 18px/1 var(--k-font); color: #7a4a00; min-width: 36px; height: 36px; padding: 0 8px; border-radius: 18px; display: inline-grid; place-items: center;
-  background: linear-gradient(var(--k-sun-lt), #ffb31f); border: 2.5px solid #fff; box-shadow: 0 2px 0 var(--k-sun-dk);
+  background: linear-gradient(var(--k-sun-lt), #ffb31f); border: 2.5px solid var(--k-rim); box-shadow: 0 2px 0 var(--k-sun-dk);
 }
 .lb-rank { font-style: normal; font-weight: 600; color: var(--k-ink-soft); }
 .lb-bar { height: 14px; border-radius: 7px; background: var(--k-well); box-shadow: inset 0 2px 0 rgba(80, 60, 140, .12); }
 .lb-bar i { border-radius: 7px; background: linear-gradient(90deg, var(--k-coral), var(--k-sun)); box-shadow: var(--k-shine); min-width: 14px; }
 .level-band small { font: 700 12px/1 var(--k-font); color: var(--k-ink-soft); }
 .brain-wrap {
-  border-radius: var(--k-r-md); border: 3px solid #fff;
-  background: radial-gradient(ellipse at 50% 40%, #ffffff 0%, var(--k-mist) 55%, var(--k-sky-lt) 100%) !important;
+  border-radius: var(--k-r-md); border: 3px solid var(--k-rim);
+  background: radial-gradient(ellipse at 50% 40%, var(--k-bubble) 0%, var(--k-mist) 60%, var(--k-paper-dk) 100%) !important;
   box-shadow: 0 4px 0 var(--k-edge), inset 0 2px 8px rgba(29, 155, 224, .15) !important;
 }
 .brain-back { left: 8px; top: 8px; width: 44px; height: 44px; }
@@ -311,12 +321,12 @@ svg.ic use { stroke: currentColor; stroke-width: 9px; stroke-linejoin: round; st
 .brain .hemi { fill: #ffc2d7 !important; stroke: #e0789e !important; stroke-width: 3.5px !important; }
 .brain .gyri { stroke: #e98fb0 !important; stroke-width: 3px !important; opacity: .85 !important; }
 .brain .region { mix-blend-mode: normal; }
-.brain .zone-name { font: 700 11px/1 var(--k-font); fill: var(--k-ink) !important; stroke: #fff !important; stroke-width: 4px !important; paint-order: stroke; }
+.brain .zone-name { font: 700 11px/1 var(--k-font); fill: var(--k-ink) !important; stroke: var(--k-bubble) !important; stroke-width: 4px !important; paint-order: stroke; }
 .brain.zoomed .zone-name { font-size: 9px; }
 /* médaillons « bonbons » : disque blanc, anneau coloré épais, petite ombre */
 .brain .zone-game { filter: drop-shadow(0 1.6px 0 rgba(80, 60, 140, .28)); }
-.brain .zg-disc { fill: #fff; }
-.brain .zg-track { stroke: color-mix(in srgb, currentColor 25%, #fff); opacity: 1; stroke-width: 3px; }
+.brain .zg-disc { fill: var(--k-bubble); }
+.brain .zg-track { stroke: color-mix(in srgb, currentColor 25%, var(--k-tint)); opacity: 1; stroke-width: 3px; }
 .brain .zg-ring { stroke-width: 3.4px; }
 .brain .zone-game svg, .brain .zone-game g path, .brain .zone-game g rect, .brain .zone-game g circle:not(.zg-disc):not(.zg-track):not(.zg-ring) { stroke-width: 2.4; }
 .brain .zg-name { font: 700 6px/1 var(--k-font); fill: var(--k-ink); }
@@ -326,28 +336,28 @@ svg.ic use { stroke: currentColor; stroke-width: 9px; stroke-linejoin: round; st
 /* capacités : bulles blanches, pastille ▶ pleine */
 .skills { gap: 12px; }
 .skills .skill, .skill {
-  background: #fff !important; border-radius: var(--k-r-md); padding: 12px 12px 12px 14px;
+  background: var(--k-bubble) !important; border-radius: var(--k-r-md); padding: 12px 12px 12px 14px;
   box-shadow: 0 4px 0 var(--k-edge), var(--k-drop-sm) !important; transition: transform .15s ease, box-shadow .15s ease;
 }
 .skill:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--k-edge) !important; }
 .skill-head span { font: 700 15px/1.2 var(--k-font); letter-spacing: 0; color: var(--k-ink); }
-.skill-head small { font: 700 12px/1.2 var(--k-font); color: color-mix(in srgb, var(--game) 55%, #2a1f3d); }
+.skill-head small { font: 700 12px/1.2 var(--k-font); color: color-mix(in srgb, var(--game) 55%, var(--k-tint-ink)); }
 .skill-bar { height: 10px; border-radius: 5px; background: var(--k-well); box-shadow: inset 0 2px 0 rgba(80, 60, 140, .1); }
 .skill-bar i { border-radius: 5px; background: var(--game) !important; box-shadow: var(--k-shine); min-width: 10px; }
 .skill-go {
-  width: 38px; height: 38px; color: #fff; --duo: #fff; --duo-o: .4; border: 2.5px solid #fff;
+  width: 38px; height: 38px; color: #fff; --duo: #fff; --duo-o: .4; border: 2.5px solid var(--k-rim);
   background: var(--game) !important; box-shadow: 0 3px 0 color-mix(in srgb, var(--game) 68%, #2a1f3d) !important;
 }
 .skill-go svg.ic { width: 16px; height: 16px; }
 .zone-panel { gap: 12px; }
 .zp-head b { font: 700 22px/1.2 var(--k-font); color: var(--k-ink); }
 .zp-head small { font: 600 12px/1.2 var(--k-font); color: var(--k-ink-soft); }
-.gd-game, .zp-game { background: #fff !important; border-radius: var(--k-r-md); box-shadow: 0 4px 0 var(--k-edge), var(--k-drop-sm) !important; padding: 10px 4px 8px; }
+.gd-game, .zp-game { background: var(--k-bubble) !important; border-radius: var(--k-r-md); box-shadow: 0 4px 0 var(--k-edge), var(--k-drop-sm) !important; padding: 10px 4px 8px; }
 .gd-game svg, .zp-game svg { width: 34px; height: 34px; padding: 7px; border-radius: 50%; color: #fff; background: var(--game); stroke-width: 2.6;
   box-shadow: 0 2px 0 color-mix(in srgb, var(--game) 68%, #2a1f3d); }
 .gd-game svg .f, .zp-game svg .f { fill: #fff; }
 .gd-game span, .zp-game span { font: 600 13px/1.2 var(--k-font); color: var(--k-ink); }
-.gd-game small, .zp-game small { font: 700 11px/1.2 var(--k-font); color: color-mix(in srgb, var(--game) 55%, #2a1f3d); }
+.gd-game small, .zp-game small { font: 700 11px/1.2 var(--k-font); color: color-mix(in srgb, var(--game) 55%, var(--k-tint-ink)); }
 
 /* ---------- Réglages ---------- */
 .settings-sheet { gap: 12px; }
@@ -355,41 +365,42 @@ svg.ic use { stroke: currentColor; stroke-width: 9px; stroke-linejoin: round; st
 .toggle > span svg.ic, .mix svg.ic { width: 34px; height: 34px; padding: 6px; border-radius: 50%; color: #fff; --duo: #fff; --duo-o: .35;
   background: var(--k-sky); box-shadow: 0 2px 0 #2f98cc; }
 .toggle i { width: 54px; height: 32px; background: var(--k-well); box-shadow: inset 0 2px 0 rgba(80, 60, 140, .12); }
-.toggle i::after { top: 3px; left: 3px; width: 26px; height: 26px; background: #fff; box-shadow: 0 2px 0 var(--k-edge), 0 2px 6px rgba(80, 60, 140, .2); }
+.toggle i::after { top: 3px; left: 3px; width: 26px; height: 26px; background: var(--k-bubble); box-shadow: 0 2px 0 var(--k-edge), 0 2px 6px rgba(80, 60, 140, .2); }
 .toggle input:checked + i { background: var(--k-grass) !important; box-shadow: inset 0 -3px 0 #3a9a26; }
 .toggle input:checked + i::after { transform: translateX(22px); box-shadow: 0 2px 0 #3a9a26; }
 .mix { padding: 0 2px 6px 0; }
 .mix input[type=range] { height: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--k-sky), var(--k-lagoon)); opacity: 1; box-shadow: inset 0 2px 0 rgba(0, 0, 0, .1); }
-.mix input[type=range]::-webkit-slider-thumb { width: 28px; height: 28px; background: #fff; border: 0; box-shadow: 0 3px 0 var(--k-edge), 0 3px 8px rgba(80, 60, 140, .25); }
-.mix input[type=range]::-moz-range-thumb { width: 28px; height: 28px; background: #fff; box-shadow: 0 3px 0 var(--k-edge); }
+.mix input[type=range]::-webkit-slider-thumb { width: 28px; height: 28px; background: var(--k-bubble); border: 0; box-shadow: 0 3px 0 var(--k-edge), 0 3px 8px rgba(80, 60, 140, .25); }
+.mix input[type=range]::-moz-range-thumb { width: 28px; height: 28px; background: var(--k-bubble); box-shadow: 0 3px 0 var(--k-edge); }
 .credits { border-top: 0; margin-top: 4px; padding: 10px 12px; border-radius: var(--k-r-sm); background: var(--k-well); font: 500 11px/1.5 var(--k-font); color: var(--k-ink-soft); }
 .credits b { font-weight: 600; color: var(--k-ink); opacity: 1; }
 
 /* ---------- Garde-robe ---------- */
-.wardrobe { background: linear-gradient(to top, rgba(94, 195, 242, .35), transparent 55%) !important; }
-.wd-tabs { gap: 8px; padding: 2px 2px 6px; }
-.wd-tabs button { height: 38px !important; padding: 0 16px; font: 700 14px/1 var(--k-font) !important; border-radius: var(--k-r-pill);
-  background: #fff !important; color: var(--k-ink) !important; opacity: 1; box-shadow: 0 3px 0 var(--k-edge); }
+.wardrobe { background: linear-gradient(to top, rgba(70, 58, 44, .22), transparent 55%) !important; }
+/* onglets sur deux rangées si besoin : aucun n'est coupé */
+.wd-tabs { gap: 8px; padding: 2px 2px 6px; flex-wrap: wrap; justify-content: center; overflow: visible !important; min-height: 0 !important; gap: 6px; }
+.wd-tabs button { height: 34px !important; padding: 0 12px; font: 700 13px/1 var(--k-font) !important; border-radius: var(--k-r-pill);
+  background: var(--k-bubble) !important; color: var(--k-ink) !important; opacity: 1; box-shadow: 0 3px 0 var(--k-edge); }
 .wd-tabs button.on { background: var(--k-coral) !important; color: #fff !important; box-shadow: 0 3px 0 #d24d84; text-shadow: 0 1px 0 rgba(0, 0, 0, .15); }
 .wd-swatch, .wd-chip { font: 600 12px/1.2 var(--k-font); color: var(--k-ink-soft); }
-.wd-swatch i { width: 50px; height: 50px; border: 3px solid #fff; box-shadow: 0 3px 0 var(--k-edge), inset 0 -4px 0 rgba(0, 0, 0, .15), var(--k-shine); }
+.wd-swatch i { width: 50px; height: 50px; border: 3px solid var(--k-rim); box-shadow: 0 3px 0 var(--k-edge), inset 0 -4px 0 rgba(0, 0, 0, .15), var(--k-shine); }
 .wd-swatch.on i { box-shadow: 0 0 0 4px var(--k-sun), 0 4px 0 4px var(--k-sun-dk), var(--k-shine); transform: scale(1.06); }
 .wd-swatch.on span, .wd-chip.on { color: var(--k-ink); }
-.wd-chip { min-height: 48px; border-radius: var(--k-r-sm); background: #fff !important; color: var(--k-ink); box-shadow: 0 3px 0 var(--k-edge); }
+.wd-chip { min-height: 48px; border-radius: var(--k-r-sm); background: var(--k-bubble) !important; color: var(--k-ink); box-shadow: 0 3px 0 var(--k-edge); }
 .wd-chip.on { background: var(--k-sun) !important; color: #7a4a00; box-shadow: 0 3px 0 var(--k-sun-dk); }
-.wd-done { padding: 14px; border-radius: var(--k-r-pill); font: 700 16px/1.2 var(--k-font); color: #fff; border: 3px solid #fff;
+.wd-done { padding: 14px; border-radius: var(--k-r-pill); font: 700 16px/1.2 var(--k-font); color: #fff; border: 3px solid var(--k-rim);
   background: var(--k-grass); text-shadow: 0 1px 0 rgba(0, 0, 0, .2); box-shadow: 0 5px 0 #3a9a26, var(--k-drop-sm), var(--k-shine); transition: transform .15s ease, box-shadow .15s ease; }
 .wd-done:active { transform: translateY(3px); box-shadow: 0 2px 0 #3a9a26, var(--k-shine); }
 
 /* ---------- Tutoriel ---------- */
-.rules-icon { width: 60px; height: 60px; padding: 13px; color: #fff; border: 3px solid #fff;
+.rules-icon { width: 60px; height: 60px; padding: 13px; color: #fff; border: 3px solid var(--k-rim);
   background: radial-gradient(circle at 38% 30%, color-mix(in srgb, var(--game) 60%, #fff), var(--game) 72%) !important;
   box-shadow: 0 4px 0 color-mix(in srgb, var(--game) 68%, #2a1f3d), var(--k-shine) !important; }
 .rules-icon svg { stroke-width: 2.6; }
 .rules-icon svg .f { fill: #fff; }
-.tuto-art-wrap { border-radius: var(--k-r-md); background: #fff; box-shadow: 0 4px 0 var(--k-edge), inset 0 0 0 3px #fff; }
+.tuto-art-wrap { border-radius: var(--k-r-md); background: var(--k-bubble); box-shadow: 0 4px 0 var(--k-edge), inset 0 0 0 3px var(--k-rim); }
 .tuto-text { font: 500 18px/1.45 var(--k-font); color: var(--k-ink); }
-.tuto-text b { font-weight: 700; color: color-mix(in srgb, var(--game) 70%, #2a1f3d); }
+.tuto-text b { font-weight: 700; color: color-mix(in srgb, var(--game) 70%, var(--k-tint-ink)); }
 .tuto-dots i { width: 10px; height: 10px; border-radius: 5px; background: var(--k-edge); }
 .tuto-dots i.on { width: 26px; background: var(--game); box-shadow: 0 2px 0 color-mix(in srgb, var(--game) 68%, #2a1f3d); }
 
@@ -403,9 +414,9 @@ svg.ic use { stroke: currentColor; stroke-width: 9px; stroke-linejoin: round; st
 .ld-time small { font: 600 13px/1.2 var(--k-font); color: var(--k-ink-soft); }
 .ld-time .record { color: #d24d84; }
 #ld-skills { gap: 10px !important; }
-.ld-row.ld2 { padding: 10px 12px !important; border-radius: var(--k-r-md) !important; background: #fff !important; box-shadow: 0 4px 0 var(--k-edge), var(--k-drop-sm) !important; }
+.ld-row.ld2 { padding: 10px 12px !important; border-radius: var(--k-r-md) !important; background: var(--k-bubble) !important; box-shadow: 0 4px 0 var(--k-edge), var(--k-drop-sm) !important; }
 .ld-row.ld2 + .ld-row.ld2::after { display: none; }
-.ld-medal { color: #fff; border: 3px solid #fff;
+.ld-medal { color: #fff; border: 3px solid var(--k-rim);
   background: radial-gradient(circle at 38% 30%, color-mix(in srgb, var(--game) 60%, #fff), var(--game) 72%);
   box-shadow: 0 3px 0 color-mix(in srgb, var(--game) 68%, #2a1f3d), var(--k-shine); }
 .ld-medal svg { stroke-width: 2.6; }
@@ -415,17 +426,17 @@ svg.ic use { stroke: currentColor; stroke-width: 9px; stroke-linejoin: round; st
 .ld2 .skill-bar { height: 10px !important; border-radius: 5px !important; -webkit-mask: none !important; mask: none !important; background: var(--k-well) !important; box-shadow: inset 0 2px 0 rgba(80, 60, 140, .1); }
 .ld2 .skill-bar i { border-radius: 5px !important; box-shadow: var(--k-shine) !important; }
 .ld2 .ld-gain { font: 700 16px/26px var(--k-font) !important; height: 30px; color: #7a4a00; background: linear-gradient(var(--k-sun-lt), #ffb31f);
-  border: 2.5px solid #fff; box-shadow: 0 2px 0 var(--k-sun-dk) !important; }
+  border: 2.5px solid var(--k-rim); box-shadow: 0 2px 0 var(--k-sun-dk) !important; }
 .ld2 .ld-gain small { font: 600 10px/1 var(--k-font); }
 .ld-row.ld2.leveled { box-shadow: 0 4px 0 color-mix(in srgb, var(--game) 68%, #2a1f3d), inset 0 0 0 3px var(--game), var(--k-drop-sm) !important; }
 .ld-row.ld2.leveled .ld-medal { box-shadow: 0 3px 0 color-mix(in srgb, var(--game) 68%, #2a1f3d), 0 0 0 4px var(--k-sun); }
 .ld-none { font: 500 15px/1.4 var(--k-font); color: var(--k-ink-soft); }
-.ld-share { font: 700 15px/1.2 var(--k-font); color: var(--k-ink); background: #fff; border-radius: var(--k-r-pill); box-shadow: 0 4px 0 var(--k-edge), var(--k-drop-sm); }
+.ld-share { font: 700 15px/1.2 var(--k-font); color: var(--k-ink); background: var(--k-bubble); border-radius: var(--k-r-pill); box-shadow: 0 4px 0 var(--k-edge), var(--k-drop-sm); }
 
 /* ---------- Toast XP ---------- */
-.xp-toast { top: calc(124px + env(safe-area-inset-top, 0px)); font: 700 15px/1.2 var(--k-font); color: var(--k-ink); background: #fff; border: 3px solid #fff; padding: 8px 18px;
+.xp-toast { top: calc(124px + env(safe-area-inset-top, 0px)); font: 700 15px/1.2 var(--k-font); color: var(--k-ink); background: var(--k-bubble); border: 3px solid var(--k-rim); padding: 8px 18px;
   -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: 0 4px 0 var(--k-edge), var(--k-drop) !important; }
-.xp-toast b { font-weight: 700; color: color-mix(in srgb, var(--game, var(--k-coral)) 70%, #2a1f3d); }
+.xp-toast b { font-weight: 700; color: color-mix(in srgb, var(--game, var(--k-coral)) 70%, var(--k-tint-ink)); }
 
 /* ---------- Mode concentration : fondu lumineux ---------- */
 .flash { background: radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--game) 45%, #fff) 0, var(--k-mist) 70%); }
@@ -476,7 +487,7 @@ svg.ic use { stroke: currentColor; stroke-width: 9px; stroke-linejoin: round; st
   /* centré sans transform (le mode « animations réduites » remet transform à none) */
   position: absolute; z-index: 1; left: 0; right: 0; width: max-content; margin: 0 auto; bottom: calc(9vh + env(safe-area-inset-bottom, 0px)); white-space: nowrap;
   padding: 10px 22px; border-radius: var(--k-r-pill); font: 700 16px/1.2 var(--k-font) !important; letter-spacing: 0; text-transform: none; color: var(--k-ink);
-  background: #fff; box-shadow: 0 5px 0 var(--k-edge), var(--k-drop);
+  background: var(--k-bubble); box-shadow: 0 5px 0 var(--k-edge), var(--k-drop);
 }
 @keyframes tap-breathe { 50% { opacity: .75; transform: scale(.96); } }
 @media (prefers-reduced-motion: reduce) {
@@ -508,12 +519,12 @@ svg.ic use { stroke: currentColor; stroke-width: 9px; stroke-linejoin: round; st
 /* grille de palier enchaînée : les étoiles éclosent un instant au-dessus du plateau */
 .pop-stars { position: fixed; left: 0; right: 0; top: 34%; z-index: 30; display: flex; justify-content: center; pointer-events: none; }
 .pop-stars[hidden] { display: none; }
-.pop-stars .big-stars { padding: 10px 16px 12px; border-radius: var(--k-r-lg); background: #fff; box-shadow: 0 5px 0 var(--k-edge), var(--k-drop); }
+.pop-stars .big-stars { padding: 10px 16px 12px; border-radius: var(--k-r-lg); background: var(--k-bubble); box-shadow: 0 5px 0 var(--k-edge), var(--k-drop); }
 .pop-stars .big-stars svg { width: 40px; height: 40px; }
 .pop-stars .big-stars svg:nth-child(2) { width: 50px; height: 50px; margin-bottom: 6px; }
 /* liste des niveaux : les étoiles d'un niveau réussi, posées sous la bulle */
 .lv { position: relative; }
-.lv .mini-stars { position: absolute; left: 50%; bottom: -5px; transform: translateX(-50%); padding: 1px 3px; border-radius: var(--k-r-pill); background: #fff; box-shadow: 0 2px 0 var(--k-edge); }
+.lv .mini-stars { position: absolute; left: 50%; bottom: -5px; transform: translateX(-50%); padding: 1px 3px; border-radius: var(--k-r-pill); background: var(--k-bubble); box-shadow: 0 2px 0 var(--k-edge); }
 .lv .mini-stars svg { width: 9px; height: 9px; }
 .lv-grid { row-gap: 14px; }
 
@@ -523,25 +534,25 @@ svg.ic use { stroke: currentColor; stroke-width: 9px; stroke-linejoin: round; st
 .daily-ic svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .daily-ic svg .f { fill: currentColor; stroke: none; }
 /* fait aujourd'hui : coche (pastille encre) en haut à droite, étoiles en dessous */
-.daily-check { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; background: var(--k-ink); border: 2px solid #fff; }
+.daily-check { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; background: var(--k-ink); border: 2px solid var(--k-rim); }
 .daily-check svg { width: 11px; height: 11px; fill: none; stroke: #fff; stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; }
-#open-daily .daily-stars { position: absolute; left: 50%; bottom: -12px; transform: translateX(-50%); padding: 1px 3px; border-radius: var(--k-r-pill); background: #fff; box-shadow: 0 2px 0 var(--k-edge); }
+#open-daily .daily-stars { position: absolute; left: 50%; bottom: -12px; transform: translateX(-50%); padding: 1px 3px; border-radius: var(--k-r-pill); background: var(--k-bubble); box-shadow: 0 2px 0 var(--k-edge); }
 #open-daily .daily-stars svg { width: 9px; height: 9px; }
 /* série de jours : petite flamme et son nombre, à droite de la bulle */
 .daily-flame { position: absolute; left: calc(100% + 2px); top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; gap: 1px; padding: 2px 6px 2px 3px;
-  border-radius: var(--k-r-pill); background: #fff; box-shadow: 0 3px 0 var(--k-edge); font: 700 13px/1 var(--k-font); font-style: normal; color: var(--k-ink); }
+  border-radius: var(--k-r-pill); background: var(--k-bubble); box-shadow: 0 3px 0 var(--k-edge); font: 700 13px/1 var(--k-font); font-style: normal; color: var(--k-ink); }
 .daily-flame svg { width: 14px; height: 14px; fill: var(--k-sun); stroke: var(--k-sun-dk); stroke-width: 1.6; stroke-linejoin: round; }
 #open-daily:not(.done) .daily-ic { animation: k-daily-breathe 2.6s ease-in-out infinite; }
 @keyframes k-daily-breathe { 50% { transform: scale(1.12); } }
 /* rangée en tête de la liste des mini-jeux */
 .daily-row { position: relative; width: 100%; display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 8px 12px; min-height: 56px; border: 0; cursor: pointer;
-  border-radius: var(--k-r-md); background: #fff; box-shadow: inset 0 0 0 3px var(--k-sun), 0 4px 0 var(--k-edge), var(--k-drop-sm); color: var(--k-ink); }
+  border-radius: var(--k-r-md); background: var(--k-bubble); box-shadow: inset 0 0 0 3px var(--k-sun), 0 4px 0 var(--k-edge), var(--k-drop-sm); color: var(--k-ink); }
 .daily-row:active { transform: translateY(3px); box-shadow: inset 0 0 0 3px var(--k-sun), 0 1px 0 var(--k-edge); }
 .daily-row .daily-ic { width: 40px; height: 40px; border-radius: 50%; background: var(--k-well); }
 .daily-row .daily-check { position: static; }
 .daily-row .daily-flame { position: static; transform: none; box-shadow: none; background: var(--k-well); }
 .daily-row .mini-stars svg { width: 14px; height: 14px; }
-.daily-row .daily-go { margin-left: auto; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--k-ink); color: #fff; --duo: #fff; --duo-o: .3; }
+.daily-row .daily-go { margin-left: auto; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--k-ink); color: var(--k-bubble); --duo: var(--k-bubble); --duo-o: .3; }
 .daily-row .daily-go svg.ic { width: 18px; height: 18px; }
 @media (prefers-reduced-motion: reduce) {
   .big-stars svg { animation: none; transform: none; }
@@ -549,3 +560,130 @@ svg.ic use { stroke: currentColor; stroke-width: 9px; stroke-linejoin: round; st
 }
 html.a11y-motion .big-stars svg { animation: none; transform: none; }
 html.a11y-motion #open-daily .daily-ic { animation: none; }
+/* =====================================================================
+   Thème sombre : la nuit de l'archipel (js/world.js, moment « nuit »).
+   Même structure, mêmes recettes : seules les valeurs des jetons changent.
+   Bleu-violet doux (#2b2f57 / #353a6b), encre crème, bords épais violet nuit,
+   bulles indigo ; les couleurs des capacités sont un peu éclaircies. Jamais noir.
+   ===================================================================== */
+:root[data-theme="dark"]:not(#k) {
+  /* palette de la nuit (ciel #262d74 → horizon #6b60b4, lune crème, lanternes dorées) */
+  --k-sky: #5b9cf0;        /* pastilles « ciel » (onglets, étiquettes) : un bleu clair de lune */
+  --k-sky-lt: #3f4296;     /* milieu du ciel de nuit */
+  --k-mist: #262d74;       /* haut du ciel, fond des écrans */
+  --k-sea: #3b7fe0;
+  --k-lagoon: #2f93b8;
+  --k-grass: #5cc93b;
+  --k-sand: #e9cf8f;
+  --k-cream: #2b2f57;      /* feuilles */
+  --k-sun: #ffcf4a;        /* or des pièces et des étoiles : il brille la nuit */
+  --k-sun-lt: #ffdd66;
+  --k-sun-dk: #c97c00;
+  --k-coral: #ff86ba;
+  --k-roof: #ff8a5c;
+  --k-ink: #fff4dc;        /* encre crème (la lune) */
+  --k-ink-soft: #b7b2dc;
+  --k-edge: #1a1b45;       /* bord épais violet nuit sous les bulles */
+  --k-well: #23275a;       /* creux */
+  --k-bubble: #353a6b;     /* bulles indigo */
+  --k-rim: #444a85;        /* liseré des bulles */
+  --k-tint: #353a6b;
+  --k-tint-ink: #fff4dc;
+  --sk-logique: #ff8c55; --sk-espace: #66d046; --sk-anticipation: #5aa4ff; --sk-raisonnement: #a796ff; --sk-memoire: #ff86c4;
+  --k-drop: 0 8px 18px rgba(12, 8, 48, .45);
+  --k-drop-sm: 0 4px 10px rgba(12, 8, 48, .35);
+  --k-shine: inset 0 3px 0 rgba(255, 255, 255, .16);
+  /* anciennes variables (plateaux des mini-jeux) */
+  --scrim: rgba(28, 24, 84, .5); --shade: rgba(10, 8, 40, .55);
+  --tile: #454b88; --tile-hi: #4f5594; --tile-edge: #23265a; --given: #4c528f; --frame: #fff4dc; --grid-line: #474c86;
+  --soft: #2f3466; --board: transparent; --region-cell: transparent; --region-line: rgba(255, 244, 220, .55);
+  --bad: #ff7d70; --bad-ink: #ff9a8f;
+  --hint: #ffcf4a; --hint-glow: rgba(255, 207, 74, .55); --hint-soft: rgba(255, 207, 74, .25); --hint-ink: #ffe3a0;
+  --title: rgba(255, 244, 220, .75); --pastel: none;
+  color-scheme: dark;
+}
+/* socle : le ciel de nuit en fond */
+:root[data-theme="dark"] body { background-image: linear-gradient(180deg, var(--k-mist) 0%, var(--k-sky-lt) 60%, #4b4593 100%); }
+/* voile derrière les feuilles : un ciel du soir translucide */
+:root[data-theme="dark"] .overlay { background: linear-gradient(180deg, rgba(38, 45, 116, .45), rgba(28, 24, 84, .6)) !important; }
+:root[data-theme="dark"] .wardrobe { background: linear-gradient(to top, rgba(28, 24, 84, .55), transparent 55%) !important; }
+:root[data-theme="dark"] .sheet { box-shadow: 0 6px 0 var(--k-edge), 0 18px 40px rgba(8, 6, 40, .5) !important; }
+:root[data-theme="dark"] .levels-sheet, :root[data-theme="dark"] .brain-sheet, :root[data-theme="dark"] .wardrobe-sheet { box-shadow: 0 -8px 30px rgba(8, 6, 40, .5) !important; }
+:root[data-theme="dark"] .library .sheet-head { background: linear-gradient(180deg, var(--k-cream) 75%, rgba(43, 47, 87, 0)) !important; }
+/* pastilles « ciel » : bord dessous bleu nuit */
+:root[data-theme="dark"] .sheet-label, :root[data-theme="dark"] .switch-mode button.on { box-shadow: 0 3px 0 #2a5fb0; }
+:root[data-theme="dark"] .toggle > span svg.ic, :root[data-theme="dark"] .mix svg.ic { box-shadow: 0 2px 0 #2a5fb0; }
+:root[data-theme="dark"] .settings-sheet .sheet-glyph { color: #9cc8ff; --duo: var(--k-sky); }
+:root[data-theme="dark"] .sheet-glyph { color: #ff9cc4; --duo: var(--k-coral); }
+:root[data-theme="dark"] .switch-mode, :root[data-theme="dark"] .toggle i, :root[data-theme="dark"] .lb-bar, :root[data-theme="dark"] .skill-bar { box-shadow: inset 0 2px 0 rgba(8, 6, 40, .35); }
+:root[data-theme="dark"] .toggle i::after { background: #fff4dc; box-shadow: 0 2px 0 var(--k-edge); }
+/* bouton play : même vert, bord dessous plus profond */
+:root[data-theme="dark"] .go { box-shadow: 0 7px 0 #2c7a1d, 0 12px 24px rgba(8, 6, 40, .5), var(--k-shine) !important; }
+:root[data-theme="dark"] .go::after { border-color: rgba(255, 244, 220, .55); }
+:root[data-theme="dark"] .go.boss { box-shadow: 0 7px 0 var(--k-sun-dk), 0 12px 24px rgba(8, 6, 40, .5), var(--k-shine) !important; }
+/* pastille du niveau (cerveau rose) : on garde l'illustration claire, sur une bulle indigo */
+:root[data-theme="dark"] #home #open-brain .brain-art, :root[data-theme="dark"] #home #open-brain .brain-glyph {
+  background: radial-gradient(circle at 40% 30%, #ffe3ee, #ffc2d7 78%) !important; box-shadow: none; color: inherit; }
+:root[data-theme="dark"] #home #open-brain { background: var(--k-bubble) !important; border-color: var(--k-rim) !important; color: var(--k-ink) !important;
+  box-shadow: 0 5px 0 var(--k-edge), var(--k-drop) !important; }
+:root[data-theme="dark"] #home #open-brain:active { box-shadow: 0 2px 0 var(--k-edge), var(--k-drop-sm) !important; }
+:root[data-theme="dark"] #home #open-brain .brain-txt { border-color: var(--k-rim); }
+:root[data-theme="dark"] #home #open-brain .brain-xp { background: var(--k-well) !important; box-shadow: inset 0 2px 0 rgba(8, 6, 40, .35); }
+/* carte du cerveau : ciel étoilé derrière les deux moitiés roses */
+:root[data-theme="dark"] .brain-wrap {
+  background: radial-gradient(1.2px 1.2px at 18% 22%, #fff4dc 99%, transparent), radial-gradient(1.4px 1.4px at 78% 16%, #fff4dc 99%, transparent),
+    radial-gradient(1px 1px at 64% 82%, #fff4dc 99%, transparent), radial-gradient(1.2px 1.2px at 30% 74%, #fff4dc 99%, transparent),
+    radial-gradient(ellipse at 50% 40%, #4a4f8f 0%, var(--k-sky-lt) 55%, var(--k-mist) 100%) !important;
+  box-shadow: 0 4px 0 var(--k-edge), inset 0 2px 10px rgba(8, 6, 40, .4) !important; }
+:root[data-theme="dark"] .brain .zone-name { fill: #3a3550 !important; stroke: #ffe3ee !important; }
+:root[data-theme="dark"] .brain .zg-name { fill: var(--k-ink); }
+:root[data-theme="dark"] .brain .zg-disc { fill: #fff8ea; }
+:root[data-theme="dark"] .brain .zg-track { stroke: color-mix(in srgb, currentColor 25%, #fff8ea); }
+:root[data-theme="dark"] .brain .zone-game { filter: drop-shadow(0 1.6px 0 rgba(8, 6, 40, .5)); }
+/* fin de niveau, étoiles : creux indigo, or vif */
+:root[data-theme="dark"] .ld-star { color: #fff4dc; --duo: var(--k-sun); }
+:root[data-theme="dark"] .ld-time .record, :root[data-theme="dark"] .ld2 .ld-head .ld-up { color: #ff9cc4; }
+/* indices : le texte doré reste lisible */
+:root[data-theme="dark"] #btn-hint { color: var(--k-sun) !important; }
+:root[data-theme="dark"] .hint-tip { color: var(--k-ink); }
+/* défi du jour : coche encre crème */
+:root[data-theme="dark"] .daily-check svg { stroke: var(--k-bubble); }
+/* concentration : fondu vers la nuit */
+:root[data-theme="dark"] .flash { background: radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--game) 55%, #2b2f57) 0, var(--k-mist) 70%); }
+
+/* ---------- Intro, version nuit : la lune remplace le soleil, ciel étoilé ---------- */
+:root[data-theme="dark"] .intro {
+  background:
+    radial-gradient(1.6px 1.6px at 12% 14%, #fff4dc 99%, transparent), radial-gradient(1.2px 1.2px at 30% 8%, #fff4dc 99%, transparent),
+    radial-gradient(1.8px 1.8px at 46% 20%, #fff4dc 99%, transparent), radial-gradient(1.2px 1.2px at 64% 6%, #fff4dc 99%, transparent),
+    radial-gradient(1.4px 1.4px at 58% 34%, #fff4dc 99%, transparent), radial-gradient(1.2px 1.2px at 8% 40%, #fff4dc 99%, transparent),
+    radial-gradient(1.6px 1.6px at 90% 30%, #fff4dc 99%, transparent), radial-gradient(1.2px 1.2px at 24% 52%, #fff4dc 99%, transparent),
+    radial-gradient(1.4px 1.4px at 82% 48%, #fff4dc 99%, transparent),
+    linear-gradient(180deg, #262d74 0%, #3f4296 45%, #6b60b4 66%) !important; }
+:root[data-theme="dark"] .intro-sun circle:nth-of-type(2) { fill: #f3e2b0; }
+:root[data-theme="dark"] .intro-sun circle:nth-of-type(3) { fill: #fff6d6; }
+:root[data-theme="dark"] .intro-sun .k-rays { stroke: rgba(255, 240, 190, .16) !important; stroke-width: 18px !important; stroke-dasharray: none !important; }
+/* nuages de nuit : à demi fondus dans le ciel violet */
+:root[data-theme="dark"] .k-cloud { opacity: .45 !important; }
+:root[data-theme="dark"] #kSea stop:nth-child(1) { stop-color: #2f93b8; }
+:root[data-theme="dark"] #kSea stop:nth-child(2) { stop-color: #2a5fb0; }
+:root[data-theme="dark"] #kSea stop:nth-child(3) { stop-color: #22408f; }
+:root[data-theme="dark"] .intro-scene .k-line { stroke: #b9c6ff; }
+:root[data-theme="dark"] .intro-title span { --o: #3b7fe0; text-shadow: 3px 0 0 var(--o), -3px 0 0 var(--o), 0 3px 0 var(--o), 0 -3px 0 var(--o), 2px 2px 0 var(--o), -2px 2px 0 var(--o), 2px -2px 0 var(--o), -2px -2px 0 var(--o),
+    0 8px 0 var(--o), 3px 7px 0 var(--o), -3px 7px 0 var(--o), 0 12px 18px rgba(8, 6, 40, .5); }
+:root[data-theme="dark"] .intro-title span:nth-child(2n) { --o: var(--k-roof); }
+:root[data-theme="dark"] .intro-title span:nth-child(3n) { --o: #3fae2a; }
+:root[data-theme="dark"] .intro-title span:nth-child(4) { --o: #ff5d8f; }
+:root[data-theme="dark"] .intro-title span:nth-child(7) { --o: #ffb31f; }
+
+/* ---------- Plateaux des mini-jeux, version nuit ---------- */
+/* (leurs règles sombres d'origine étaient grises / bleu pétrole : on les ramène à la palette de la nuit) */
+:root[data-theme="dark"] .cell-grid.demineur {
+  --sea: #3f72cc; --sea-hi: #4d82dc; --sea-edge: #2b55a8;
+  --sand: #2f3466; --sand-edge: #262a5a; --rock: #fff4dc;
+  --n1: #8cc0ff; --n2: #8fe0a0; --n3: #ffab7a; --n4: #c4b2ff; --n5: #ff9cb6; --n6: #7ee0d2; --n7: #e2ddff; --n8: #fff4dc;
+}
+:root[data-theme="dark"] { --rh-sea: #3466b8; --rh-sea-deep: #2b56a2; --rh-spot: rgba(255, 255, 255, .07); --rh-shadow: rgba(8, 6, 40, .45);
+  --rh-foam: rgba(220, 230, 255, .5); --rh-sun: rgba(255, 220, 140, .14); --rh-gull: #e2ddff; }
+:root[data-theme="dark"] .bataille-wrap { --sea: #3a6cc4; --sea-hi: #4a7cd4; --sea-edge: #2b55a8; --sea-open: #2b2f62; --sea-sunk: #2f4f96; }:root[data-theme="dark"] .simon { --shell-op: .8; }
+:root[data-theme="dark"] .simon-shell .sh-ridge { stroke: #1a1b45; stroke-opacity: .3; }

@@ -60,6 +60,16 @@
     return mat;
   };
   const lambert = (color, extra) => toonMat(Object.assign({ color }, extra || {}));
+  // Fenêtres et lanternes qui s'allument la nuit : l'attribut « glow » (0..1.6) des géométries
+  // fusionnées ajoute une lueur dorée, dosée par l'heure (nightU). Une seule fonction partagée :
+  // tous ces matériaux réutilisent le même programme.
+  function glowCompile(sh) {
+    sh.uniforms.uNight = nightU; sh.uniforms.uGlowCol = glowColU;
+    sh.vertexShader = 'attribute float glow;\nvarying float vGlow;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = glow;');
+    sh.fragmentShader = 'uniform float uNight;\nuniform vec3 uGlowCol;\nvarying float vGlow;\n' + sh.fragmentShader
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += uGlowCol * vGlow * uNight;');
+  }
+  const glowMat = (mat) => { mat.onBeforeCompile = glowCompile; return mat; };
   const OUTLINE = false; // contour encré du héros (non retenu : coûteux sur téléphone)
   const chapterOf = (L) => Math.floor(L / PER);
   const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -183,65 +193,166 @@
   // ------------------------------------------------------------------
   // Décor global : ciel, mer, nuages, oiseaux, voilier, poussières de lumière
   // ------------------------------------------------------------------
-  let dayBg, nightBg, hemi, cloudMat, moon, isDark = false;
+  let skyTex, skyCanvas, hemi, cloudMat, moon, isDark = false, skyStars = null, heroLamp = null;
   const mountains = [];
+  // Ciel : un seul dégradé vertical (toile 4 × 256), repeint quand la lumière change d'heure.
   function makeSky() {
-    const gradient = (stops) => canvasTexture(4, 256, (g, w, h) => {
-      const grd = g.createLinearGradient(0, 0, 0, h);
-      stops.forEach(([k, c]) => grd.addColorStop(k, c));
-      g.fillStyle = grd; g.fillRect(0, 0, w, h);
-    });
-    dayBg = gradient([[0, '#5ec3f2'], [0.55, '#a9e3fb'], [1, FOG]]);
-    nightBg = dayBg;
-    scene.background = dayBg;
+    skyCanvas = document.createElement('canvas');
+    skyCanvas.width = 4; skyCanvas.height = 256;
+    skyTex = new THREE.CanvasTexture(skyCanvas);
+    skyTex.encoding = THREE.sRGBEncoding;
+    scene.background = skyTex;
     scene.fog = new THREE.Fog(FOG, 30, 85);
-    // (la lune n'est plus utilisée : l'archipel reste ensoleillé ; l'objet reste pour l'API)
-    moon = new THREE.Object3D();
+    makeMoon();
+    makeSkyStars();
+  }
+  function paintSky(stops) {
+    const g = skyCanvas.getContext('2d');
+    const grd = g.createLinearGradient(0, 0, 0, 256);
+    grd.addColorStop(0, stops[0]); grd.addColorStop(0.55, stops[1]); grd.addColorStop(1, stops[2]);
+    g.fillStyle = grd; g.fillRect(0, 0, 4, 256);
+    skyTex.needsUpdate = true;
+  }
+  // Lune de dessin animé : un gros disque crème, deux cratères doux et un halo (un seul sprite).
+  function makeMoon() {
+    const tex = canvasTexture(128, 128, (g) => {
+      const halo = g.createRadialGradient(64, 64, 20, 64, 64, 64);
+      halo.addColorStop(0, 'rgba(255,244,200,.55)'); halo.addColorStop(0.5, 'rgba(255,236,190,.18)'); halo.addColorStop(1, 'rgba(255,236,190,0)');
+      g.fillStyle = halo; g.fillRect(0, 0, 128, 128);
+      g.fillStyle = '#fff6d6'; g.beginPath(); g.arc(64, 64, 24, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(232,214,160,.7)';
+      g.beginPath(); g.arc(57, 58, 6, 0, Math.PI * 2); g.fill();
+      g.beginPath(); g.arc(72, 72, 4, 0, Math.PI * 2); g.fill();
+      g.beginPath(); g.arc(70, 54, 2.6, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(255,255,255,.8)'; g.beginPath(); g.ellipse(55, 47, 7, 3.5, -0.6, 0, Math.PI * 2); g.fill();
+    });
+    moon = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false, opacity: 0, toneMapped: false }));
+    moon.scale.set(16, 16, 1);
     moon.visible = false;
+    scene.add(moon);
+  }
+  // Étoiles du ciel nocturne : petites croix douces qui scintillent (un nuage de points, shader minuscule).
+  function makeSkyStars() {
+    const N = 170, pos = new Float32Array(N * 3), ph = new Float32Array(N), sz = new Float32Array(N);
+    const r = C.makeRng('ciel:etoiles');
+    for (let i = 0; i < N; i++) {
+      const a = r() * Math.PI * 2, y = 0.05 + Math.pow(r(), 0.85) * 0.9, h = Math.sqrt(1 - y * y);
+      pos[i * 3] = Math.cos(a) * h; pos[i * 3 + 1] = y; pos[i * 3 + 2] = Math.sin(a) * h;
+      ph[i] = r() * 6.283; sz[i] = 3 + r() * 5;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('phase', new THREE.BufferAttribute(ph, 1));
+    geo.setAttribute('size', new THREE.BufferAttribute(sz, 1));
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { uTime: { value: 0 }, uOpacity: { value: 0 }, uScale: { value: 1 } },
+      vertexShader: [
+        'attribute float phase; attribute float size; uniform float uTime; uniform float uScale; varying float vTw;',
+        'void main() {',
+        '  vTw = 0.55 + 0.45 * sin(uTime * (1.2 + fract(phase) * 1.8) + phase * 7.0);',
+        '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
+        '  gl_PointSize = size * (0.75 + 0.45 * vTw) * uScale;',
+        '}'].join('\n'),
+      fragmentShader: [
+        'uniform float uOpacity; varying float vTw;',
+        'void main() {',
+        '  vec2 q = abs(gl_PointCoord - 0.5);',
+        '  float core = pow(smoothstep(0.5, 0.0, length(q)), 3.0);',
+        '  float rays = max(smoothstep(0.07, 0.0, q.x) * smoothstep(0.5, 0.05, q.y), smoothstep(0.07, 0.0, q.y) * smoothstep(0.5, 0.05, q.x));',
+        '  float a = max(core, rays * 0.85) * vTw * uOpacity;',
+        '  if (a < 0.01) discard;',
+        '  gl_FragColor = vec4(1.0, 0.96, 0.82, a);',
+        '}'].join('\n'),
+      transparent: true, depthWrite: false
+    });
+    skyStars = new THREE.Points(geo, mat);
+    skyStars.scale.setScalar(96);
+    skyStars.frustumCulled = false;
+    skyStars.visible = false;
+    scene.add(skyStars);
   }
 
   // ------------------------------------------------------------------
-  // Lumière : un grand soleil de dessin animé, toujours joyeux. Le mode sombre choisi
-  // (setTime(…, true)) donne une fin d'après-midi dorée, jamais une nuit noire.
+  // Lumière selon l'heure réelle : aube pêche et rose, grand jour ensoleillé, heure dorée,
+  // crépuscule rose-violet, puis une nuit de dessin animé (bleu-violet profond mais
+  // amical, jamais noire : lune ronde, étoiles qui scintillent, fenêtres et lanternes
+  // allumées, clair de lune qui garde l'île lisible). Les moments clés sont interpolés
+  // en douceur ; l'horloge est relue toutes les 30 s (aucun saut).
   // ------------------------------------------------------------------
-  // sea = [eau du large, eau du lagon autour des îles]
+  // sea = [eau du large, eau du lagon] ; hemi = [ciel, sol, intensité] ; sun = [couleur, intensité]
+  // night = 0..1 (fenêtres, lune, étoiles, lucioles) ; spark = paillettes sur l'eau ; dir = direction du soleil / de la lune
   const MOMENTS = {
+    nuit: { sky: ['#262d74', '#3f4296', '#6b60b4'], fog: '#4c4b98', sea: ['#22408f', '#2f93b8'], hemi: ['#98a2f0', '#6656a6', 0.8],
+      sun: ['#b4c0ff', 0.42], cloud: ['#8f92d8', 0.9], mtn: '#8e8cd6', motes: ['#ffeb8a', 1, 0.16], night: 1, spark: 0.6, dir: [-9, 15, -5] },
+    aube: { sky: ['#8cb2ee', '#ffc3d2', '#ffe3cc'], fog: '#ffd9d4', sea: ['#3b8fdc', '#6ee2d2'], hemi: ['#ffe2ec', '#ffd6c2', 0.64],
+      sun: ['#ffcfb4', 0.74], cloud: ['#ffe7f0', 1], mtn: '#ffe2ea', motes: ['#ffe0ec', 0.8, 0.11], night: 0, spark: 0.8, dir: [-12, 9, 7] },
     jour: { sky: ['#5ec3f2', '#a9e3fb', FOG], fog: FOG, sea: ['#1d9be0', '#3fe0d0'], hemi: ['#d8f1ff', '#ffe7c4', 0.62],
-      sun: ['#fff6e0', 0.78], cloud: ['#ffffff', 1], mtn: '#ffffff', motes: ['#ffffff', 0.7, 0.1], night: 0, env: 0 },
-    dore: { sky: ['#7cb8f0', '#ffd9a8', '#ffe9c9'], fog: '#ffe6c6', sea: ['#2a8fd6', '#52d8c8'], hemi: ['#ffe9d2', '#ffd6b0', 0.62],
-      sun: ['#ffd9a0', 0.8], cloud: ['#fff3e6', 1], mtn: '#fff1e2', motes: ['#ffe9b8', 0.85, 0.12], night: 0, env: 0 }
+      sun: ['#fff6e0', 0.78], cloud: ['#ffffff', 1], mtn: '#ffffff', motes: ['#ffffff', 0.7, 0.1], night: 0, spark: 1, dir: [7, 16, 9] },
+    dore: { sky: ['#6fb2ec', '#ffcd8e', '#ffe4ba'], fog: '#ffdfb4', sea: ['#2a8cd4', '#56d8c4'], hemi: ['#ffe6c8', '#ffcf9e', 0.62],
+      sun: ['#ffc27c', 0.86], cloud: ['#fff0dc', 1], mtn: '#fff0dc', motes: ['#ffe2a0', 0.85, 0.12], night: 0, spark: 1, dir: [13, 8, 5] },
+    crepuscule: { sky: ['#5d57b8', '#ff96b6', '#ffc6a0'], fog: '#eeaac4', sea: ['#3557ae', '#4fbcc9'], hemi: ['#dcc4ff', '#ffb8a2', 0.74],
+      sun: ['#ffa088', 0.6], cloud: ['#ffc2d4', 0.96], mtn: '#ebb6d8', motes: ['#ffe6a8', 0.9, 0.13], night: 0.45, spark: 0.8, dir: [14, 6, 3] }
   };
-  MOMENTS.nuit = MOMENTS.dore; MOMENTS.aube = MOMENTS.jour; MOMENTS.crepuscule = MOMENTS.dore;
+  // [heure, moment] : la lumière glisse d'un moment au suivant (lissage en S)
+  const HOURS = [[0, 'nuit'], [5.2, 'nuit'], [6.6, 'aube'], [8, 'aube'], [9.5, 'jour'], [16, 'jour'], [17.3, 'dore'],
+    [18.8, 'dore'], [20, 'crepuscule'], [21.2, 'nuit'], [24, 'nuit']];
   const SUN_K = 1, HEMI_K = 1;
   let envMap = null;
   let calm = false;
   let cine = null; // séquence « mode concentration » en cours
-  let lightHour = 12, forceNight = false, skyKey = '', mtnColor = '#ffffff';
+  // lightHour = heure affichée ; elle rejoint en douceur l'heure visée (horloge, aperçu, verrou « jour »)
+  let lightHour = 12, forceNight = false, lockDay = false, previewHour = null, clockOffset = 0, clockT = 0;
+  let skyKey = '', mtnColor = '#ffffff', nightK = 0;
+  const sunDir = { x: 7, y: 16, z: 9 };
+  // lueur nocturne des fenêtres / lanternes (attribut « glow » des géométries fusionnées)
+  const nightU = { value: 0 }, glowColU = { value: null }, moonU = { value: new Float32Array([0, -1]) };
 
   function mix(a, b, k) {
     if (typeof a === 'number') return a + (b - a) * k;
     if (Array.isArray(a)) return a.map((v, i) => mix(v, b[i], k));
     return '#' + new THREE.Color(a).lerp(new THREE.Color(b), k).getHexString();
   }
-  function paletteAt() { return forceNight ? MOMENTS.dore : MOMENTS.jour; }
+  function paletteAt(h) {
+    h = ((h % 24) + 24) % 24;
+    let i = 0;
+    while (i < HOURS.length - 2 && h >= HOURS[i + 1][0]) i++;
+    const [h0, a] = HOURS[i], [h1, b] = HOURS[i + 1];
+    const k = smooth(h0, h1, h);
+    const A = MOMENTS[a], B = MOMENTS[b];
+    if (a === b || k <= 0) return A;
+    if (k >= 1) return B;
+    const out = {};
+    Object.keys(A).forEach((key) => { out[key] = mix(A[key], B[key], k); });
+    return out;
+  }
+  const clockHour = () => { const d = new Date(); return d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600; };
+  function targetHour() {
+    if (previewHour != null) return previewHour;
+    if (forceNight) return 23;
+    if (lockDay) return 12;
+    return (((clockHour() + clockOffset) % 24) + 24) % 24;
+  }
+  // l'heure affichée rejoint l'heure visée par le plus court chemin sur le cadran (jamais de saut)
+  function stepLight(dt) {
+    clockT -= dt;
+    const goal = targetHour();
+    let d = goal - lightHour;
+    d = ((d % 24) + 36) % 24 - 12;
+    if (Math.abs(d) < 1e-4) return;
+    const mv = Math.abs(d) * (1 - Math.exp(-dt * 1.4)) + dt * 0.05;
+    lightHour = (((lightHour + Math.sign(d) * Math.min(Math.abs(d), mv)) % 24) + 24) % 24;
+    if (clockT <= 0 || Math.abs(d) > 0.004) { clockT = 1; applyLight(); } // (la course lente de l'horloge : une mise à jour par seconde suffit)
+  }
 
   function applyLight() {
     const p = paletteAt(lightHour);
     const key = p.sky.join();
-    if (key !== skyKey) { // le dégradé du ciel n'est redessiné que s'il change
-      skyKey = key;
-      if (scene.background && scene.background.dispose && scene.background !== dayBg) scene.background.dispose();
-      scene.background = p === MOMENTS.jour ? dayBg : canvasTexture(4, 256, (g, w, h) => {
-        const grd = g.createLinearGradient(0, 0, 0, h);
-        grd.addColorStop(0, p.sky[0]); grd.addColorStop(0.55, p.sky[1]); grd.addColorStop(1, p.sky[2]);
-        g.fillStyle = grd; g.fillRect(0, 0, w, h);
-      });
-    }
+    if (key !== skyKey) { skyKey = key; paintSky(p.sky); } // (repeint seulement si le ciel change)
     setLin(scene.fog.color, p.fog);
     if (sea.material.userData.deep) {
       setLin(sea.material.userData.deep.value, p.sea[0]);
       setLin(sea.material.userData.shallow.value, p.sea[1]);
-      sea.material.userData.spark.value = 1;
+      sea.material.userData.spark.value = p.spark;
     }
     setLin(hemi.color, p.hemi[0]); setLin(hemi.groundColor, p.hemi[1]);
     hemi.intensity = p.hemi[2] * HEMI_K;
@@ -250,12 +361,20 @@
     mtnColor = p.mtn;
     mountains.forEach((m) => setLin(m.material.color, p.mtn));
     setLin(motes.material.color, p.motes[0]); motes.material.opacity = p.motes[1]; motes.material.size = p.motes[2];
-    isDark = false;
+    sunDir.x = p.dir[0]; sunDir.y = p.dir[1]; sunDir.z = p.dir[2];
+    // la nuit : fenêtres, lune, étoiles, lanterne d'Ulysse (fondu dès le crépuscule)
+    nightK = p.night;
+    nightU.value = p.night;
+    const n2 = smooth(0.35, 1, p.night);
+    moon.material.opacity = n2; moon.visible = n2 > 0.01;
+    skyStars.material.uniforms.uOpacity.value = n2; skyStars.visible = n2 > 0.01;
+    if (heroLamp) heroLamp.intensity = 0.9 * p.night;
+    isDark = p.night > 0.5;
   }
 
-  // soleil haut, de trois quarts : ombres courtes et nettes, comme dans un dessin animé
+  // soleil (ou lune) de trois quarts : ombres nettes ; bas et long le matin et le soir
   function sunOffset() {
-    return forceNight ? new THREE.Vector3(12, 11, 6) : new THREE.Vector3(7, 16, 9);
+    return new THREE.Vector3(sunDir.x, sunDir.y, sunDir.z);
   }
 
   const SEA_SIZE = 130, SEA_SEG = 48;
@@ -271,6 +390,7 @@
     U.shallow = { value: lin('#3fe0d0') };
     U.isl = { value: [0, 1, 2, 3, 4, 5].map(() => new THREE.Vector4(0, 0, -99, 0)) };
     U.spark = { value: 1 };
+    U.moonDir = { value: new THREE.Vector2(0, -1) };
     seaMat.onBeforeCompile = (sh) => {
       sh.uniforms.uTime = U.time; sh.uniforms.deep = U.deep; sh.uniforms.shallow = U.shallow; sh.uniforms.isl = U.isl;
       sh.vertexShader = 'uniform float uTime;\nvarying vec3 vW;\n' + sh.vertexShader
@@ -281,8 +401,8 @@
           'vec3 objectNormal = normalize(vec3(-cos(a1) * 0.0225, 1.0, sin(a2) * 0.024));'
         ].join('\n'))
         .replace('#include <begin_vertex>', 'vec3 transformed = vec3(position); transformed.y += wv; vW = wp0;');
-      sh.uniforms.uSpark = U.spark;
-      sh.fragmentShader = 'uniform float uTime;\nuniform float uSpark;\nuniform vec3 deep;\nuniform vec3 shallow;\nuniform vec4 isl[6];\nvarying vec3 vW;\n' + sh.fragmentShader
+      sh.uniforms.uSpark = U.spark; sh.uniforms.uNightK = nightU; sh.uniforms.uMoonDir = U.moonDir;
+      sh.fragmentShader = 'uniform float uTime;\nuniform float uSpark;\nuniform float uNightK;\nuniform vec2 uMoonDir;\nuniform vec3 deep;\nuniform vec3 shallow;\nuniform vec4 isl[6];\nvarying vec3 vW;\n' + sh.fragmentShader
         .replace('vec4 diffuseColor = vec4( diffuse, opacity );', [
           'float near = 99.0;',
           'for (int i = 0; i < 6; i++) { vec4 s = isl[i]; near = min(near, length(vW.xz - s.xy) - s.z + (1.0 - s.w) * 2.5); }',
@@ -307,6 +427,14 @@
           'vec2 g2 = p + vec2(sin(p.y * 0.73 + t * 0.3), cos(p.x * 0.61 - t * 0.25)) * 1.7;',
           'float gl = pow(max(0.0, sin(g2.x * 13.0 + t * 2.1) * sin(g2.y * 11.0 - t * 1.7)), 30.0) * smoothstep(0.55, 0.95, sin(p.x * 0.45 + p.y * 0.31 + t * 0.2) * 0.5 + 0.5);',
           'base += vec3(1.0, 0.97, 0.88) * gl * 0.35 * uSpark * (1.0 - smoothstep(4.0, 14.0, near));',
+          // la nuit : un chemin de lune qui miroite sur l'eau, vers la lune
+          'if (uNightK > 0.01) {',
+          '  vec2 toF = vW.xz - cameraPosition.xz; float dl = length(toF); vec2 dF = toF / max(dl, 0.001);',
+          '  float lat = abs(dF.x * uMoonDir.y - dF.y * uMoonDir.x);',
+          '  float glade = step(0.0, dot(dF, uMoonDir)) * (1.0 - smoothstep(0.03, 0.1 + dl * 0.004, lat)) * smoothstep(2.0, 9.0, dl);',
+          '  float rip = 0.5 + 0.5 * sin(p.y * 6.0 + p.x * 2.0 + t * 2.4) * sin(p.x * 5.0 - t * 1.7);',
+          '  base += vec3(1.0, 0.93, 0.72) * glade * (0.2 + 0.6 * rip * rip) * uNightK * 0.55 * (1.0 - sh * 0.6);',
+          '}',
           'vec4 diffuseColor = vec4(base, opacity);'
         ].join('\n'))
         .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n' + [
@@ -482,7 +610,8 @@
   // Géographie : la chaîne d'îles et leur relief
   // ------------------------------------------------------------------
   function centerOf(c) { return new THREE.Vector3(c * SPACING, 0, Math.sin(c * 1.15) * 7); }
-  function radiusOf(c) { return 5.4 + C.makeRng('rayon:' + c)() * 0.4; }
+  // les îles grandissent un peu au fil du voyage (sentiment de progrès)
+  function radiusOf(c) { return 5.4 + C.makeRng('rayon:' + c)() * 0.4 + Math.min(0.9, c * 0.035); }
   function flat(v) { v.y = 0; return v.normalize(); }
   function edgeToward(c, other, k) {
     const ctr = centerOf(c);
@@ -496,7 +625,9 @@
     let h = 0;
     ch.hills.forEach((b) => {
       const d2 = (x - b.x) * (x - b.x) + (z - b.z) * (z - b.z);
-      h += b.a * Math.exp(-d2 / (2 * b.s * b.s));
+      // butte rocheuse (rad) : bosse ronde et bornée, nulle au-delà de son rayon (le sentier reste à plat)
+      if (b.rad) { const d = Math.sqrt(d2) / b.rad; if (d < 1) h += b.a * (1 - d * d) * (1 - d * d); }
+      else h += b.a * Math.exp(-d2 / (2 * b.s * b.s));
     });
     const d = Math.hypot(x, z) / ch.r;
     return TOP + h * (1 - smooth(0.62, 0.86, d)) - smooth(0.86, 1.0, d) * 0.12;
@@ -559,6 +690,7 @@
   // Les niveaux sont posés à intervalles réguliers le long de cette ligne (ordre = ordre des niveaux).
   // ------------------------------------------------------------------
   const LV0 = 0.08, LV1 = 0.84, GATE_F = 0.9, PATH_W = 0.34;
+  const PATH_STYLES = ['s', 'coast', 'zigzag', 'loop', 's', 'spiral'];
   const levelF = (k) => LV0 + (LV1 - LV0) * k / (PER - 1);
   function layoutPath(ch, entry, exit) {
     const R = ch.r, rng = ch.rng;
@@ -570,10 +702,30 @@
     // une seule grande courbe en S : elle laisse deux larges zones, une de chaque côté
     const waves = 1, amp = R * (0.26 + rng() * 0.08), ph = rng() < 0.5 ? 0 : Math.PI;
     const pts = [a];
-    const n = 9;
+    // Tracé propre à chaque île (choisi par son thème, sinon par son numéro) :
+    // s = grand S ; zigzag = lacets serrés ; coast = longe la côte ; loop = fait le tour de la butte
+    // centrale ; spiral = s'enroule vers le cœur de l'île puis ressort
+    const style = ch.isle.path || PATH_STYLES[ch.c % PATH_STYLES.length];
+    ch.pathStyle = style;
+    const aA = Math.atan2(a.z, a.x), aB = Math.atan2(b.z, b.x);
+    let dA = Math.atan2(Math.sin(aB - aA), Math.cos(aB - aA));
+    if (Math.abs(Math.abs(dA) - Math.PI) < 0.35) dA = Math.abs(dA) * (ph ? 1 : -1); // (îles opposées : le côté suit la phase)
+    const n = style === 'zigzag' ? 13 : style === 's' ? 9 : 11;
     for (let i = 1; i <= n; i++) {
       const t = i / (n + 1);
-      const p = a.clone().addScaledVector(dir, len * t).addScaledVector(side, Math.sin(Math.PI * 2 * waves * t + ph) * amp * Math.sin(Math.PI * t));
+      let p;
+      if (style === 'zigzag') {
+        p = a.clone().addScaledVector(dir, len * t).addScaledVector(side, Math.sin(Math.PI * 4 * t + ph) * R * 0.2 * Math.sin(Math.PI * t));
+      } else if (style === 'coast' || style === 'loop' || style === 'spiral') {
+        const rr = style === 'coast' ? R * 0.68 : style === 'loop' ? R * (0.98 - 0.52 * Math.sin(Math.PI * Math.min(1, t * 1.6)) * Math.sin(Math.PI * Math.min(1, (1 - t) * 1.6)))
+          : R * (0.98 - 0.66 * Math.sin(Math.PI * t));
+        const ang = aA + dA * t + (style === 'spiral' ? Math.sign(dA || 1) * 1.1 * Math.sin(Math.PI * t) : 0);
+        const blend = style === 'coast' ? smooth(0, 0.18, Math.min(t, 1 - t)) : 1;
+        p = new THREE.Vector3(Math.cos(ang) * rr, 0, Math.sin(ang) * rr);
+        if (blend < 1) p.lerp(a.clone().lerp(b, t), 1 - blend);
+      } else {
+        p = a.clone().addScaledVector(dir, len * t).addScaledVector(side, Math.sin(Math.PI * 2 * waves * t + ph) * amp * Math.sin(Math.PI * t));
+      }
       const r = Math.hypot(p.x, p.z);
       if (r > R * 0.72) p.multiplyScalar(R * 0.72 / r);
       pts.push(p);
@@ -692,23 +844,26 @@
 
   // petite fusion de géométries colorées (un seul appel de dessin) : [{ geo, color, m: Matrix4 }]
   function mergeParts(parts) {
-    const pos = [], nor = [], col = [];
+    const pos = [], nor = [], col = [], glow = [];
     const v = new THREE.Vector3(), c = new THREE.Color(), nm = new THREE.Matrix3();
     parts.forEach((p) => {
       const g = p.geo.index ? p.geo.toNonIndexed() : p.geo;
       const P = g.attributes.position, N = g.attributes.normal;
       nm.getNormalMatrix(p.m);
       c.copy(lin(p.color));
+      const gl = p.glow || 0; // lueur nocturne (fenêtre, lanterne) : voir glowCompile
       for (let i = 0; i < P.count; i++) {
         v.fromBufferAttribute(P, i).applyMatrix4(p.m); pos.push(v.x, v.y, v.z);
         v.fromBufferAttribute(N, i).applyMatrix3(nm).normalize(); nor.push(v.x, v.y, v.z);
         col.push(c.r, c.g, c.b);
+        glow.push(gl);
       }
     });
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    geo.setAttribute('glow', new THREE.Float32BufferAttribute(glow, 1));
     geo.computeBoundingSphere();
     return geo;
   }
@@ -744,23 +899,43 @@
   // massifs de fleurs. Tout est posé par règles (zones, anneaux, alignements), loin du
   // sentier, puis fusionné en un seul maillage par île (un appel de dessin).
   // ------------------------------------------------------------------
-  // grass = [herbe, taches plus fraîches, hauteurs] ; roofs = toits du village ;
-  // tree = essence du bosquet ; animals = [espèce, nombre] ; landmark = monument
+  // Les 30 îles suivent la route d'Ulysse dans l'Odyssée, dans l'ordre d'Homère : chaque île
+  // raconte son épisode par son monument (sans un mot). Les paysages glissent d'une île à
+  // l'autre : Égée verte → terres sauvages → îles magiques → tempêtes → jardins luxuriants →
+  // Schérie dorée → retour à Ithaque, plus riche à chaque étape.
+  // grass = [herbe, taches plus fraîches, hauteurs] ; roofs = toits du village ; tree = essence du bosquet ;
+  // animals = [espèce, nombre] ; landmark = monument ; rock = teinte des rochers ; sand = plage ; path = tracé
   const ISLES = [
-    { id: 'troie', grass: ['#79d14a', '#8fdc55', '#b8e86a'], tree: 'olive', grove: 'orchard', roofs: ['#ee7a4d', '#f4a259'], flowers: ['#ff5d8f', '#ffd23f'], animals: ['sheep', 2], landmark: 'horse' },
-    { id: 'cicones', grass: ['#6fd04f', '#86dc5c', '#b5e86e'], tree: 'round', grove: 'ring', roofs: ['#3d8ee8', '#ee7a4d'], flowers: ['#ffd23f', '#ff7a5c'], animals: ['sheep', 3], landmark: 'market' },
-    { id: 'lotus', grass: ['#62d877', '#7de38a', '#b0ee8e'], tree: 'palm', grove: 'ring', roofs: ['#ff8fb1', '#3db8c9'], flowers: ['#ff8fc0', '#ffffff'], animals: null, landmark: 'lotus', beach: 'palms' },
-    { id: 'cyclope', grass: ['#8bd24e', '#a0dc5a', '#c4e874'], tree: 'pine', grove: 'ring', roofs: ['#d9824a', '#c96f45'], flowers: ['#ffd23f', '#ffffff'], animals: ['sheep', 6], landmark: 'cave' },
-    { id: 'eolie', grass: ['#7ad65e', '#93e070', '#bdec86'], tree: 'round', grove: 'orchard', roofs: ['#3d8ee8', '#5aa9f0'], flowers: ['#7ec8ff', '#ffffff'], animals: ['sheep', 2], landmark: 'windmills' },
-    { id: 'lestrygons', grass: ['#76cc55', '#8ed866', '#b2e47c'], tree: 'pine', grove: 'ring', roofs: ['#ee7a4d', '#d9824a'], flowers: ['#ff5d5d', '#ffd23f'], animals: null, landmark: 'cliffs' },
-    { id: 'circe', grass: ['#6fd67e', '#8be092', '#b5eca4'], tree: 'round', grove: 'ring', roofs: ['#c86fd6', '#ff8fb1'], flowers: ['#d68bff', '#ff8fc0'], animals: ['pig', 4], landmark: 'palace' },
-    { id: 'ombres', grass: ['#7fd6b4', '#97e0c4', '#c0ecd8'], tree: 'cypress', grove: 'orchard', roofs: ['#8a7fe0', '#a99cf0'], flowers: ['#c7b8ff', '#ffffff'], animals: null, landmark: 'portal' },
-    { id: 'sirenes', grass: ['#7ddc6c', '#96e57e', '#c0f09a'], tree: 'palm', grove: 'ring', roofs: ['#3db8c9', '#5ad1c9'], flowers: ['#ff8fc0', '#ffd23f'], animals: null, landmark: 'shells', beach: 'palms' },
-    { id: 'charybde', grass: ['#72d35c', '#8bde6c', '#b4ea86'], tree: 'pine', grove: 'ring', roofs: ['#3d8ee8', '#ee7a4d'], flowers: ['#7ec8ff', '#ffd23f'], animals: ['sheep', 2], landmark: 'whirlpool' },
-    { id: 'thrinacie', grass: ['#a2d94a', '#b6e25a', '#d6ee7a'], tree: 'olive', grove: 'orchard', roofs: ['#f4a259', '#ee7a4d'], flowers: ['#ffd23f', '#ff9f3d'], animals: ['cow', 4], landmark: 'sun' },
-    { id: 'ogygie', grass: ['#5fd884', '#7be396', '#aaeeb0'], tree: 'palm', grove: 'ring', roofs: ['#3db8c9', '#ff8fb1'], flowers: ['#ff8fc0', '#d68bff'], animals: null, landmark: 'grotto', beach: 'palms' },
-    { id: 'scherie', grass: ['#78d65c', '#90e06e', '#b8ec88'], tree: 'round', grove: 'orchard', roofs: ['#f2c14e', '#3d8ee8'], flowers: ['#ffd23f', '#ff5d8f'], animals: ['sheep', 2], landmark: 'palaceGold' },
-    { id: 'ithaque', grass: ['#80d251', '#97dd62', '#bfe97a'], tree: 'olive', grove: 'orchard', roofs: ['#ee7a4d', '#f4a259'], flowers: ['#ff5d8f', '#ffffff'], animals: ['sheep', 3], landmark: 'home' }
+    { id: 'troie', grass: ['#79d14a', '#8fdc55', '#b8e86a'], tree: 'olive', grove: 'orchard', roofs: ['#ee7a4d', '#f4a259'], flowers: ['#ff5d8f', '#ffd23f'], animals: ['sheep', 2], landmark: 'horse', rock: '#e6cfa6', path: 's' },
+    { id: 'ismaros', grass: ['#6fd04f', '#86dc5c', '#b5e86e'], tree: 'round', grove: 'ring', roofs: ['#3d8ee8', '#ee7a4d'], flowers: ['#ffd23f', '#ff7a5c'], animals: ['sheep', 3], landmark: 'market', rock: '#d9c7b0', path: 'coast' },
+    { id: 'malee', grass: ['#68c95a', '#7fd46c', '#a9e08a'], tree: 'bent', grove: 'ring', roofs: ['#3d8ee8', '#5aa9f0'], flowers: ['#7ec8ff', '#ffffff'], animals: null, landmark: 'cape', rock: '#b9c3cf', path: 'zigzag' },
+    { id: 'lotus', grass: ['#62d877', '#7de38a', '#b0ee8e'], tree: 'palm', grove: 'ring', roofs: ['#ff8fb1', '#3db8c9'], flowers: ['#ff8fc0', '#ffffff'], animals: null, landmark: 'lotus', beach: 'palms', rock: '#e9d3c0', path: 'loop' },
+    { id: 'chevres', grass: ['#7fcf48', '#95da58', '#bde572'], tree: 'pine', grove: 'ring', roofs: ['#d9824a', '#c96f45'], flowers: ['#ffd23f', '#ffffff'], animals: ['goat', 5], landmark: 'goats', rock: '#cbbfae', path: 's' },
+    { id: 'cyclope', grass: ['#8bd24e', '#a0dc5a', '#c4e874'], tree: 'pine', grove: 'ring', roofs: ['#d9824a', '#c96f45'], flowers: ['#ffd23f', '#ffffff'], animals: ['sheep', 6], landmark: 'cave', rock: '#c3b6d6', path: 'spiral' },
+    { id: 'eolie', grass: ['#7ad65e', '#93e070', '#bdec86'], tree: 'round', grove: 'orchard', roofs: ['#3d8ee8', '#5aa9f0'], flowers: ['#7ec8ff', '#ffffff'], animals: ['sheep', 2], landmark: 'windmills', rock: '#e8c48a', path: 'coast' },
+    { id: 'ithaquevue', grass: ['#80d251', '#97dd62', '#bfe97a'], tree: 'olive', grove: 'orchard', roofs: ['#ee7a4d', '#f4a259'], flowers: ['#ff5d8f', '#ffffff'], animals: null, landmark: 'windbag', rock: '#d9c7b0', path: 'zigzag' },
+    { id: 'lestrygons', grass: ['#76cc55', '#8ed866', '#b2e47c'], tree: 'pine', grove: 'ring', roofs: ['#ee7a4d', '#d9824a'], flowers: ['#ff5d5d', '#ffd23f'], animals: null, landmark: 'cliffs', rock: '#f0b27a', path: 's' },
+    { id: 'circe', grass: ['#6fd67e', '#8be092', '#b5eca4'], tree: 'round', grove: 'ring', roofs: ['#c86fd6', '#ff8fb1'], flowers: ['#d68bff', '#ff8fc0'], animals: ['pig', 4], landmark: 'palace', rock: '#d8c2e8', path: 'loop' },
+    { id: 'ombres', grass: ['#7fd6b4', '#97e0c4', '#c0ecd8'], tree: 'poplar', grove: 'orchard', roofs: ['#8a7fe0', '#a99cf0'], flowers: ['#c7b8ff', '#ffffff'], animals: null, landmark: 'portal', rock: '#b8b0dc', path: 'spiral' },
+    { id: 'elpenor', grass: ['#78d39a', '#90deac', '#b9eac6'], tree: 'cypress', grove: 'orchard', roofs: ['#c86fd6', '#8a7fe0'], flowers: ['#c7b8ff', '#ffd23f'], animals: null, landmark: 'oar', rock: '#cdbfdc', path: 'coast' },
+    { id: 'sirenes', grass: ['#7ddc6c', '#96e57e', '#c0f09a'], tree: 'palm', grove: 'ring', roofs: ['#3db8c9', '#5ad1c9'], flowers: ['#ff8fc0', '#ffd23f'], animals: null, landmark: 'shells', beach: 'palms', rock: '#c9c1d8', path: 's' },
+    { id: 'errantes', grass: ['#72d68a', '#8be09c', '#b6ecbe'], tree: 'pine', grove: 'ring', roofs: ['#3d8ee8', '#3db8c9'], flowers: ['#7ec8ff', '#d68bff'], animals: null, landmark: 'clashing', rock: '#a9b4d6', path: 'zigzag' },
+    { id: 'charybde', grass: ['#72d35c', '#8bde6c', '#b4ea86'], tree: 'fig', grove: 'ring', roofs: ['#3d8ee8', '#ee7a4d'], flowers: ['#7ec8ff', '#ffd23f'], animals: ['sheep', 2], landmark: 'whirlpool', rock: '#c3b6d6', path: 'spiral' },
+    { id: 'thrinacie', grass: ['#a2d94a', '#b6e25a', '#d6ee7a'], tree: 'olive', grove: 'orchard', roofs: ['#f4a259', '#ee7a4d'], flowers: ['#ffd23f', '#ff9f3d'], animals: ['cow', 4], landmark: 'sun', rock: '#f0cf8a', path: 'loop' },
+    { id: 'naufrage', grass: ['#9ad65a', '#aedf6a', '#cfe98a'], tree: 'palm', grove: 'ring', roofs: ['#c98b4f', '#3d8ee8'], flowers: ['#ffd23f', '#ffffff'], animals: null, landmark: 'wreck', beach: 'palms', rock: '#d8c8b0', sand: '#fff0c4', path: 'coast' },
+    { id: 'ogygie', grass: ['#5fd884', '#7be396', '#aaeeb0'], tree: 'cypress', grove: 'ring', roofs: ['#3db8c9', '#ff8fb1'], flowers: ['#d68bff', '#ff8fc0'], animals: null, landmark: 'grotto', beach: 'palms', rock: '#e8c9a0', path: 's' },
+    { id: 'radeau', grass: ['#56d47a', '#70de8c', '#a2eaa6'], tree: 'pine', grove: 'orchard', roofs: ['#3db8c9', '#c98b4f'], flowers: ['#d68bff', '#ffffff'], animals: null, landmark: 'raft', beach: 'palms', rock: '#d9c4a6', path: 'zigzag' },
+    { id: 'tempete', grass: ['#63cf86', '#7cd998', '#a8e6b4'], tree: 'bent', grove: 'ring', roofs: ['#3d8ee8', '#5aa9f0'], flowers: ['#7ec8ff', '#ffffff'], animals: null, landmark: 'storm', rock: '#a9b4c8', path: 'spiral' },
+    { id: 'nausicaa', grass: ['#6fd65a', '#88e06c', '#b4ec88'], tree: 'round', grove: 'ring', roofs: ['#f2c14e', '#3d8ee8'], flowers: ['#ffd23f', '#ff8fc0'], animals: null, landmark: 'laundry', rock: '#e6d3b0', path: 'coast' },
+    { id: 'alcinoos', grass: ['#78d65c', '#90e06e', '#b8ec88'], tree: 'fruit', grove: 'orchard', roofs: ['#f2c14e', '#3d8ee8'], flowers: ['#ffd23f', '#ff5d8f'], animals: ['dog', 2], landmark: 'palaceGold', rock: '#f0d79a', path: 'loop' },
+    { id: 'jeux', grass: ['#7fd858', '#96e26a', '#bdee86'], tree: 'round', grove: 'ring', roofs: ['#f2c14e', '#ee7a4d'], flowers: ['#ffd23f', '#3d8ee8'], animals: null, landmark: 'games', rock: '#e6d3b0', path: 's' },
+    { id: 'navire', grass: ['#74d45e', '#8cde70', '#b4ea8a'], tree: 'palm', grove: 'ring', roofs: ['#f2c14e', '#3db8c9'], flowers: ['#ffd23f', '#ffffff'], animals: null, landmark: 'ship', beach: 'palms', rock: '#e8d2b0', path: 'coast' },
+    { id: 'phorkys', grass: ['#80d251', '#97dd62', '#bfe97a'], tree: 'olive', grove: 'orchard', roofs: ['#ee7a4d', '#f4a259'], flowers: ['#ff5d8f', '#ffffff'], animals: null, landmark: 'nymphs', rock: '#e2cfae', path: 'spiral' },
+    { id: 'eumee', grass: ['#86d24c', '#9cdc5c', '#c2e876'], tree: 'olive', grove: 'ring', roofs: ['#c98b4f', '#ee7a4d'], flowers: ['#ffd23f', '#ff5d8f'], animals: ['pig', 5], landmark: 'hut', rock: '#dcc8a6', path: 'zigzag' },
+    { id: 'palais', grass: ['#7fd250', '#96dc62', '#bde87a'], tree: 'cypress', grove: 'orchard', roofs: ['#ee7a4d', '#f2c14e'], flowers: ['#ff5d8f', '#ffd23f'], animals: ['dog', 1], landmark: 'feast', rock: '#e8d4b0', path: 'loop' },
+    { id: 'arc', grass: ['#82d34e', '#99dd60', '#c0e978'], tree: 'olive', grove: 'orchard', roofs: ['#ee7a4d', '#f4a259'], flowers: ['#ff5d8f', '#ffd23f'], animals: null, landmark: 'axes', rock: '#e2cfae', path: 's' },
+    { id: 'lit', grass: ['#7ed656', '#96e068', '#bdec82'], tree: 'olive', grove: 'ring', roofs: ['#ee7a4d', '#ff8fb1'], flowers: ['#ff8fc0', '#ffffff'], animals: null, landmark: 'bed', rock: '#e6d3b0', path: 'coast' },
+    { id: 'laerte', grass: ['#80d251', '#97dd62', '#bfe97a'], tree: 'fruit', grove: 'orchard', roofs: ['#ee7a4d', '#f4a259'], flowers: ['#ff5d8f', '#ffd23f', '#ffffff'], animals: ['sheep', 3], landmark: 'home', rock: '#e2cfae', path: 'loop' }
   ];
   const isleOf = (c) => ISLES[c % ISLES.length];
   const SAND = '#ffe3a1', CLIFF = '#f4bf7f', WHITE = '#fffaf0', BLUE = '#3d7fe0', WOOD = '#b77a45', WOOD_D = '#8a5a30';
@@ -808,6 +983,8 @@
         parts.push({ geo, color, m: base.clone().multiply(M4(x, y, z, ry, sx, sy == null ? sx : sy, sz == null ? sx : sz, rx, rz)) });
         return k;
       },
+      // la dernière pièce s'allume la nuit (fenêtre, lanterne) : k.add(…).lit()
+      lit(s) { parts[parts.length - 1].glow = s == null ? 1 : s; return k; },
       at(x, y, z, ry, s, fn) { const prev = base; base = prev.clone().multiply(M4(x, y, z, ry, s, s, s)); fn(); base = prev; return k; },
       pt(x, y, z) { return new THREE.Vector3(x, y, z).applyMatrix4(base); },
       rot() { return new THREE.Euler().setFromRotationMatrix(base, 'YXZ').y; }
@@ -854,6 +1031,26 @@
       k.add(G.ball, '#aad968', 0.2, 0.95, -0.12, 0.46, 0.34, 0.46);
       return;
     }
+    if (type === 'bent') { // pin tordu par le vent (caps battus par la tempête)
+      k.add(G.cyl, WOOD, 0.06, 0.25, 0, 0.12, 0.55, 0.12, 0, 0, -0.35);
+      k.add(G.cone, '#2fae6a', 0.3, 0.72, 0, 0.9, 0.5, 0.7, 0, 0, -0.55);
+      k.add(G.cone, '#44c47c', 0.48, 0.98, 0, 0.62, 0.42, 0.5, 0, 0, -0.65);
+      return;
+    }
+    if (type === 'poplar') { // peuplier argenté (bois de Perséphone)
+      k.add(G.cyl, '#d8d2c8', 0, 0.2, 0, 0.1, 0.4, 0.1);
+      k.add(G.ball, '#9fd8b0', 0, 1.05, 0, 0.46, 1.75 * j(), 0.46);
+      k.add(G.ball, '#c4ecd2', 0.06, 1.3, 0.06, 0.28, 0.9, 0.28);
+      return;
+    }
+    if (type === 'fig' || type === 'fruit') { // figuier / arbre fruitier : feuillage rond et fruits
+      k.add(G.cyl, '#9c7352', 0, 0.24, 0, 0.15, 0.48, 0.15);
+      k.add(G.ball, type === 'fig' ? '#3e9e48' : '#4cc04a', 0, 0.8, 0, 0.88 * j(), 0.66, 0.86);
+      k.add(G.ball, type === 'fig' ? '#4fb156' : '#62d25a', 0.18, 0.98, 0.1, 0.5);
+      const fc = type === 'fig' ? ['#8a4fa8', '#a565c0'] : ['#ff8a3d', '#ff5d5d', '#ffd23f'];
+      for (let i = 0; i < 6; i++) { const a = i * 1.05 + rng(); k.add(G.sphere, fc[i % fc.length], Math.cos(a) * 0.38, 0.72 + (i % 3) * 0.12, Math.sin(a) * 0.36, 0.12); }
+      return;
+    }
     // arbre rond (feuillus)
     k.add(G.cyl, WOOD, 0, 0.26, 0, 0.15, 0.52, 0.15);
     k.add(G.ball, '#3fbf45', 0, 0.82, 0, 0.82 * j());
@@ -884,8 +1081,8 @@
     k.add(G.box, WHITE, 0, 0.38, 0, 0.8, 0.68, 0.7);
     k.add(G.box, BLUE, 0, 0.2, 0.36, 0.22, 0.36, 0.04);
     k.add(G.sphere, '#ffd23f', 0.07, 0.2, 0.385, 0.03);
-    [-0.25, 0.25].forEach((x) => k.add(G.box, BLUE, x, 0.47, 0.36, 0.15, 0.15, 0.04));
-    k.add(G.box, BLUE, 0.41, 0.45, 0, 0.04, 0.15, 0.15);
+    [-0.25, 0.25].forEach((x) => k.add(G.box, BLUE, x, 0.47, 0.36, 0.15, 0.15, 0.04).lit());
+    k.add(G.box, BLUE, 0.41, 0.45, 0, 0.04, 0.15, 0.15).lit();
     k.add(G.box, '#ffffff', 0, 0.52, 0.37, 0.9, 0.025, 0.02);
     if (style === 'dome') {
       k.add(G.box, WHITE, 0, 0.74, 0, 0.84, 0.06, 0.74);
@@ -915,13 +1112,48 @@
     const G = geoLib();
     k.add(G.rock, col || '#c9c1d8', 0, sy * 0.36, 0, sx, sy, sz, ry || 0);
   }
+  // Rochers de dessin animé, plusieurs familles (une teinte par île, nuancée) :
+  // boulder = gros galet arrondi ; slab = dalle plate ; pebbles = tas de galets ;
+  // mossy = rocher coiffé de mousse ; arch = arche de pierre (côte)
+  function drawRockKind(k, kind, col, rng, x, z, s) {
+    const G = geoLib();
+    const base = new THREE.Color(col);
+    const tone = (f) => '#' + base.clone().multiplyScalar(f).getHexString();
+    const lt = '#' + base.clone().lerp(new THREE.Color('#ffffff'), 0.25).getHexString();
+    k.at(x, 0, z, rng() * 6, s, () => {
+      if (kind === 'boulder') {
+        k.add(G.ball, col, 0, 0.3, 0, 0.95, 0.7, 0.85);
+        k.add(G.ball, lt, -0.12, 0.5, 0.06, 0.55, 0.32, 0.5);
+        k.add(G.ball, tone(0.88), 0.38, 0.14, 0.18, 0.45, 0.32, 0.42);
+      } else if (kind === 'slab') {
+        k.add(G.cyl6, col, 0, 0.06, 0, 0.9, 0.12, 0.7);
+        k.add(G.cyl6, lt, 0.08, 0.13, 0.02, 0.6, 0.05, 0.45);
+        k.add(G.ball, tone(0.9), -0.45, 0.06, 0.25, 0.22, 0.14, 0.2);
+      } else if (kind === 'pebbles') {
+        [[0, 0, 0.32], [0.26, 0.12, 0.22], [-0.22, 0.16, 0.2], [0.08, -0.24, 0.18], [-0.3, -0.16, 0.14]].forEach(([px, pz, r], i) =>
+          k.add(G.ball, i % 2 ? lt : col, px, r * 0.38, pz, r, r * 0.72, r * 0.9));
+      } else if (kind === 'mossy') {
+        k.add(G.ball, col, 0, 0.26, 0, 0.75, 0.6, 0.7);
+        k.add(G.ball, '#5fcf4a', 0, 0.5, 0, 0.62, 0.2, 0.58);
+        k.add(G.ball, '#7ad85a', 0.12, 0.56, -0.08, 0.32, 0.12, 0.3);
+        k.add(G.ball, tone(0.85), -0.4, 0.1, 0.2, 0.3, 0.22, 0.28);
+      } else if (kind === 'arch') {
+        k.add(G.ball, col, -0.75, 0.55, 0, 0.55, 1.4, 0.6);
+        k.add(G.ball, col, 0.75, 0.55, 0, 0.55, 1.4, 0.6);
+        k.add(G.torus, col, 0, 0.75, 0, 1.6, 1.25, 2.4, 0, 0, 0);
+        k.add(G.ball, lt, 0, 1.38, 0, 1.0, 0.3, 0.55);
+        k.add(G.ball, '#5fcf4a', 0, 1.5, 0, 0.7, 0.14, 0.4);
+      }
+    });
+  }
   function drawLighthouse(k) {
     const G = geoLib();
     k.add(G.taper, WHITE, 0, 0.7, 0, 0.5, 1.4, 0.5);
     k.add(G.cyl, '#ff5d5d', 0, 0.55, 0, 0.47, 0.2, 0.47);
     k.add(G.cyl, '#ff5d5d', 0, 1.05, 0, 0.43, 0.2, 0.43);
     k.add(G.cyl, '#f3ead8', 0, 1.43, 0, 0.56, 0.06, 0.56);
-    k.add(G.cyl, '#ffe066', 0, 1.58, 0, 0.3, 0.26, 0.3);
+    k.add(G.cyl, '#ffe066', 0, 1.58, 0, 0.3, 0.26, 0.3).lit(1.6);
+    if (k.lamps) k.lamps.push(k.pt(0, 1.58, 0));
     k.add(G.cone, '#ff5d5d', 0, 1.82, 0, 0.42, 0.24, 0.42);
   }
   function drawPalace(k, wall, roof, trim) {
@@ -929,7 +1161,7 @@
     k.add(G.box, '#fff3e0', 0, 0.06, 0, 2.0, 0.12, 1.3);
     k.add(G.box, '#fff8ec', 0, 0.18, 0, 1.8, 0.12, 1.12);
     k.add(G.box, wall, 0, 0.56, -0.08, 1.3, 0.66, 0.7);
-    k.add(G.box, BLUE, 0, 0.42, 0.28, 0.26, 0.4, 0.04);
+    k.add(G.box, BLUE, 0, 0.42, 0.28, 0.26, 0.4, 0.04).lit(0.8);
     [-0.75, -0.25, 0.25, 0.75].forEach((x) => k.at(x, 0.24, 0.42, 0, 1, () => drawColumn(k, 0.66)));
     k.add(G.box, trim, 0, 1.02, 0, 1.9, 0.1, 1.2);
     k.add(G.prism, roof, 0, 1.07, 0, 2.0, 0.42, 1.24);
@@ -1032,7 +1264,8 @@
       k.add(G.cyl, '#cbb8ff', 0, 0.68, 0, 0.92, 0.04, 1.24, 0, Math.PI / 2);
       [[-1.0, 0.55], [1.0, 0.55]].forEach(([x, z]) => {
         k.add(G.cyl6, '#8a7fe0', x, 0.3, z, 0.06, 0.6, 0.06);
-        k.add(G.ball, '#fff2a8', x, 0.68, z, 0.2);
+        k.add(G.ball, '#fff2a8', x, 0.68, z, 0.2).lit(1.4);
+        if (k.lanterns) k.lanterns.push(k.pt(x, 0.68, z));
       });
       ctx.mist.push(k.pt(0, 0.7, 0.3), k.pt(-1.3, 0.4, -0.4), k.pt(1.3, 0.45, -0.3), k.pt(0.2, 0.35, 1.2));
     },
@@ -1102,6 +1335,197 @@
       k.at(0, 0, -0.15, 0, 0.95, () => drawPalace(k, WHITE, '#ffc531', '#ffe8a8'));
       [-1.1, 1.1].forEach((x) => { k.add(G.cyl6, WOOD_D, x, 0.75, 0.4, 0.05, 1.5, 0.05); k.add(G.box, BLUE, x + 0.2, 1.3, 0.4, 0.36, 0.26, 0.03); });
     },
+    // Cap Malée : le cap battu par le vent, une grosse vague figée et deux pins couchés
+    cape(k, ctx) {
+      const G = geoLib();
+      k.add(G.rock, '#b9c3cf', -0.4, 0.45, -0.4, 1.4, 1.1, 1.1, 0.4);
+      k.add(G.ball, '#6fd04f', -0.4, 0.95, -0.4, 0.9, 0.22, 0.7);
+      // la vague : un rouleau bleu et son écume, qui s'enroule vers le cap
+      k.at(0.7, 0, 0.1, -0.5, 1, () => {
+        k.add(G.torus, '#3fb6e8', 0, 0.55, 0, 1.0, 1.0, 1.6, 0, 0, 0);
+        k.add(G.ball, '#ffffff', 0.25, 0.98, 0, 0.32, 0.22, 0.6);
+        k.add(G.ball, '#ffffff', -0.1, 1.06, 0, 0.26, 0.2, 0.5);
+        k.add(G.ball, '#8fe0ff', 0, 0.12, 0, 1.1, 0.24, 0.7);
+      });
+      [[-1.1, 0.5], [0.0, -1.0]].forEach(([x, z]) => k.at(x, 0, z, 0.3, 0.9, () => drawTree(k, 'bent', ctx.rng)));
+    },
+    // L'île aux Chèvres : un rocher en gradins où grimpent les chèvres, une source, un petit bois
+    goats(k, ctx) {
+      const G = geoLib();
+      k.add(G.cyl6, '#cbbfae', 0, 0.22, -0.3, 1.5, 0.44, 1.2);
+      k.add(G.cyl6, '#ddd3c4', 0.1, 0.55, -0.4, 1.0, 0.3, 0.8);
+      k.add(G.cyl6, '#cbbfae', 0.15, 0.82, -0.45, 0.55, 0.26, 0.45);
+      k.add(G.ball, '#6fd04f', 0.15, 0.98, -0.45, 0.4, 0.1, 0.35);
+      k.at(0.15, 0.98, -0.45, 0.6, 0.9, () => ANIMALS.goat(k, false));
+      k.at(0.42, 0.98, -0.45, 0.6, 0.9, () => ANIMALS.goat(k, true));
+      k.add(G.cyl, '#3fd0ef', 0.9, 0.04, 0.6, 0.7, 0.05, 0.5);
+      [[-1.0, 0.6], [-1.2, -0.2]].forEach(([x, z]) => k.at(x, 0, z, 0, 0.8, () => drawTree(k, 'pine', ctx.rng)));
+    },
+    // Ithaque en vue : l'outre d'Éole ouverte, les vents s'échappent en spirales ; un fanal au loin
+    windbag(k, ctx) {
+      const G = geoLib();
+      k.add(G.ball, '#c98b4f', 0, 0.42, 0, 1.0, 0.84, 0.9);
+      k.add(G.cyl, '#b0763e', 0, 0.9, 0, 0.3, 0.2, 0.3);
+      k.add(G.torus, '#ffd23f', 0, 0.82, 0, 0.62, 0.62, 0.62, 0, Math.PI / 2);
+      // vents : trois tourbillons blancs qui s'envolent
+      [[0.1, 1.35, 0, 0.6], [0.55, 1.75, -0.2, 0.45], [-0.4, 1.9, 0.1, 0.35]].forEach(([x, y, z, s]) => {
+        k.add(G.torus, '#ffffff', x, y, z, s, s, s * 0.6, 0.4, 0.3);
+        k.add(G.ball, '#e8f6ff', x, y, z, s * 0.35);
+      });
+      // Ithaque au loin : un petit cap vert avec sa maison
+      k.at(-1.15, 0, -0.6, 0, 0.6, () => { k.add(G.dome, '#7fd06a', 0, 0, 0, 1.4, 0.8, 1.2); k.add(G.box, WHITE, 0.1, 0.8, 0, 0.4, 0.3, 0.3); k.add(G.prism, '#ee7a4d', 0.1, 0.95, 0, 0.5, 0.2, 0.36); });
+    },
+    // Le tombeau d'Elpénor : un tertre rond, sa rame plantée au sommet
+    oar(k) {
+      const G = geoLib();
+      k.add(G.dome, '#9fd8a0', 0, 0, 0, 1.6, 0.8, 1.6);
+      k.add(G.cyl, '#e8e0d0', 0, 0.06, 0.95, 0.7, 0.12, 0.3);
+      k.add(G.cyl6, WOOD, 0, 1.15, 0, 0.07, 1.6, 0.07);
+      k.add(G.box, '#c98b4f', 0, 1.95, 0, 0.26, 0.5, 0.05);
+      [[-0.6, 0.6], [0.65, 0.5], [0, -0.7]].forEach(([x, z]) => k.add(G.sphere, '#c7b8ff', x, 0.34, z, 0.16));
+    },
+    // Les Roches Errantes : deux grands rochers qui s'entrechoquent, des éclats qui scintillent
+    clashing(k) {
+      const G = geoLib();
+      k.add(G.rock, '#a9b4d6', -0.62, 0.9, 0, 1.0, 2.0, 1.1, 0.3, 0, 0.18);
+      k.add(G.rock, '#bcc6e2', 0.62, 0.9, 0, 1.0, 2.0, 1.1, 1.1, 0, -0.18);
+      k.add(G.cyl, '#3fb6e8', 0, 0.03, 0.2, 2.2, 0.05, 1.4);
+      [[-0.1, 1.9, 0.4], [0.15, 1.6, 0.5], [0, 2.2, 0.2], [0.3, 2.0, 0.3], [-0.3, 1.7, 0.4]].forEach(([x, y, z]) => k.add(G.star, '#fff3b0', x, y, z, 0.08, 0.08, 0.08).lit(0.8));
+    },
+    // Le naufrage : la coque brisée sur la plage, le mât et la quille liés en radeau
+    wreck(k) {
+      const G = geoLib();
+      k.at(-0.3, 0, -0.2, 0.5, 1, () => {
+        k.add(G.cyl, '#a0663a', 0, 0.3, 0, 0.9, 0.6, 2.0, 0, Math.PI / 2, 0.35);
+        k.add(G.cyl, '#7a4a26', 0, 0.62, -0.2, 0.06, 1.5, 0.06, 0, 0.9, 0.3);
+        k.add(G.box, '#f4f1ea', 0.2, 0.9, -0.5, 0.05, 0.6, 0.7, 0.3, 0.4);
+      });
+      k.at(0.9, 0, 0.6, -0.4, 1, () => {
+        [-0.2, 0, 0.2].forEach((z) => k.add(G.cyl6, '#c98b4f', 0, 0.08, z, 0.09, 1.1, 0.09, 0, 0, Math.PI / 2));
+        k.add(G.cyl6, '#8a5a30', 0, 0.2, 0, 0.06, 0.9, 0.06, 0, Math.PI / 2);
+      });
+      [[0.3, 0.9], [-1.0, 0.7]].forEach(([x, z]) => k.add(G.box, '#c98b4f', x, 0.05, z, 0.3, 0.06, 0.12, x));
+    },
+    // Le radeau : Ulysse bâtit son radeau, rondins abattus, hache plantée dans une souche
+    raft(k, ctx) {
+      const G = geoLib();
+      k.at(0.1, 0, 0.15, 0, 1, () => {
+        for (let i = 0; i < 6; i++) k.add(G.cyl6, i % 2 ? '#c98b4f' : '#b5844a', -0.5 + i * 0.2, 0.1, 0, 0.1, 1.4, 0.1, 0, Math.PI / 2);
+        [-0.45, 0.45].forEach((z) => k.add(G.box, '#8a5a30', 0, 0.2, z, 1.25, 0.06, 0.08));
+        k.add(G.cyl6, '#8a5a30', 0, 0.85, 0, 0.05, 1.3, 0.05);
+        k.add(G.box, '#f4f1ea', 0.2, 1.0, 0, 0.04, 0.7, 0.6);
+      });
+      [[-1.0, -0.5], [-0.8, -0.8]].forEach(([x, z], i) => k.add(G.cyl6, '#b5844a', x, 0.1, z, 0.12, 1.2, 0.12, i * 0.4, Math.PI / 2));
+      k.add(G.cyl, '#9c7352', 1.0, 0.15, -0.6, 0.3, 0.3, 0.3);
+      k.add(G.cyl, '#e8c9a0', 1.0, 0.31, -0.6, 0.26, 0.02, 0.26);
+      k.add(G.cyl6, WOOD_D, 1.0, 0.45, -0.6, 0.03, 0.3, 0.03, 0, 0, 0.3);
+      k.add(G.box, '#b9c4cc', 1.06, 0.36, -0.6, 0.16, 0.1, 0.03, 0, 0, 0.3);
+      k.at(-1.1, 0, 0.6, 0, 0.8, () => drawTree(k, 'pine', ctx.rng));
+    },
+    // La tempête de Poséidon : un nuage d'orage joufflu, son éclair doré, et le voile de Leucothée
+    storm(k) {
+      const G = geoLib();
+      [[0, 2.3, 0, 0.8], [-0.55, 2.2, 0.05, 0.6], [0.55, 2.2, 0, 0.62], [0.2, 2.6, -0.1, 0.55]].forEach(([x, y, z, s]) => k.add(G.ball, '#9aa0c8', x, y, z, s, s * 0.75, s * 0.8));
+      k.add(G.ball, '#8a8fbc', 0, 2.0, 0, 1.5, 0.3, 0.8);
+      [[0.1, 1.6, 0.2, -0.4], [-0.05, 1.2, 0.2, 0.5], [0.1, 0.85, 0.2, -0.4]].forEach(([x, y, z, rz]) => k.add(G.box, '#ffd23f', x, y, z, 0.12, 0.45, 0.06, 0, 0, rz).lit(1.2));
+      k.add(G.torus, '#3fb6e8', 0, 0.35, 0, 0.9, 0.7, 1.3);
+      // le voile : une longue écharpe bleu pâle qui flotte
+      for (let i = 0; i < 5; i++) k.add(G.box, i % 2 ? '#e8f6ff' : '#bfe6ff', -1.0 + i * 0.18, 0.9 + Math.sin(i) * 0.15, 0.6, 0.2, 0.04, 0.4, 0, 0.3, Math.sin(i * 1.3) * 0.4);
+    },
+    // Nausicaa : les lavoirs au bord de la rivière, le linge qui sèche, la balle des jeunes filles
+    laundry(k) {
+      const G = geoLib();
+      k.add(G.box, '#3fd0ef', 0, 0.03, 0, 2.6, 0.04, 0.5, 0.2);
+      [[-0.6, 0.45], [0.5, -0.25]].forEach(([x, z]) => { k.add(G.box, '#e8e0d0', x, 0.1, z, 0.6, 0.18, 0.45); k.add(G.box, '#7fdcf0', x, 0.18, z, 0.48, 0.04, 0.33); });
+      [-0.9, 0.9].forEach((x) => k.add(G.cyl6, WOOD_D, x, 0.45, -0.8, 0.04, 0.9, 0.04));
+      k.add(G.cyl6, '#f4f1ea', 0, 0.86, -0.8, 0.015, 1.8, 0.015, 0, 0, Math.PI / 2);
+      ['#ff8fc0', '#ffffff', '#7ec8ff', '#ffd23f'].forEach((c, i) => k.add(G.box, c, -0.6 + i * 0.4, 0.68, -0.8, 0.3, 0.34, 0.02));
+      k.add(G.sphere, '#ff5d5d', 0.9, 0.14, 0.7, 0.24);
+      k.add(G.sphere, '#ffffff', 0.9, 0.2, 0.75, 0.12, 0.05, 0.25);
+    },
+    // Les jeux des Phéaciens : piste de course, bornes, disque et stèle du vainqueur
+    games(k) {
+      const G = geoLib();
+      k.add(G.box, '#f2dcae', 0, 0.03, 0, 2.6, 0.04, 0.7);
+      [-1.2, 1.2].forEach((x) => { k.add(G.cyl, '#ffffff', x, 0.35, 0, 0.14, 0.7, 0.14); k.add(G.sphere, '#ffd23f', x, 0.74, 0, 0.12); });
+      k.add(G.cyl, '#ffc531', 0.3, 0.08, 0.7, 0.4, 0.05, 0.4);
+      k.add(G.box, '#f3ead8', -0.4, 0.06, -0.8, 0.9, 0.12, 0.5);
+      [[-0.7, 0.3, '#c0c0c0'], [-0.4, 0.42, '#ffc531'], [-0.1, 0.24, '#d98a2b']].forEach(([x, h, c]) => { k.add(G.box, '#fff8ec', x, 0.12 + h / 2, -0.8, 0.28, h, 0.36); k.add(G.sphere, c, x, 0.2 + h, -0.8, 0.1); });
+    },
+    // Le navire des Phéaciens : le bateau magique tiré sur le sable, Ulysse endormi sur le pont
+    ship(k) {
+      const G = geoLib();
+      k.at(0, 0, 0, 0.3, 1, () => {
+        k.add(G.cyl, '#3d8ee8', 0, 0.35, 0, 0.7, 0.55, 2.4, 0, Math.PI / 2);
+        k.add(G.box, '#f2c14e', 0, 0.62, 0, 0.9, 0.06, 2.0);
+        k.add(G.cone, '#3d8ee8', 0, 0.75, 1.3, 0.25, 0.7, 0.25, 0, -0.6);
+        k.add(G.cyl6, WOOD_D, 0, 1.4, 0, 0.05, 1.6, 0.05);
+        k.add(G.box, '#ffffff', 0, 1.5, 0.05, 0.04, 0.9, 0.9);
+        k.add(G.box, '#ff8fb1', 0, 1.5, 0.08, 0.05, 0.25, 0.9);
+        k.add(G.ball, '#ffffff', 0, 0.72, -0.5, 0.5, 0.14, 0.32);
+        k.add(G.sphere, '#e2b38f', 0, 0.78, -0.82, 0.12);
+      });
+    },
+    // Phorkys : la grotte des Nymphes sous la colline, et le grand olivier de la baie
+    nymphs(k, ctx) {
+      const G = geoLib();
+      k.add(G.ball, '#e2cfae', -0.2, 0.5, -0.3, 2.0, 1.4, 1.4);
+      k.add(G.ball, '#6fd04f', -0.2, 1.1, -0.35, 1.5, 0.3, 1.1);
+      k.add(G.cyl, '#5c4a7a', -0.2, 0.35, 0.3, 0.7, 0.05, 0.85, 0, Math.PI / 2 - 0.15);
+      [[-0.55, 0.42], [0.15, 0.42]].forEach(([x, z]) => k.add(G.cyl, '#fff3dc', x, 0.3, z, 0.12, 0.6, 0.12));
+      k.add(G.cyl, '#3fd0ef', -0.2, 0.05, 0.75, 0.6, 0.05, 0.35);
+      k.at(1.0, 0, 0.3, 0.3, 1.5, () => drawTree(k, 'olive', ctx.rng));
+    },
+    // Eumée : la cabane du porcher, son enclos de pierres sèches
+    hut(k) {
+      const G = geoLib();
+      k.add(G.cyl, '#e8d4b0', -0.4, 0.35, -0.3, 0.9, 0.7, 0.9);
+      k.add(G.cone, '#d9a35a', -0.4, 0.95, -0.3, 1.15, 0.6, 1.15);
+      k.add(G.box, '#8a5a30', -0.4, 0.25, 0.14, 0.24, 0.42, 0.04);
+      for (let i = 0; i < 14; i++) { const a = (i / 14) * Math.PI * 2; if (Math.cos(a) > 0.9) continue; k.add(G.rock, '#dcc8a6', 0.7 + Math.sin(a) * 0.65, 0.12, 0.35 + Math.cos(a) * 0.55, 0.28, 0.24, 0.28, a); }
+      k.add(G.cyl, '#c98b4f', 0.7, 0.08, 0.35, 0.35, 0.1, 0.22);
+    },
+    // Le palais d'Ithaque : la grande salle du festin des prétendants, et le métier à tisser de Pénélope
+    feast(k) {
+      const G = geoLib();
+      k.add(G.box, '#fff3e0', 0, 0.05, -0.1, 2.4, 0.1, 1.6);
+      [-1.0, -0.35, 0.35, 1.0].forEach((x) => k.at(x, 0.1, -0.75, 0, 1, () => drawColumn(k, 1.0)));
+      k.add(G.box, '#ffe8c0', 0, 1.28, -0.75, 2.4, 0.12, 0.4);
+      k.add(G.box, '#c98b4f', 0, 0.45, 0.1, 1.6, 0.06, 0.5);
+      [-0.6, 0.6].forEach((x) => k.add(G.box, '#8a5a30', x, 0.25, 0.1, 0.06, 0.4, 0.4));
+      [[-0.5, '#ffc531'], [-0.15, '#ff5d5d'], [0.2, '#ffc531'], [0.55, '#8bd34a']].forEach(([x, c]) => k.add(G.sphere, c, x, 0.55, 0.1, 0.1));
+      // le métier à tisser : cadre de bois, la toile à moitié tissée
+      k.at(1.05, 0.1, 0.5, -0.5, 1, () => {
+        [-0.3, 0.3].forEach((x) => k.add(G.cyl6, WOOD_D, x, 0.45, 0, 0.04, 0.9, 0.04));
+        k.add(G.box, WOOD_D, 0, 0.88, 0, 0.7, 0.05, 0.05);
+        k.add(G.box, '#ff8fb1', 0, 0.55, 0, 0.5, 0.45, 0.02);
+        k.add(G.box, '#f4f1ea', 0, 0.25, 0, 0.5, 0.15, 0.02);
+      });
+    },
+    // L'épreuve de l'arc : douze haches alignées, le grand arc posé devant
+    axes(k) {
+      const G = geoLib();
+      k.add(G.box, '#f2dcae', 0, 0.03, 0, 2.7, 0.04, 0.5);
+      for (let i = 0; i < 12; i++) {
+        const x = -1.21 + i * 0.22;
+        k.add(G.cyl6, WOOD, x, 0.28, 0, 0.03, 0.52, 0.03);
+        k.add(G.torus, '#b9c4cc', x, 0.56, 0, 0.12, 0.12, 0.12, Math.PI / 2);
+      }
+      k.add(G.torus, '#c98b4f', 0, 0.12, 0.6, 0.9, 0.9, 0.9, 0, Math.PI / 2, 0).lit(0);
+      k.add(G.cyl6, '#f4f1ea', 0, 0.12, 0.6, 0.012, 0.85, 0.012, 0, 0, Math.PI / 2);
+    },
+    // Le lit d'olivier : le lit qu'Ulysse a taillé dans un olivier vivant, la chambre autour
+    bed(k, ctx) {
+      const G = geoLib();
+      k.add(G.box, '#fff3e0', 0, 0.05, 0, 2.0, 0.1, 1.6);
+      [-0.95, 0.95].forEach((x) => k.add(G.box, WHITE, x, 0.5, -0.2, 0.1, 0.9, 1.2));
+      k.add(G.box, WHITE, 0, 0.5, -0.78, 2.0, 0.9, 0.1);
+      k.add(G.box, '#c98b4f', 0, 0.28, 0.05, 1.0, 0.18, 0.7);
+      k.add(G.box, '#ffffff', 0, 0.4, 0.05, 0.92, 0.08, 0.62);
+      k.add(G.box, '#ff8fb1', 0, 0.45, 0.2, 0.92, 0.04, 0.34);
+      k.add(G.ball, '#ffffff', 0, 0.48, -0.18, 0.5, 0.12, 0.2);
+      k.at(-0.55, 0, -0.35, 0, 1.3, () => drawTree(k, 'olive', ctx.rng));
+    },
     // Ithaque : la maison d'Ulysse, son grand olivier et Argos le chien fidèle
     home(k, ctx) {
       const G = geoLib();
@@ -1109,7 +1533,7 @@
       k.add(G.box, WHITE, 0, 0.5, -0.25, 1.5, 0.84, 1.0);
       k.add(G.prism, '#ee7a4d', 0, 0.92, -0.25, 1.7, 0.5, 1.2);
       k.add(G.box, BLUE, 0, 0.27, 0.26, 0.3, 0.5, 0.04);
-      [-0.45, 0.45].forEach((x) => { k.add(G.box, BLUE, x, 0.6, 0.26, 0.2, 0.2, 0.04); k.at(x, 0, 0.42, 0, 0.9, () => drawColumn(k, 0.78)); });
+      [-0.45, 0.45].forEach((x) => { k.add(G.box, BLUE, x, 0.6, 0.26, 0.2, 0.2, 0.04).lit(); k.at(x, 0, 0.42, 0, 0.9, () => drawColumn(k, 0.78)); });
       k.add(G.box, '#efe2cc', 0, 0.94, 0.42, 1.3, 0.08, 0.3);
       k.at(-1.15, 0, -0.45, 0.4, 1.5, () => drawTree(k, 'olive', ctx.rng));
       k.at(0.55, 0, 0.75, -0.6, 1, () => { // Argos
@@ -1149,6 +1573,35 @@
       [[-0.1, -0.07], [0.1, -0.07], [-0.1, 0.07], [0.1, 0.07]].forEach(([x, z]) => k.add(G.cyl6, '#ff9cb8', x, 0.07, z, 0.06, 0.14, 0.06));
       k.add(G.ball, '#ffb3c7', 0, 0.22, 0, 0.46, 0.3, 0.3);
       k.add(G.torus, '#ff9cb8', -0.23, 0.26, 0, 0.06, 0.06, 0.06, 0, 0, Math.PI / 2);
+    },
+    // chèvre sauvage : pelage brun et blanc, petites cornes, barbiche
+    goat(k, h) {
+      const G = geoLib();
+      if (h) {
+        k.add(G.ball, '#a8774a', 0, 0, 0, 0.2, 0.17, 0.15);
+        k.add(G.ball, '#f4ead8', 0.08, -0.03, 0, 0.1, 0.09, 0.1);
+        [-1, 1].forEach((s) => { k.add(G.cone, '#5a4636', -0.05, 0.12, s * 0.05, 0.035, 0.14, 0.035, 0, s * 0.3, 0.4); k.add(G.sphere, '#1e1b26', 0.06, 0.04, s * 0.06, 0.025); });
+        k.add(G.cone, '#f4ead8', 0.06, -0.1, 0, 0.04, 0.08, 0.04, 0, 0, Math.PI);
+        return;
+      }
+      [[-0.1, -0.06], [0.1, -0.06], [-0.1, 0.06], [0.1, 0.06]].forEach(([x, z]) => k.add(G.cyl6, '#5a4636', x, 0.1, z, 0.04, 0.2, 0.04));
+      k.add(G.ball, '#a8774a', 0, 0.27, 0, 0.4, 0.24, 0.24);
+      k.add(G.ball, '#f4ead8', 0.04, 0.3, 0, 0.24, 0.16, 0.25);
+      k.add(G.cone, '#a8774a', -0.21, 0.34, 0, 0.04, 0.1, 0.04, 0, 0, 0.8);
+    },
+    // chien (Argos, chiens d'or d'Alcinoos)
+    dog(k, h) {
+      const G = geoLib();
+      if (h) {
+        k.add(G.ball, '#e2a447', 0, 0, 0, 0.19, 0.17, 0.16);
+        k.add(G.ball, '#f6d49a', 0.09, -0.03, 0, 0.1, 0.08, 0.1);
+        k.add(G.sphere, '#2b2b3a', 0.14, -0.01, 0, 0.03);
+        [-1, 1].forEach((s) => { k.add(G.ball, '#b9772e', -0.02, 0.07, s * 0.08, 0.05, 0.12, 0.04); k.add(G.sphere, '#1e1b26', 0.06, 0.04, s * 0.05, 0.022); });
+        return;
+      }
+      [[-0.1, -0.06], [0.1, -0.06], [-0.1, 0.06], [0.1, 0.06]].forEach(([x, z]) => k.add(G.cyl6, '#e2a447', x, 0.08, z, 0.045, 0.16, 0.045));
+      k.add(G.ball, '#e2a447', 0, 0.22, 0, 0.38, 0.2, 0.2);
+      k.add(G.cyl6, '#e2a447', -0.21, 0.28, 0, 0.03, 0.18, 0.03, 0, 0, 0.9);
     },
     cow(k, h) {
       const G = geoLib();
@@ -1344,13 +1797,23 @@
     // l'événement spécial de l'île : un petit totem à l'écart du sentier, choisi en dernier
     // (le décor existant ne bouge pas), assez près du sentier pour qu'on le voie en passant
     plan.event = pick(0.5, 0, 0.75) || pick(0.32, 0, 0.5);
+    // (choisis APRÈS le reste : rien de ce qui précède ne bouge)
+    // affleurement rocheux : une butte ronde coiffée de rochers, à l'écart du sentier
+    plan.outcrop = pick(0.95, 0, 0.9);
+    // rochers qui encadrent le sentier : posés tout près du bord, de part et d'autre
+    plan.rocks = [];
+    for (let i = 0; i < 3; i++) { const r = pick(0.32, i % 2 ? 1 : -1, 0.5); if (r) plan.rocks.push(r); }
+    // les îles du bout du voyage sont un peu plus riches : massifs et arbres en plus
+    const extra = Math.min(4, Math.floor(ch.c / 7));
+    for (let i = 0; i < extra; i++) { const f = pick(0.36, 0, 0.75); if (f) plan.flowers.push(f); }
+    for (let i = 0; i < Math.ceil(extra / 2); i++) { const t = pick(0.5, 0, 1.0); if (t) plan.lone.push(t); }
     return plan;
   }
 
   // matériau du décor fusionné d'une île (il s'estompe avec l'île dans la brume)
   function decorMaterial(ch) {
     if (!ch.decorMat) {
-      ch.decorMat = toonMat({ color: '#ffffff', vertexColors: true, transparent: true });
+      ch.decorMat = glowMat(toonMat({ color: '#ffffff', vertexColors: true, transparent: true }));
       ch.fadeMats.push(ch.decorMat);
     }
     return ch.decorMat;
@@ -1364,10 +1827,14 @@
     ch.group.add(decor);
     ch.life = { sails: [], boats: [], lamp: null, mist: [], whirl: null };
     const k = kit();
+    k.lamps = []; k.lanterns = []; // (phare, lanternes : lueurs de nuit posées après la fusion)
     const G = geoLib();
     const y0 = (x, z) => heightLocal(ch, x, z) - 0.02;
     const plan = ch.plan = planIsland(ch);
-    const ctx = { rng, isle, sails: [], mist: [], whirl: false };
+    const ctx = { rng, isle, sails: [], mist: [], whirl: false, c: ch.c };
+    // l'affleurement soulève le sol AVANT de poser le décor (hauteurs justes)
+    const O = plan.outcrop;
+    if (O) ch.hills.push({ x: O.x, z: O.z, a: 0.42 + (ch.c % 3) * 0.06, rad: O.rad * 1.15 });
 
     // le monument
     const L = plan.landmark;
@@ -1376,7 +1843,15 @@
     // le village : maisons en arc autour d'une placette à fontaine, ouvert vers le sentier
     const V = plan.village;
     if (V) {
-      k.at(V.x, y0(V.x, V.z), V.z, 0, V.s, () => drawFountain(k));
+      k.at(V.x, y0(V.x, V.z), V.z, 0, V.s, () => {
+        drawFountain(k);
+        // réverbère de la placette : poteau de bois, lanterne dorée (allumée la nuit)
+        k.add(G.cyl6, WOOD_D, 0.78, 0.42, 0.1, 0.06, 0.84, 0.06);
+        k.add(G.box, WOOD_D, 0.78, 0.86, 0.1, 0.2, 0.04, 0.2);
+        k.add(G.ball, '#ffe48a', 0.78, 0.97, 0.1, 0.17).lit(1.4);
+        k.add(G.cone, WOOD_D, 0.78, 1.1, 0.1, 0.22, 0.1, 0.22);
+        k.lanterns.push(k.pt(0.78, 0.97, 0.1));
+      });
       const a0 = Math.atan2(V.pz - V.z, V.px - V.x) + Math.PI;
       [-1.75, -0.6, 0.6, 1.75].forEach((off, i) => {
         const a = a0 + off, rr = 1.12 * V.s;
@@ -1460,9 +1935,73 @@
       made++;
     }
 
+    // Rochers, posés par règles (jamais au hasard) :
+    // 1) l'affleurement : un gros rocher, deux moyens, une dalle, coiffé de mousse
+    const RC = isle.rock || '#c9c1d8';
+    if (O) k.at(O.x, y0(O.x, O.z), O.z, O.ry, O.s, () => {
+      drawRockKind(k, 'boulder', RC, rng, 0, 0, 1.0);
+      drawRockKind(k, 'mossy', RC, rng, 0.55, 0.3, 0.6);
+      drawRockKind(k, 'boulder', RC, rng, -0.5, 0.25, 0.55);
+      drawRockKind(k, 'slab', RC, rng, 0.1, -0.6, 0.7);
+    });
+    // 2) le long du sentier : dalle plate, tas de galets, rocher moussu (en alternance)
+    ['slab', 'pebbles', 'mossy'].forEach((kind, i) => {
+      const P = plan.rocks[i];
+      if (P) k.at(P.x, y0(P.x, P.z), P.z, P.ry, 1, () => drawRockKind(k, kind, RC, rng, 0, 0, 0.75));
+    });
+    // 3) près du monument : deux rochers moussus qui l'encadrent
+    if (L) [-1, 1].forEach((sd) => {
+      const ax = L.x + Math.cos(L.ry) * sd * 1.35 * L.s, az = L.z - Math.sin(L.ry) * sd * 1.35 * L.s;
+      if (Math.hypot(ax, az) < R * 0.8 && distToPath(ch, ax, az) > 0.8) k.at(ax, y0(ax, az), az, rng() * 6, 0.8, () => drawRockKind(k, sd > 0 ? 'mossy' : 'boulder', RC, rng, 0, 0, 0.6));
+    });
+    // 4) sur la côte : deux amas de rochers à demi dans l'eau, loin des arrivées et du port ;
+    //    une arche de pierre sur une île sur trois
+    for (let i = 0, made = 0; i < 16 && made < 2; i++) {
+      const a = ch.phase * 2.3 + i * 2.39996;
+      if (!far(a, 0.6)) continue;
+      made++;
+      const rr = R * 1.0, x = Math.cos(a) * rr, z = Math.sin(a) * rr;
+      k.at(x, -0.05, z, a, 1, () => {
+        if (made === 1 && ch.c % 3 === 1) { drawRockKind(k, 'arch', RC, rng, 0, 0, 1.1); return; }
+        drawRockKind(k, 'boulder', RC, rng, 0, 0, 1.1);
+        drawRockKind(k, 'boulder', RC, rng, 0.35, 0.5, 0.7);
+        drawRockKind(k, 'boulder', RC, rng, -0.3, -0.55, 0.55);
+        drawRockKind(k, 'pebbles', RC, rng, -0.6, 0.2, 0.7);
+      });
+    }
+
     const mesh = new THREE.Mesh(mergeParts(k.parts), decorMaterial(ch));
     mesh.castShadow = mesh.receiveShadow = true;
     decor.add(mesh);
+
+    // la nuit : halos dorés des lanternes, faisceau tournant du phare
+    ch.life.glows = k.lanterns.map((p) => {
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: lin('#ffc65a'), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+      s.position.copy(p);
+      s.scale.setScalar(1.1);
+      s.visible = false;
+      decor.add(s);
+      return s;
+    });
+    k.lamps.forEach((p) => {
+      const beamGeo = new THREE.ConeGeometry(0.75, 6.5, 18, 1, true);
+      beamGeo.translate(0, -3.25, 0); beamGeo.rotateZ(Math.PI / 2); // pointe sur la lanterne, vers +x
+      const beamMat = new THREE.MeshBasicMaterial({ color: lin('#fff1b8'), transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+      const pivot = new THREE.Group();
+      pivot.position.copy(p);
+      const b1 = new THREE.Mesh(beamGeo, beamMat), b2 = new THREE.Mesh(beamGeo, beamMat);
+      b2.rotation.y = Math.PI;
+      b1.rotation.z = b2.rotation.z = -0.08; // (légèrement plongeant, vers la mer)
+      pivot.add(b1, b2);
+      pivot.visible = false;
+      decor.add(pivot);
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: lin('#fff0b0'), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+      halo.position.copy(p);
+      halo.scale.setScalar(1.8);
+      decor.add(halo);
+      ch.life.glows.push(halo);
+      ch.life.lamp = { pivot, mat: beamMat };
+    });
 
     // parties animées : ailes des moulins, brumes des Ombres, tourbillon
     ctx.sails.forEach((sp) => {
@@ -1754,6 +2293,8 @@
       const y = Math.max(0, 3.0 * Math.sqrt(Math.max(0, 1 - (x * x) / 81 - (z * z) / 49)));
       parts.push({ geo: cube, color: '#ffffff', m: M4(x, y + 0.2, z, rng(), 0.6 + rng() * 0.5, 0.5 + rng() * 0.3, 0.6) });
       parts.push({ geo: cube, color: k % 2 ? '#3d8ee8' : '#ee7a4d', m: M4(x, y + 0.5, z, 0, 0.5, 0.12, 0.5) });
+      // une fenêtre par maison, qui s'allume la nuit (village lointain)
+      parts.push({ geo: cube, color: '#ffe08a', glow: 1.3, m: M4(x, y + 0.25, z + 0.31, 0, 0.18, 0.18, 0.04) });
     }
     return mergeParts(parts);
   }
@@ -1784,7 +2325,7 @@
       ch.hills.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, a: 0.12 + rng() * 0.12, s: 0.9 + rng() * 0.5 });
     }
 
-    const colors = { low: lin(isle.grass[0]), fresh: lin(isle.grass[1]), high: lin(isle.grass[2]), sand: lin(SAND) };
+    const colors = { low: lin(isle.grass[0]), fresh: lin(isle.grass[1]), high: lin(isle.grass[2]), sand: lin(isle.sand || SAND) };
     const groundMat = toonMat({ vertexColors: true, transparent: true });
     fadeMats.push(groundMat);
     const ground = new THREE.Mesh(terrain(ch, colors), groundMat);
@@ -1802,7 +2343,7 @@
     cliff.position.y = TOP - 0.12 - 1.3;
     cliff.receiveShadow = true;
     group.add(cliff);
-    const beachMat = lambert(SAND, { transparent: true });
+    const beachMat = lambert(isle.sand || SAND, { transparent: true });
     fadeMats.push(beachMat);
     const beach = new THREE.Mesh(new THREE.RingGeometry(r * 0.95, r * 1.2, 56), beachMat);
     beach.rotation.x = -Math.PI / 2;
@@ -1813,6 +2354,8 @@
     // sentier : une seule route, de la plage d'arrivée au portique de sortie
     const entry = entryOf(c).sub(ctr), exit = exitOf(c).sub(ctr);
     layoutPath(ch, entry, exit);
+    // sentier en boucle : il fait le tour d'une butte ronde au centre de l'île
+    if (ch.pathStyle === 'loop') ch.hills.push({ x: 0, z: 0, a: 0.6, rad: r * 0.36 });
     ch.gateLocal = pathAt(ch, GATE_F);
     // le port : l'angle le plus éloigné des deux bouts du sentier
     {
@@ -1885,6 +2428,8 @@
     Object.assign(ch, { gate, veil, lintelMat });
 
     decorate(ch);
+    // le relief a gagné des buttes (boucle, affleurements rocheux) : on redessine le sol
+    if (ch.hills.some((h) => h.rad)) { ground.geometry.dispose(); ground.geometry = terrain(ch, colors); }
 
     // le ponton vers l'île suivante : il sort de l'eau, planche après planche, quand le boss est battu
     ch.stones = [];
@@ -1923,7 +2468,7 @@
 
     // îles lointaines à l'horizon, de part et d'autre de la route, avec leurs maisons blanches
     [-1, 1].forEach((side) => {
-      const mtn = new THREE.Mesh(horizonIsland(rng), lambert(mtnColor, { vertexColors: true }));
+      const mtn = new THREE.Mesh(horizonIsland(rng), glowMat(lambert(mtnColor, { vertexColors: true })));
       mountains.push(mtn);
       const s = 0.8 + rng() * 0.6;
       mtn.scale.set(s, s * (0.8 + rng() * 0.5), s);
@@ -2619,6 +3164,18 @@
       g.position.set(0, P(B.chest).y + 0.02, bb.min.z - 0.06);
       acc.shield = attach(B.chest, g);
     }
+    // longue cape de tissu dans le dos (la « cape » du modèle n'est qu'une pèlerine sur les épaules) :
+    // un pan de cylindre ouvert, des épaules aux mollets, à la couleur choisie
+    {
+      const halfW = (bb.max.x - bb.min.x) / 2, halfD = (bb.max.z - bb.min.z) / 2;
+      const top = P(B.chest).y + 0.1, h = top - 0.16;
+      const rT = Math.max(halfW, halfD) * 0.92, rB = rT * 1.55;
+      const geo = new THREE.CylinderGeometry(rT, rB, h, 18, 4, true, Math.PI * 0.6, Math.PI * 0.8);
+      const capeCloth = new THREE.Mesh(geo, toonMat({ color: '#f4f1ea', side: THREE.DoubleSide }));
+      capeCloth.position.set((bb.min.x + bb.max.x) / 2, top - h / 2, (bb.min.z + bb.max.z) / 2 - 0.01);
+      capeCloth.castShadow = true;
+      acc.capeCloth = attach(B.chest, capeCloth);
+    }
     // repère au centre de la tête (caméra du mode concentration, lueur de la pensée)
     const anchor = new THREE.Object3D();
     anchor.position.copy(headC);
@@ -2641,12 +3198,16 @@
 
   // tenues : couleurs des liserés, du cuir, du métal, des jambes et des lanières
   const OUTFIT_COL = {
-    voyageur: { trim: '#f6ead0', leather: '#9a5a32', metal: '#ffcc4d', legs: '#7a5236', wraps: '#c98b4f' },
-    hoplite: { trim: '#fff1d0', leather: '#8a5a32', metal: '#ffcc4d', legs: null, wraps: '#8a5a32', chest: '#f0b23a' },
-    roi: { trim: '#ffcc4d', leather: '#ffcc4d', metal: '#ffffff', legs: null, wraps: '#ffcc4d' },
-    marin: { trim: '#ffffff', leather: '#ead7ad', metal: '#b9c4cc', legs: null, wraps: '#c98b4f' },
-    pelerin: { trim: '#ead9b5', leather: '#8a6a4c', metal: '#d9c08a', legs: '#9c7a5a', wraps: '#8a6a4c' }
+    // 'T+' / 'T-' = la couleur de la tunique, éclaircie / foncée : les bordures de fourrure et la grosse
+    // ceinture du modèle (barbare) se fondent dans la tunique, qui se lit comme un chiton grec
+    voyageur: { trim: 'T+', leather: 'T-', metal: '#ffcc4d', legs: null, wraps: '#c98b4f' },
+    hoplite: { trim: 'T+', leather: '#b0703a', metal: '#ffcc4d', legs: null, wraps: '#8a5a32', chest: '#f0b23a' },
+    roi: { trim: '#ffcc4d', leather: 'T-', metal: '#ffffff', legs: null, wraps: '#ffcc4d' },
+    marin: { trim: '#ffffff', leather: 'T-', metal: '#b9c4cc', legs: null, wraps: '#c98b4f' },
+    pelerin: { trim: 'T+', leather: '#8a6a4c', metal: '#d9c08a', legs: '#9c7a5a', wraps: '#8a6a4c' }
   };
+  const tunicShade = (tunic, v) => v === 'T+' ? '#' + new THREE.Color(tunic).lerp(new THREE.Color('#fff8ec'), 0.3).getHexString()
+    : v === 'T-' ? '#' + new THREE.Color(tunic).multiplyScalar(0.72).getHexString() : v;
   // repeint les pastilles de la palette KayKit (dégradé d'origine × couleur choisie)
   function paintPalette(K, colors) {
     const W = 512, cw = W / 8, chh = W / 4;
@@ -2703,10 +3264,11 @@
     const skinHex = col('skin'), hairHex = col('hair');
     paintPalette(K, {
       skin: skinHex, hair: hairHex, tunic: col('tunic'), cape: capeId === 'none' ? col('tunic') : capeHex,
-      trim: O.trim, leather: O.leather, metal: O.metal, legs: O.legs || skinHex, wraps: O.wraps, chest: O.chest
+      trim: tunicShade(col('tunic'), O.trim), leather: tunicShade(col('tunic'), O.leather), metal: O.metal, legs: O.legs || skinHex, wraps: O.wraps, chest: O.chest
     });
     if (K.capeMesh) K.capeMesh.visible = capeId !== 'none';
     const A = K.acc;
+    if (A.capeCloth) { A.capeCloth.visible = capeId !== 'none'; setLin(A.capeCloth.material.color, capeHex); }
     setLin(A.hairMat.color, hairHex);
     const accId = skinOpt('accessory', st.accessory).id;
     ['laurel', 'helmet', 'band', 'petasos'].forEach((n) => { A[n].visible = accId === n; });
@@ -2902,7 +3464,12 @@
       // au repos, il regarde vers la suite du voyage (la caméra est derrière lui)
       if (!hero.free) { const d = pathDir(selected); hero.facing = Math.atan2(d.x, d.z); }
       // vitrine : il se tourne vers la caméra (qui reste du côté dégagé de l'île)
-      if (showcaseOn) hero.facing = Math.atan2(Math.cos(showcaseBase), Math.sin(showcaseBase));
+      // il pivote doucement (trois quarts gauche / droite) ; quand on vient de changer la cape,
+      // le bouclier ou l'arme, il montre son dos un instant
+      if (showcaseOn) {
+        const back = showBack > 0 ? smooth(0, 0.5, 2.6 - showBack) * smooth(0, 0.5, showBack) : 0;
+        hero.facing = Math.atan2(Math.cos(showcaseBase), Math.sin(showcaseBase)) + Math.sin(showcaseT * 0.55) * 0.75 * (1 - back) + Math.PI * back;
+      }
     }
     hero.moving = moving;
     if (hero.celebrate > 0) {
@@ -2962,6 +3529,23 @@
   function tick(dt, t) {
     simTime = t;
     const focus = hero.group.position;
+    stepLight(dt);
+    skyStars.material.uniforms.uTime.value = t;
+    // la nuit : Ulysse porte une petite lueur chaude ; lanternes et phare s'allument
+    if (heroLamp) heroLamp.position.set(focus.x + 0.6, focus.y + 1.6, focus.z + 0.6);
+    chapters.forEach((ch) => {
+      const life = ch && ch.life;
+      if (!life) return;
+      const on = nightK > 0.02;
+      (life.glows || []).forEach((s, i) => {
+        s.visible = on;
+        if (on) s.material.opacity = nightK * ch.fade * (0.8 + 0.2 * Math.sin(t * 3 + i * 1.7));
+      });
+      if (life.lamp) {
+        life.lamp.pivot.visible = on;
+        if (on) { if (!calm) life.lamp.pivot.rotation.y += dt * 0.8; life.lamp.mat.opacity = 0.16 * nightK * ch.fade; }
+      }
+    });
 
     // la mer suit la caméra par pas de maille (sans faire glisser la houle)
     const cell = SEA_SIZE / SEA_SEG;
@@ -2978,7 +3562,7 @@
 
     chapters.forEach((ch) => {
       if (!ch) return;
-      const reached = done >= ch.c * PER;
+      const reached = done >= ch.c * PER || ch.preview;
       ch.fade += ((reached ? 1 : 0.22) - ch.fade) * (1 - Math.exp(-dt * 0.8));
       // l'île suivante attend, enfoncée dans la brume ; atteinte, elle s'élève doucement
       const rise = smooth(0.22, 0.95, ch.fade);
@@ -3073,34 +3657,11 @@
         BOUNCE.rotation.y = t * 1.5;
       }
     }
-    const sel = nodePos(selected);
-    const camD = camera.position.distanceTo(sel);
-    const ms = Math.max(0.28, Math.min(1.15, camD * 0.085));
-    const aspect = (marker.material.map && marker.material.map.userData.aspect) || 2;
-    // apparition : la bulle gonfle avec un petit rebond
+    // apparition de la bulle : elle gonfle avec un petit rebond (placée à l'écran par placeMarker)
     const mu = marker.userData;
     if (mu.pop == null) mu.pop = 1;
-    if (mu.pop < 1 && marker.material.opacity > 0.3) mu.pop = Math.min(1, mu.pop + dt * 2.6);
-    const pp = mu.pop - 1, popS = Math.max(0.05, 1 + 2.6 * pp * pp * pp + 1.6 * pp * pp);
-    marker.scale.set(ms * aspect * popS, ms * popS, 1);
-    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
-    right.y = 0; right.normalize();
-    marker.position.set(sel.x, sel.y + 1.38 + ms * 0.55 + Math.sin(t * 1.6) * 0.04, sel.z).addScaledVector(right, 0.35 + ms * 0.5);
-    // jamais coupée par le bord de l'écran : on la ramène à l'intérieur (horizontalement et en haut)
-    {
-      const halfW = ms * aspect * 0.5, halfH = ms * 0.5;
-      const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
-      const p = marker.position.clone().project(camera);
-      if (p.z < 1) {
-        const ex = marker.position.clone().addScaledVector(right, halfW).project(camera);
-        const ey = marker.position.clone().addScaledVector(up, halfH).project(camera);
-        const nx = Math.abs(ex.x - p.x), ny = Math.abs(ey.y - p.y);
-        const limX = 0.97 - nx, limY = 0.95 - ny;
-        if (nx > 1e-4 && limX > 0 && Math.abs(p.x) > limX) marker.position.addScaledVector(right, (Math.sign(p.x) * limX - p.x) * halfW / nx);
-        if (ny > 1e-4 && limY > 0 && p.y > limY) marker.position.addScaledVector(up, (limY - p.y) * halfH / ny);
-      }
-    }
-    marker.material.opacity += ((hero.route || hero.free || cine || lvlCam || showcaseOn ? 0 : 1) - marker.material.opacity) * (1 - Math.exp(-dt * 5));
+    if (mu.pop < 1 && marker.material.opacity > 0.3) mu.pop = Math.min(1, mu.pop + dt * 2.2);
+    marker.material.opacity += ((!bubbleOn || hero.route || hero.free || cine || lvlCam || showcaseOn || mu.offscreen ? 0 : 1) - marker.material.opacity) * (1 - Math.exp(-dt * 5));
     if (cine) pulse.visible = false;
 
     clouds.forEach((c) => {
@@ -3159,7 +3720,8 @@
       // vitrine (garde-robe) : Ulysse de face, en pied, cadré dans le haut de l'écran ;
       // la caméra oscille lentement de part et d'autre de lui
       showcaseT += calm ? 0 : dt;
-      goal.theta = showcaseBase + Math.sin(showcaseT * 0.35) * 0.35;
+      if (showBack > 0) showBack = Math.max(0, showBack - dt);
+      goal.theta = showcaseBase + Math.sin(showcaseT * 0.35) * 0.2;
       goal.radius = 3.9; goal.elev = 0.1;
       groundY += (focus.y - groundY) * (1 - Math.exp(-dt * 1.5));
       goal.tx = focus.x; goal.tz = focus.z;
@@ -3225,7 +3787,35 @@
   // caméra de suivi : distance, inclinaison (réglables au doigt), coup d'œil latéral temporaire
   // (vue fixe, un peu reculée : on voit le coin d'île autour d'Ulysse ; pas de zoom au doigt)
   const FOLLOW_R = 6.9, FOLLOW_ELEV = 0.5;
-  let showcaseOn = false, showcaseT = 0, showcaseBase = 0;
+  let showcaseOn = false, showcaseT = 0, showcaseBase = 0, showBack = 0;
+  // Vitrine : un angle de caméra dégagé (aucune maison, aucun arbre entre Ulysse et l'objectif).
+  // On essaie l'angle de l'île, puis des angles de plus en plus écartés ; chaque candidat est
+  // testé par des rayons depuis la tête et le buste d'Ulysse, sur toute l'amplitude du balancement.
+  function clearShowcaseTheta(base) {
+    const p = hero.group.position;
+    const blockers = [];
+    chapters.forEach((ch) => {
+      if (!ch || Math.hypot(p.x - ch.group.position.x, p.z - ch.group.position.z) > ch.r + 6) return;
+      ch.group.traverse((o) => { if (o.isMesh && o.visible && !(o.material && o.material.transparent && o.material.opacity < 0.5)) blockers.push(o); });
+    });
+    if (!blockers.length) return base;
+    const rc = new THREE.Raycaster(), from = new THREE.Vector3(), to = new THREE.Vector3(), dir = new THREE.Vector3();
+    const R = 3.9, e = 0.1, ty = p.y - 0.22;
+    // points visés autour d'Ulysse : tête, buste, et de part et d'autre (le cadre entier doit être libre)
+    const aims = [[0, 0.95], [0, 0.45], [-0.75, 0.75], [0.75, 0.75], [-0.9, 0.25], [0.9, 0.25]];
+    const clear = (th) => aims.every(([lat, hy]) => [-0.2, 0, 0.2].every((dth) => {
+      const t = th + dth;
+      to.set(p.x + Math.cos(t) * Math.cos(e) * R, ty + Math.sin(e) * R, p.z + Math.sin(t) * Math.cos(e) * R);
+      from.set(p.x - Math.sin(t) * lat, p.y + hy, p.z + Math.cos(t) * lat);
+      dir.subVectors(to, from);
+      const d = dir.length();
+      rc.set(from, dir.normalize()); rc.near = 0.35; rc.far = d;
+      return rc.intersectObjects(blockers, false).length === 0;
+    }));
+    const offs = [0, 0.45, -0.45, 0.9, -0.9, 1.35, -1.35, 1.8, -1.8, 2.3, -2.3, Math.PI];
+    for (const o of offs) if (clear(base + o)) return base + o;
+    return base;
+  }
   // angle de la caméra de suivi sur une île : de trois quarts, dans le sens de la traversée
   const thetaCache = {};
   function islandTheta(c) {
@@ -3246,11 +3836,19 @@
       cam.tz + Math.sin(cam.theta) * ce * cam.radius
     );
     camera.lookAt(cam.tx, cam.ty, cam.tz);
-    moon.position.set(cam.tx - 22, 26, cam.tz - 30);
     const so = sunOffset();
     sun.position.set(cam.tx + so.x, so.y, cam.tz + so.z);
     sun.target.position.set(cam.tx, 0, cam.tz);
     camera.updateMatrixWorld();
+    // la lune se lève devant le regard, un peu à droite ; son chemin miroite sur la mer
+    {
+      const fx = -Math.cos(cam.theta), fz = -Math.sin(cam.theta), a = 0.3;
+      const mx = fx * Math.cos(a) - fz * Math.sin(a), mz = fx * Math.sin(a) + fz * Math.cos(a);
+      sea.material.userData.moonDir.value.set(mx, mz);
+      if (moon.visible) moon.position.set(camera.position.x + mx * 88, Math.max(14, camera.position.y + 18), camera.position.z + mz * 88);
+      if (skyStars.visible) { skyStars.position.copy(camera.position); skyStars.material.uniforms.uScale.value = renderer.getPixelRatio(); }
+    }
+    placeMarker();
     updateStars(simTime);
     renderFrame();
   }
@@ -3433,14 +4031,25 @@
   }
   function renderFrame() {
     renderer.info.reset();
-    if (!post) { renderer.render(scene, camera); return; }
-    // en gros plan (mode concentration), le flou se resserre autour du visage
-    post.material.uniforms.strength.value = calm ? 0.35 : 1;
-    renderer.setRenderTarget(post.target);
-    renderer.render(scene, camera);
-    renderer.setRenderTarget(null);
-    renderer.render(post.scene, post.camera);
+    if (!post) renderer.render(scene, camera);
+    else {
+      // en gros plan (mode concentration), le flou se resserre autour du visage
+      post.material.uniforms.strength.value = calm ? 0.35 : 1;
+      renderer.setRenderTarget(post.target);
+      renderer.render(scene, camera);
+      renderer.setRenderTarget(null);
+      renderer.render(post.scene, post.camera);
+    }
+    // calque d'interface 3D (bulle du prochain niveau) : par-dessus tout, net
+    if (uiScene && marker.material.opacity > 0.01) {
+      const ac = renderer.autoClear;
+      renderer.autoClear = false;
+      renderer.clearDepth();
+      renderer.render(uiScene, camera);
+      renderer.autoClear = ac;
+    }
   }
+  let uiScene = null;
 
   function resize() {
     if (!renderer) return;
@@ -3534,9 +4143,64 @@
     });
     paint();
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(paint); // (le numéro, une fois Jost chargée)
-    tex.userData = { aspect: W / H };
+    tex.userData = { aspect: W / H, h: H };
     bubbleCache[key] = tex;
     return tex;
+  }
+
+  // Bulle du prochain niveau, à taille fixe à l'écran (pastilles ≈ 56 px, pièce ≈ 32 px),
+  // centrée horizontalement, juste au-dessus de la tête d'Ulysse (sa pointe le désigne) ;
+  // jamais sous les boutons du haut ni sur le bouton play. Dessinée par-dessus la scène
+  // (après le flou de bascule) : elle reste nette.
+  const BUBBLE_K = 56 / 84;          // pastilles de 84 px dans la toile → 56 px à l'écran
+  // (désactivée par défaut : l'interface HTML montre ces infos près du bouton play ; World.setBubble(true) la rallume)
+  let bubbleOn = false;
+  let uiBox = { top: 8, bottom: 1e4, t: -9 };
+  function uiLimits(W, H) {
+    if (simTime - uiBox.t < 0.5 && simTime >= uiBox.t) return uiBox; // (relu deux fois par seconde)
+    const rect = renderer.domElement.getBoundingClientRect();
+    let top = 8, bottom = H - 8;
+    document.querySelectorAll('#home .corner, #home .level-badge, #home .daily-btn').forEach((el) => {
+      const r = el.getBoundingClientRect();
+      if (r.height && r.bottom - rect.top < H * 0.4) top = Math.max(top, r.bottom - rect.top + 12);
+    });
+    ['go', 'go-label'].forEach((id) => {
+      const el = document.getElementById(id), r = el && el.getBoundingClientRect();
+      if (r && r.height) bottom = Math.min(bottom, r.top - rect.top - 14);
+    });
+    uiBox = { top, bottom, t: simTime };
+    return uiBox;
+  }
+  const _mv = { a: null, b: null, f: null };
+  function placeMarker() {
+    const map = marker.material.map;
+    const W = host.clientWidth, H = host.clientHeight;
+    if (!map || !W || !H) return;
+    if (!_mv.a) { _mv.a = new THREE.Vector3(); _mv.b = new THREE.Vector3(); _mv.f = new THREE.Vector3(); }
+    const pxH = (map.userData.h || 168) * BUBBLE_K, pxW = pxH * (map.userData.aspect || 1);
+    const mu = marker.userData, pp = (mu.pop == null ? 1 : mu.pop) - 1;
+    const popS = Math.max(0.05, 1 + 2.6 * pp * pp * pp + 1.6 * pp * pp);
+    // ancre : au-dessus de la tête d'Ulysse, debout sur la pierre choisie
+    const sel = nodePos(selected);
+    const a = _mv.a.set(sel.x, sel.y + 1.32, sel.z).project(camera);
+    const L = uiLimits(W, H);
+    let cy = (1 - a.y) / 2 * H - 4 - pxH / 2 + Math.sin(simTime * 1.6) * 2;
+    if (a.z > 1) cy = L.top + pxH / 2;
+    cy = Math.max(L.top + pxH / 2, Math.min(L.bottom - pxH / 2, cy));
+    // centrée en caméra de suivi ; en caméra libre, elle suit Ulysse (et s'efface s'il sort du cadre)
+    let nx = 0;
+    if (camMode === 'free') {
+      const m = (pxW / 2 + 10) / W * 2;
+      nx = Math.max(-1 + m, Math.min(1 - m, a.x));
+    }
+    mu.offscreen = a.z > 1 || Math.abs(a.x) > 1.05 || a.y < -1.05 || a.y > 1.3;
+    // retour en 3D : sur le rayon du point (x, cy), à 3 unités devant l'objectif
+    const D = 3;
+    const dir = _mv.b.set(nx, 1 - cy / H * 2, 0.5).unproject(camera).sub(camera.position).normalize();
+    camera.getWorldDirection(_mv.f);
+    marker.position.copy(camera.position).addScaledVector(dir, D / Math.max(0.2, dir.dot(_mv.f)));
+    const perPx = 2 * D * Math.tan(camera.fov * Math.PI / 360) / H;
+    marker.scale.set(pxW * perPx * popS, pxH * perPx * popS, 1);
   }
 
   function setMarker() {
@@ -3587,6 +4251,10 @@
     sun.shadow.normalBias = 0.02;
     Object.assign(sun.shadow.camera, { left: -13, right: 13, top: 13, bottom: -13, near: 1, far: 60 });
     scene.add(sun, sun.target);
+    glowColU.value = lin('#ffc94a').multiplyScalar(1.7);
+    // petite lueur chaude autour d'Ulysse, la nuit seulement (toujours présente : pas de recompilation)
+    heroLamp = new THREE.PointLight(lin('#ffc77a'), 0, 5.5, 1.6);
+    scene.add(heroLamp);
 
     makeSea();
     makeClouds();
@@ -3601,7 +4269,9 @@
     scene.add(pulse);
     marker = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, opacity: 0, toneMapped: false }));
     marker.scale.set(0.75, 0.75, 1);
-    scene.add(marker);
+    marker.material.depthTest = false;
+    uiScene = new THREE.Scene();
+    uiScene.add(marker);
 
     done = options.done || 0;
     selected = Math.min(options.selected != null ? options.selected : done, done);
@@ -3624,6 +4294,7 @@
     if (window.ResizeObserver) new ResizeObserver(resize).observe(host); // barre d'adresse, plein écran : la scène suit la vraie hauteur
     resize();
     World.ok = true;
+    lightHour = targetHour();
     applyLight();
     loadAssets(); // modèles 3D en arrière-plan ; le monde procédural reste en place s'ils manquent
     return true;
@@ -3663,9 +4334,29 @@
   };
   // position monde du totem d'une île (tests, caméra)
   World.eventPos = (c) => { const ch = chapters[c]; if (!ch || !ch.event) return null; const v = new THREE.Vector3(); ch.event.group.getWorldPosition(v); return v; };
-  // heure réelle (ex. 18.5 pour 18 h 30) ; night = forcer la nuit (mode sombre choisi)
-  World.setTime = (hour, night) => { if (!World.ok) return; lightHour = hour; forceNight = !!night; applyLight(); };
-  World.isNight = (hour) => hour < 6 || hour >= 20.5;
+  // Heure du monde. La 3D suit seule l'horloge locale (relue toutes les 30 s, transitions douces).
+  // setTime(heure, mode) : heure = heure locale vue par l'appli (ex. 18.5 ; recale l'horloge si
+  // elle diffère) ; mode 'day' = toujours le jour (réglage), true = forcer la nuit, sinon l'heure réelle.
+  World.setTime = (hour, mode) => {
+    forceNight = mode === true; lockDay = mode === 'day';
+    if (typeof hour === 'number' && isFinite(hour)) {
+      clockOffset = hour - clockHour();
+      if (Math.abs(clockOffset) < 0.05) clockOffset = 0; // (simple appel de l'appli : on garde l'horloge)
+    }
+    if (World.ok && !running) { lightHour = targetHour(); applyLight(); }
+  };
+  // aperçu d'une heure (outil de test) : World.previewTime(23) ; previewTime(null) rend la main à l'horloge.
+  // La lumière glisse vers l'heure demandée ; instant = true (ou boucle à l'arrêt) : tout de suite.
+  World.previewTime = (h, instant) => {
+    previewHour = h == null ? null : ((+h % 24) + 24) % 24;
+    if (World.ok && (instant || !running)) { lightHour = targetHour(); applyLight(); if (!running) placeCamera(); }
+    return targetHour();
+  };
+  // bulle 3D du prochain niveau au-dessus d'Ulysse (éteinte par défaut)
+  World.setBubble = (on) => { bubbleOn = !!on; if (!bubbleOn && marker) marker.material.opacity = 0; return bubbleOn; };
+  World.lightInfo = () => ({ hour: +lightHour.toFixed(3), goal: +targetHour().toFixed(3), night: +nightK.toFixed(3), lockDay, forceNight, preview: previewHour });
+  // nuit ? (heure donnée, ou lumière affichée)
+  World.isNight = (hour) => (hour == null ? nightK > 0.5 : hour < 6 || hour >= 20.5);
   // caméra libre (on survole la carte) ou suivi d'Ulysse
   World.setCameraMode = (mode) => {
     const was = camMode;
@@ -3680,8 +4371,11 @@
   World.cameraMode = () => camMode;
   // Îles du voyage (une par chapitre), dans l'ordre de l'Odyssée
   // noms courts et simples, un mot par île
-  const ISLAND_NAMES = ['Troie', 'Le Marché', 'Les Lotus', 'Le Cyclope', 'Les Vents', 'Les Falaises',
-    'Circé', 'Les Brumes', 'Les Sirènes', 'Le Tourbillon', 'Le Soleil', 'Calypso', 'Le Palais', 'Ithaque'];
+  // (même ordre que ISLES : la route d'Ulysse dans l'Odyssée)
+  const ISLAND_NAMES = ['Troie', 'Ismaros', 'Cap Malée', 'Les Lotus', 'Les Chèvres', 'Le Cyclope', 'Éolie', 'Ithaque en vue',
+    'Lestrygons', 'Circé', 'Les Ombres', 'Elpénor', 'Les Sirènes', 'Roches Errantes', 'Charybde', 'Thrinacie', 'Le Naufrage',
+    'Ogygie', 'Le Radeau', 'La Tempête', 'Nausicaa', 'Alcinoos', 'Les Jeux', 'Le Navire', 'Phorkys', 'Eumée', 'Le Palais',
+    "L'Arc", "Le Lit d'olivier", 'Laërte'];
   const islandName = (i) => ISLAND_NAMES[i % ISLAND_NAMES.length] + (i >= ISLAND_NAMES.length ? ' ' + (Math.floor(i / ISLAND_NAMES.length) + 1) : '');
   World.islands = () => {
     const here = hero.free ? hero.free.c : chapterOf(selected);
@@ -3716,7 +4410,7 @@
       const p = hero.group.position;
       let near = chapterOf(selected), bd = Infinity;
       chapters.forEach((ch) => { if (!ch) return; const d = Math.hypot(p.x - ch.group.position.x, p.z - ch.group.position.z); if (d < bd) { bd = d; near = ch.c; } });
-      showcaseBase = islandTheta(near);
+      showcaseBase = clearShowcaseTheta(islandTheta(near));
     }
     if (!running) placeCamera();
   };
@@ -3781,7 +4475,12 @@
   // setSkin({ outfit, tunic, cape, hair, skin, accessory, weapon, shield }) : immédiat, sans coût notable ;
   // peut être appelé avant l'init ou avant le chargement du modèle (appliqué ensuite)
   World.setSkin = (s) => {
-    if (s) Object.keys(SKIN_DEFAULT).forEach((k) => { if (s[k] != null && SKIN_OPTIONS[k].some((o) => o.id === s[k])) skinState[k] = s[k]; });
+    if (s) Object.keys(SKIN_DEFAULT).forEach((k) => {
+      if (s[k] == null || !SKIN_OPTIONS[k].some((o) => o.id === s[k])) return;
+      // vitrine : une nouvelle cape, un bouclier ou un arc se portent dans le dos → il se retourne
+      if (showcaseOn && s[k] !== skinState[k] && (k === 'cape' || k === 'shield' || (k === 'weapon' && s[k] === 'bow'))) showBack = 2.6;
+      skinState[k] = s[k];
+    });
     if (THREE && hero.group) applySkin();
     return Object.assign({}, skinState);
   };
@@ -3798,6 +4497,13 @@
   World._scene = () => scene;
   World._camera = () => camera;
   World._render = () => renderFrame();
+  World._clearTheta = (b) => clearShowcaseTheta(b);
+  // aperçu d'une île lointaine (outil de test) : la construit, la sort de la brume, la survole
+  World._previewIsland = (c) => {
+    for (let i = 0; i <= c; i++) if (!chapters[i]) buildChapter(i);
+    chapters[c].preview = true; chapters[c].fade = 1;
+    return World.viewIsland(c);
+  };
   World._gfx = () => ({ renderer, sun, hemi, stdMats, post, envMap, MOMENTS, applyLight, goal, freeTarget, chapters });
   World.wander = (c, dx, dz) => { const p = centerOf(c); wanderTo(c, new THREE.Vector3(p.x + dx, 0, p.z + dz)); };
   World.debug = () => ({ done, selected, free: !!hero.free, route: hero.route ? hero.route.length : 0, chapters: chapters.length,
