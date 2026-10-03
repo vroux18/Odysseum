@@ -2,6 +2,8 @@
 
 Usage : py tools/build_artifact.py  ->  dist/odysseum.html
 """
+import base64
+import json
 import re
 from pathlib import Path
 
@@ -27,6 +29,15 @@ html = re.sub(r'<script src="(js/[^"]+)"></script>', inline_js, html)
 # Three.js : copie locale pour l'APK, CDN autorisé pour la page de test
 html = html.replace('<script src="vendor/three.min.js"></script>',
                     '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>')
+# Modèles 3D (CC0) : chargeur depuis le CDN, et les fichiers .glb intégrés en data URI
+# (la page de test est un fichier unique ; world.js lit window.ODY_ASSETS avant le réseau).
+models = {}
+for f in sorted((WWW / "assets" / "models").rglob("*.glb")):
+    rel = f.relative_to(WWW).as_posix()
+    models[rel] = "data:model/gltf-binary;base64," + base64.b64encode(f.read_bytes()).decode("ascii")
+html = html.replace('<script src="vendor/GLTFLoader.js"></script>',
+                    '<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>\n'
+                    '<script>window.ODY_ASSETS = ' + json.dumps(models) + ';</script>')
 
 # La page publiée reçoit déjà son squelette (doctype, head, body, meta).
 for pattern in [r"<!doctype html>\s*", r"<html[^>]*>\s*", r"</html>\s*", r"<head>\s*", r"</head>\s*",

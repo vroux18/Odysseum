@@ -598,33 +598,255 @@
     dunes: [['palmier', 6, 0.8], ['rocher', 9, 0.6], ['touffe', 14, 0.45], ['colonne', 2, 0.7], ['fleurs', 3, 0.45]]
   };
 
+  // ------------------------------------------------------------------
+  // Modèles 3D (CC0 : Kenney Nature Kit, Quaternius) chargés en arrière-plan.
+  // Tant qu'ils ne sont pas là (ou si le chargement échoue, hors ligne…), le monde
+  // procédural ci-dessus sert de décor. Une fois chargés, chaque île est redécorée :
+  // tous ses modèles sont fusionnés en un seul maillage à couleurs de sommets
+  // (un seul appel de dessin par île), avec le même ombrage « cartoon ».
+  // ------------------------------------------------------------------
+  const MODEL_DIR = 'assets/models/';
+  const MODELS = {
+    man: 'man.glb', boat: 'sailboat.glb', column: 'column.glb', columnRound: 'column_round.glb', arch: 'arch.glb', rockPoly: 'rock.glb',
+    cypress: 'nature/tree_pineTallA_detailed.glb', pineRound: 'nature/tree_pineRoundC.glb', plateau: 'nature/tree_plateau.glb',
+    oak: 'nature/tree_oak.glb', treeDefault: 'nature/tree_default.glb', palmTall: 'nature/tree_palmDetailedTall.glb', palmBend: 'nature/tree_palmBend.glb',
+    bushLarge: 'nature/plant_bushLarge.glb', bush: 'nature/plant_bush.glb', bushDetailed: 'nature/plant_bushDetailed.glb',
+    grassLarge: 'nature/grass_large.glb', grass: 'nature/grass.glb',
+    flowerY: 'nature/flower_yellowA.glb', flowerP: 'nature/flower_purpleA.glb', flowerR: 'nature/flower_redA.glb',
+    rockLarge: 'nature/rock_largeA.glb', rockTall: 'nature/rock_tallB.glb', rockSmall: 'nature/rock_smallA.glb', stone: 'nature/stone_largeA.glb'
+  };
+  // couleurs (par nom de matériau glTF), dans la palette douce de l'archipel, un peu plus chaudes
+  const MATCOL = {
+    leafsGreen: '#93c27c', leafsDark: '#6f9f80', grass: '#a7cd88', woodBark: '#c09f80', woodBarkDark: '#a6876e',
+    dirt: '#d9c5a7', stone: '#e5e1d8', _defaultMat: '#e5e1d8', Stone: '#e3ded4',
+    colorPurple: '#c8b4ee', colorRed: '#f2a49c', colorYellow: '#f7d586',
+    Marble: '#f4f0e8', Grey_Floor: '#f3efe7', DarkGrey_Floor: '#e6e0d5', HalloweenBits: '#efe9de',
+    DarkWood: '#a07c5f', LightWood: '#dabf9c', Sail: '#fcf9f2', Steel: '#b9bdc0'
+  };
+  const THEME_COL = { dunes: { grass: '#d3cd97', leafsGreen: '#a3c486' } };
+  // [modèles possibles, hauteur min/max, place libre autour, décor procédural de secours]
+  const KINDS = {
+    cypress: { m: ['cypress'], h: [1.25, 1.9], room: 0.42, fb: 'pin' },
+    pine: { m: ['pineRound'], h: [1.0, 1.4], room: 0.6, fb: 'pin' },
+    olive: { m: ['plateau', 'oak'], h: [0.8, 1.1], room: 0.6, fb: 'olivier', col: { leafsGreen: '#b3c48f', woodBark: '#b9a58e' } },
+    tree: { m: ['treeDefault', 'oak'], h: [0.9, 1.2], room: 0.6, fb: 'olivier' },
+    bush: { m: ['bushLarge', 'bush', 'bushDetailed'], h: [0.4, 0.62], room: 0.32, fb: 'buisson', fit: true },
+    grass: { m: ['grassLarge', 'grass'], h: [0.26, 0.4], room: 0.16, fb: 'touffe', fit: true },
+    flower: { m: ['flowerY', 'flowerP', 'flowerR'], h: [0.16, 0.24], room: 0.13, fb: 'fleurs', fit: true },
+    rock: { m: ['rockPoly', 'rockLarge', 'rockTall', 'stone'], h: [0.4, 0.75], room: 0.45, fb: 'rocher', fit: true },
+    pebble: { m: ['rockSmall'], h: [0.1, 0.2], room: 0.15, fb: null, fit: true },
+    column: { m: ['column', 'columnRound'], h: [1.2, 1.45], room: 0.5, fb: 'colonne', broken: 0.55 },
+    arch: { m: ['arch'], h: [1.5, 1.7], room: 1.1, fb: null },
+    palm: { m: ['palmTall', 'palmBend'], h: [1.5, 2.0], room: 0.6, fb: 'palmier', keepXZ: true },
+    temple: { m: [], room: 1.4, fb: 'temple' }
+  };
+  // composition des îles quand les modèles sont là : plus dense, plus luxuriante
+  const SCENES_3D = {
+    pinede: [['cypress', 10, 0.8], ['pine', 7, 0.9], ['rock', 6, 0.6], ['bush', 10, 0.55], ['grass', 34, 0.35], ['flower', 16, 0.35], ['pebble', 10, 0.3]],
+    ruines: [['temple', 1, 1.3], ['arch', 1, 1.0], ['column', 10, 0.7], ['olive', 9, 0.8], ['cypress', 6, 0.8], ['rock', 4, 0.6], ['bush', 10, 0.55],
+      ['grass', 40, 0.35], ['flower', 20, 0.35], ['pebble', 8, 0.3]],
+    jardin: [['bush', 14, 0.55], ['olive', 5, 0.8], ['tree', 3, 0.8], ['cypress', 4, 0.8], ['flower', 44, 0.35], ['grass', 24, 0.35], ['rock', 3, 0.6]],
+    dunes: [['palm', 7, 0.8], ['rock', 10, 0.6], ['grass', 18, 0.4], ['column', 2, 0.7], ['flower', 4, 0.4], ['pebble', 12, 0.3]]
+  };
+  const assets = { ready: false, status: 'none', tpl: {}, error: null };
+
+  // modèle glTF → gabarit : triangles à plat (positions, normales, nom du matériau),
+  // posés au sol (y min = 0), centrés, hauteur ramenée à 1
+  function makeTemplate(root, opt) {
+    opt = opt || {};
+    root.updateMatrixWorld(true);
+    const parts = [];
+    const box = new THREE.Box3();
+    const v = new THREE.Vector3();
+    root.traverse((o) => {
+      if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
+      const g = o.geometry, P = g.attributes.position, N = g.attributes.normal, I = g.index;
+      const n = I ? I.count : P.count;
+      const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3);
+      const nm = new THREE.Matrix3().getNormalMatrix(o.matrixWorld);
+      for (let k = 0; k < n; k++) {
+        const i = I ? I.getX(k) : k;
+        v.fromBufferAttribute(P, i).applyMatrix4(o.matrixWorld);
+        if (opt.rotY) v.applyAxisAngle(new THREE.Vector3(0, 1, 0), opt.rotY);
+        pos[k * 3] = v.x; pos[k * 3 + 1] = v.y; pos[k * 3 + 2] = v.z;
+        box.expandByPoint(v);
+        if (N) {
+          v.fromBufferAttribute(N, i).applyMatrix3(nm);
+          if (opt.rotY) v.applyAxisAngle(new THREE.Vector3(0, 1, 0), opt.rotY);
+          v.normalize();
+          nor[k * 3] = v.x; nor[k * 3 + 1] = v.y; nor[k * 3 + 2] = v.z;
+        }
+      }
+      if (!N) { // normales à plat, triangle par triangle
+        const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+        for (let k = 0; k + 2 < n; k += 3) {
+          a.fromArray(pos, k * 3); b.fromArray(pos, k * 3 + 3); c.fromArray(pos, k * 3 + 6);
+          c.sub(b); a.sub(b); c.cross(a).normalize();
+          for (let j = 0; j < 3; j++) c.toArray(nor, (k + j) * 3);
+        }
+      }
+      const mat = Array.isArray(o.material) ? o.material[0] : o.material;
+      parts.push({ pos, nor, mat: (mat && mat.name) || '' });
+    });
+    const h = Math.max(1e-6, box.max.y - box.min.y);
+    const cx = opt.keepXZ ? 0 : (box.min.x + box.max.x) / 2, cz = opt.keepXZ ? 0 : (box.min.z + box.max.z) / 2;
+    parts.forEach((p) => {
+      for (let k = 0; k < p.pos.length; k += 3) {
+        p.pos[k] = (p.pos[k] - cx) / h; p.pos[k + 1] = (p.pos[k + 1] - box.min.y) / h; p.pos[k + 2] = (p.pos[k + 2] - cz) / h;
+      }
+    });
+    return { parts, w: (box.max.x - box.min.x) / h, d: (box.max.z - box.min.z) / h };
+  }
+
+  // lot de gabarits posés dans une île, fusionnés en un seul maillage à couleurs de sommets
+  const colCache = {};
+  const colorOf = (hex) => colCache[hex] || (colCache[hex] = new THREE.Color(hex));
+  function newBatch() {
+    const pos = [], nor = [], col = [];
+    const c = new THREE.Color();
+    return {
+      add(tpl, x, y, z, rot, sxz, sy, over, rng) {
+        const cs = Math.cos(rot), sn = Math.sin(rot);
+        const shade = 0.93 + (rng ? rng() : 0.5) * 0.14;   // chaque plante a sa nuance
+        const warm = (rng ? rng() : 0.5) * 0.08;
+        tpl.parts.forEach((p) => {
+          const hex = (over && over[p.mat]) || MATCOL[p.mat] || '#e5e1d8';
+          c.copy(colorOf(hex)).lerp(colorOf('#f3dcb0'), warm).multiplyScalar(shade);
+          const P = p.pos, N = p.nor;
+          for (let k = 0; k < P.length; k += 3) {
+            const px = P[k] * sxz, pz = P[k + 2] * sxz;
+            pos.push(x + px * cs + pz * sn, y + P[k + 1] * sy, z - px * sn + pz * cs);
+            let nx = N[k] / sxz, ny = N[k + 1] / sy, nz = N[k + 2] / sxz;
+            const l = Math.hypot(nx, ny, nz) || 1;
+            nx /= l; ny /= l; nz /= l;
+            nor.push(nx * cs + nz * sn, ny, -nx * sn + nz * cs);
+            col.push(c.r, c.g, c.b);
+          }
+        });
+      },
+      count: () => pos.length / 3,
+      build(material) {
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+        geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+        geo.computeBoundingSphere();
+        const mesh = new THREE.Mesh(geo, material);
+        mesh.castShadow = mesh.receiveShadow = true;
+        mesh.userData.merged = true;
+        return mesh;
+      }
+    };
+  }
+
   function decorate(ch, m) {
     const placed = [];
     const theme = THEMES[ch.c % THEMES.length];
-    SCENES[theme].forEach(([type, count, clear]) => {
+    const rng = C.makeRng('decor:' + ch.c);
+    const decor = new THREE.Group();
+    ch.decor = decor;
+    ch.group.add(decor);
+    const batch = assets.ready ? newBatch() : null;
+    const themeCol = THEME_COL[theme] || {};
+    (batch ? SCENES_3D : SCENES)[theme].forEach(([type, count, clear]) => {
+      const kind = batch ? KINDS[type] : null;
+      const tpls = kind ? kind.m.map((k) => assets.tpl[k]).filter(Boolean) : [];
+      const proc = kind ? kind.fb : type;
+      if (!tpls.length && !proc) return;
+      const big = proc === 'temple' && !tpls.length;
+      const room = kind ? kind.room : type === 'temple' ? 1.4 : type === 'touffe' || type === 'fleurs' ? 0.3 : 0.55;
+      const over = kind && Object.assign({}, kind.col || {}, themeCol);
       for (let k = 0; k < count; k++) {
         for (let tries = 0; tries < 40; tries++) {
-          const a = ch.rng() * Math.PI * 2;
-          const d = Math.sqrt(ch.rng()) * ch.r * (type === 'temple' ? 0.55 : 0.86);
+          const a = rng() * Math.PI * 2;
+          const d = Math.sqrt(rng()) * ch.r * (big ? 0.55 : 0.86);
           const x = Math.cos(a) * d, z = Math.sin(a) * d;
           if (distToPath(ch, x, z) < clear) continue;
           if (ch.gateLocal.distanceTo(new THREE.Vector3(x, 0, z)) < 1.2) continue;
-          const room = type === 'temple' ? 1.4 : type === 'touffe' || type === 'fleurs' ? 0.3 : 0.55;
-          if (placed.some((p) => Math.hypot(p.x - x, p.z - z) < room)) continue;
-          const obj = PROP[type](m, ch.rng);
-          obj.position.set(x, heightLocal(ch, x, z) - 0.02, z);
-          obj.rotation.y = ch.rng() * Math.PI * 2;
-          obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-          ch.group.add(obj);
-          placed.push({ x, z });
+          if (placed.some((p) => Math.hypot(p.x - x, p.z - z) < Math.max(room, p.room))) continue;
+          const y = heightLocal(ch, x, z) - 0.02;
+          if (tpls.length) {
+            const tpl = tpls[Math.floor(rng() * tpls.length)];
+            // (h = hauteur ; pour les « fit », plus grande dimension : un rocher plat reste petit)
+            const h = (kind.h[0] + rng() * (kind.h[1] - kind.h[0])) / (kind.fit ? Math.max(1, tpl.w, tpl.d) : 1);
+            const sy = kind.broken && rng() < kind.broken ? h * (0.22 + rng() * 0.35) : h; // colonnes brisées
+            batch.add(tpl, x, y - 0.01, z, rng() * Math.PI * 2, h, sy, over, rng);
+          } else {
+            const obj = PROP[proc](m, rng);
+            obj.position.set(x, y, z);
+            obj.rotation.y = rng() * Math.PI * 2;
+            obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+            decor.add(obj);
+          }
+          placed.push({ x, z, room: room * 0.6 });
           break;
         }
       }
     });
+    if (batch && batch.count()) {
+      if (!ch.decorMat) { ch.decorMat = toonMat({ color: '#ffffff', vertexColors: true, transparent: true }); ch.fadeMats.push(ch.decorMat); }
+      decor.add(batch.build(ch.decorMat));
+    }
     // des moutons sur les îles herbeuses
-    if (theme !== 'dunes') {
+    if (theme !== 'dunes' && !ch.sheep.length) {
       for (let k = 0; k < 3; k++) ch.sheep.push(makeSheep(ch, m));
     }
+  }
+
+  function redecorate(ch) {
+    if (ch.decor) {
+      ch.group.remove(ch.decor);
+      ch.decor.traverse((o) => { if (o.isMesh) o.geometry.dispose(); });
+    }
+    decorate(ch, ch.m);
+  }
+
+  function loadAssets() {
+    if (!THREE.GLTFLoader) { assets.status = 'no-loader'; return; }
+    assets.status = 'loading';
+    const loader = new THREE.GLTFLoader();
+    const embedded = window.ODY_ASSETS || {};
+    const load = (key) => new Promise((resolve) => {
+      const path = MODEL_DIR + MODELS[key];
+      try {
+        loader.load(embedded[path] || path, (g) => resolve([key, g]), undefined, (e) => {
+          console.warn('[world] modèle indisponible', path, e && e.message ? e.message : e);
+          resolve([key, null]);
+        });
+      } catch (e) { resolve([key, null]); }
+    });
+    Promise.all(Object.keys(MODELS).map(load)).then((list) => {
+      const got = {};
+      list.forEach(([k, g]) => { if (g) got[k] = g; });
+      // décor
+      Object.keys(got).forEach((k) => {
+        if (k === 'man' || k === 'boat') return;
+        try {
+          const kind = Object.values(KINDS).find((K) => K.m.indexOf(k) >= 0);
+          assets.tpl[k] = makeTemplate(got[k].scene, { keepXZ: kind && kind.keepXZ });
+        } catch (e) { console.warn('[world] gabarit', k, e); }
+      });
+      if (Object.keys(assets.tpl).length) {
+        assets.ready = true;
+        chapters.forEach((ch) => { if (ch) { try { redecorate(ch); } catch (e) { console.warn('[world] décor', e); } } });
+      }
+      if (got.boat) { try { upgradeBoat(got.boat); } catch (e) { console.warn('[world] voilier', e); } }
+      if (got.man) { try { upgradeHero(got.man); } catch (e) { console.warn('[world] Ulysse', e); assets.error = String(e); } }
+      assets.status = Object.keys(got).length ? 'ok:' + Object.keys(got).length + '/' + Object.keys(MODELS).length : 'fallback';
+      if (World.ok && !running) renderFrame(); // une image à jour même si la boucle est en pause
+    }).catch((e) => { assets.status = 'error'; assets.error = String(e); console.warn('[world] modèles', e); });
+  }
+
+  // le voilier : le modèle remplace la coque procédurale (même groupe, même trajectoire)
+  function upgradeBoat(gltf) {
+    let tpl = makeTemplate(gltf.scene);
+    if (tpl.d > tpl.w) tpl = makeTemplate(gltf.scene, { rotY: Math.PI / 2 }); // l'étrave vers +x
+    const b = newBatch();
+    b.add(tpl, 0, -0.1, 0, 0, 1.45, 1.45, null, null);
+    const mesh = b.build(toonMat({ color: '#ffffff', vertexColors: true }));
+    mesh.receiveShadow = false;
+    boat.children.slice().forEach((o) => boat.remove(o));
+    boat.add(mesh);
   }
 
   function makeSheep(ch, m) {
@@ -689,7 +911,7 @@
       return matCache[hex];
     };
 
-    const ch = { c, group, r, rng, accent, fadeMats, sheep: [], flowers: {}, fade: 0.2, phase: rng() * 6.28, open: 0 };
+    const ch = { c, group, r, rng, accent, fadeMats, m, sheep: [], flowers: {}, fade: 0.2, phase: rng() * 6.28, open: 0 };
     // collines
     const theme = THEMES[c % THEMES.length];
     ch.hills = [];
@@ -752,17 +974,22 @@
     });
     // petits pavés le long du sentier, qui suivent le relief
     const dotMat = m('#ece7dc');
+    // (tous les pavés de l'île sont fusionnés en un seul maillage : un seul appel de dessin)
+    const dotTpl = makeTemplate(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.04, 14)));
+    const dots = newBatch();
     for (let k = 0; k + 1 < order.length; k++) {
       const a = order[k], b = order[k + 1];
       const n = Math.max(1, Math.floor(a.distanceTo(b) / 0.32));
       for (let j = 1; j < n; j++) {
         const p = a.clone().lerp(b, j / n);
         if (j * (a.distanceTo(b) / n) < 0.35 || (n - j) * (a.distanceTo(b) / n) < 0.35) continue;
-        const dot = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.04, 14), dotMat);
-        dot.position.set(p.x, heightLocal(ch, p.x, p.z) + 0.01, p.z);
-        dot.receiveShadow = true;
-        group.add(dot);
+        dots.add(dotTpl, p.x, heightLocal(ch, p.x, p.z) - 0.01, p.z, 0, 0.04, 0.04, null, null);
       }
+    }
+    if (dots.count()) {
+      const dotMesh = dots.build(dotMat);
+      dotMesh.castShadow = false;
+      group.add(dotMesh);
     }
 
     // le portique du boss
@@ -1021,7 +1248,174 @@
       o.add(hull);
     });
     scene.add(g);
-    Object.assign(hero, { group: g, body, scarf: scarfMat, shadow, cape: capePivot, legs, head, emblem, arms, mind, focus: 0, focusTarget: 0 });
+    Object.assign(hero, { group: g, body, scarf: scarfMat, shadow, cape: capePivot, legs, head, emblem, arms, mind, spear, focus: 0, focusTarget: 0 });
+  }
+
+  // Ulysse animé (personnage « Man » de Quaternius, CC0) : il remplace le corps procédural.
+  // La cape est accrochée à l'os du torse, la lance reste plantée à côté de lui.
+  function upgradeHero(gltf) {
+    const src = gltf.scene;
+    const clips = gltf.animations || [];
+    const clip = (suffix) => clips.find((c) => c.name === suffix || c.name.endsWith('|' + suffix) || c.name.endsWith(suffix));
+    if (!clip('Man_Idle') || !clip('Man_Run')) throw new Error('animations manquantes');
+    const bone = (name) => src.getObjectByName(name) || src.getObjectByName(name.replace(/\./g, ''));
+    const need = ['Head', 'Head_end', 'Torso', 'UpperArm.L', 'LowerArm.L', 'MiddleHand.L', 'UpperArm.R', 'LowerArm.R', 'MiddleHand.R'];
+    const B = {};
+    need.forEach((n) => { B[n] = bone(n); if (!B[n]) throw new Error('os manquant ' + n); });
+
+    const rig = new THREE.Group();
+    rig.add(src);
+    src.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(src);
+    const s = 1.1 / (box.max.y - box.min.y);
+    src.scale.setScalar(s);
+    src.position.set(-(box.min.x + box.max.x) / 2 * s, -box.min.y * s, -(box.min.z + box.max.z) / 2 * s);
+
+    const COL = { Shirt: '#4d5862', Pants: '#6b737a', Skin: '#ecd5bd', Hair: '#5a4636', Eyes: '#2b2622', Socks: '#8a7a68' };
+    const skinned = [];
+    src.traverse((o) => {
+      if (!o.isMesh) return;
+      const name = o.material && o.material.name;
+      o.material = toonMat({ color: COL[name] || '#d9d4cc', skinning: !!o.isSkinnedMesh });
+      o.castShadow = true;
+      o.frustumCulled = false; // la boîte englobante ne suit pas l'animation
+      if (o.isSkinnedMesh && name !== 'Eyes') skinned.push(o);
+    });
+    rig.updateMatrixWorld(true);
+    // contour encré : coque inversée gonflée le long des normales (suit le squelette)
+    const ws = new THREE.Vector3();
+    const inkMat = new THREE.MeshBasicMaterial({ color: '#2a2622', side: THREE.BackSide, skinning: true });
+    if (skinned.length) {
+      skinned[0].getWorldScale(ws);
+      const thick = 0.011 / (ws.x || 1);
+      inkMat.onBeforeCompile = (sh) => {
+        sh.uniforms.outline = { value: thick };
+        sh.vertexShader = 'uniform float outline;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\ttransformed += normalize(normal) * outline;');
+      };
+    }
+    // le modèle est à facettes : on gonfle le contour selon des normales lissées
+    // (moyenne par position), sinon la coque se fendille aux arêtes
+    const smoothGeo = (geo) => {
+      const g = geo.clone();
+      const P = g.attributes.position, N = g.attributes.normal;
+      if (!N) return g;
+      const acc = {}, key = (i) => Math.round(P.getX(i) * 1e5) + ',' + Math.round(P.getY(i) * 1e5) + ',' + Math.round(P.getZ(i) * 1e5);
+      for (let i = 0; i < P.count; i++) {
+        const k = key(i), a = acc[k] || (acc[k] = [0, 0, 0]);
+        a[0] += N.getX(i); a[1] += N.getY(i); a[2] += N.getZ(i);
+      }
+      const out = new Float32Array(P.count * 3);
+      for (let i = 0; i < P.count; i++) {
+        const a = acc[key(i)], l = Math.hypot(a[0], a[1], a[2]) || 1;
+        out[i * 3] = a[0] / l; out[i * 3 + 1] = a[1] / l; out[i * 3 + 2] = a[2] / l;
+      }
+      g.setAttribute('normal', new THREE.BufferAttribute(out, 3));
+      return g;
+    };
+    skinned.forEach((o) => {
+      const hull = new THREE.SkinnedMesh(smoothGeo(o.geometry), inkMat);
+      hull.bind(o.skeleton, o.bindMatrix);
+      hull.position.copy(o.position); hull.quaternion.copy(o.quaternion); hull.scale.copy(o.scale);
+      hull.frustumCulled = false;
+      o.parent.add(hull);
+    });
+
+    // animations : repos, marche, course, mélangées selon le déplacement
+    const mixer = new THREE.AnimationMixer(src);
+    const acts = {};
+    [['idle', 'Man_Idle'], ['walk', 'Man_Walk'], ['run', 'Man_Run']].forEach(([k, n]) => {
+      const c = clip(n);
+      if (!c) return;
+      const a = mixer.clipAction(c);
+      a.play();
+      a.setEffectiveWeight(k === 'idle' ? 1 : 0);
+      acts[k] = { a, w: k === 'idle' ? 1 : 0 };
+    });
+    mixer.update(0);
+    rig.updateMatrixWorld(true);
+
+    const P = (o) => o.getWorldPosition(new THREE.Vector3()); // (rig encore à l'origine : repère du rig)
+    const ul = P(B['UpperArm.L']), ur = P(B['UpperArm.R']);
+    const width = ul.distanceTo(ur);
+    // cape : accrochée au torse, à hauteur d'épaules
+    const holder = new THREE.Group();
+    const sy = (ul.y + ur.y) / 2;
+    holder.position.set(0, sy - 0.01, -0.01);
+    const k = Math.max(0.6, Math.min(1.8, width / 0.27));
+    holder.scale.set(k, sy / 0.88, k * 0.95);
+    hero.cape.position.set(0, 0, 0);
+    holder.add(hero.cape);
+    rig.add(holder);
+    rig.updateMatrixWorld(true);
+    B.Torso.attach(holder);
+    // lance de voyageur, plantée à sa droite
+    hero.spear.position.set(-(width * 0.5 + 0.1), 0, 0.06);
+    hero.spear.rotation.z = 0.06;
+    rig.add(hero.spear);
+    // repère au centre de la tête (caméra du mode concentration, lueur de la pensée)
+    const hp = P(B.Head), he = P(B.Head_end);
+    const anchor = new THREE.Object3D();
+    anchor.position.copy(hp).lerp(he, 0.45);
+    rig.add(anchor);
+    rig.updateMatrixWorld(true);
+    B.Head.attach(anchor);
+    rig.add(hero.mind);
+    hero.mind.position.copy(anchor.position);
+
+    hero.group.remove(hero.body);
+    hero.group.add(rig);
+    _ik = { a: new THREE.Vector3(), b: new THREE.Vector3(), c: new THREE.Vector3(), t: new THREE.Vector3(), h: new THREE.Vector3(),
+      q: new THREE.Quaternion(), w: new THREE.Quaternion(), p: new THREE.Quaternion() };
+    const arm = (side) => ({ upper: B['UpperArm.' + side], lower: B['LowerArm.' + side], end: B['MiddleHand.' + side], qa: [new THREE.Quaternion(), new THREE.Quaternion()] });
+    Object.assign(hero, { body: rig, head: anchor, rig: { mixer, acts, arms: [arm('L'), arm('R')], headBone: B.Head, headSize: hp.distanceTo(he) } });
+  }
+
+  // Mains sur la tête (mode concentration) : petite IK « CCD » sur bras + avant-bras,
+  // mélangée à l'animation de repos selon f (0 → animation seule, 1 → pose complète).
+  let _ik = null; // (vecteurs de travail, créés quand THREE est disponible)
+  function handsOnHead(f) {
+    const r = hero.rig;
+    hero.group.updateMatrixWorld(true);
+    const head = hero.head.getWorldPosition(_ik.h);
+    const scale = hero.group.scale.x;
+    r.arms.forEach((arm) => {
+      arm.qa[0].copy(arm.upper.quaternion); arm.qa[1].copy(arm.lower.quaternion);
+      // cible : sur le côté du crâne, un peu au-dessus de l'oreille
+      const sh = arm.upper.getWorldPosition(_ik.a);
+      const side = _ik.b.set(sh.x - head.x, 0, sh.z - head.z);
+      if (side.lengthSq() < 1e-8) side.set(1, 0, 0);
+      side.normalize();
+      const target = _ik.t.copy(head).addScaledVector(side, r.headSize * 0.55 * scale).add(_ik.c.set(0, r.headSize * 0.22 * scale, 0));
+      for (let it = 0; it < 8; it++) {
+        [arm.lower, arm.upper].forEach((bone) => {
+          const bp = bone.getWorldPosition(_ik.a);
+          const ep = arm.end.getWorldPosition(_ik.b).sub(bp).normalize();
+          const tp = _ik.c.copy(target).sub(bp).normalize();
+          _ik.q.setFromUnitVectors(ep, tp);
+          bone.getWorldQuaternion(_ik.w).premultiply(_ik.q);
+          bone.parent.getWorldQuaternion(_ik.p).invert();
+          bone.quaternion.copy(_ik.p.multiply(_ik.w));
+        });
+      }
+      arm.upper.quaternion.copy(arm.qa[0].slerp(arm.upper.quaternion, f));
+      arm.lower.quaternion.copy(arm.qa[1].slerp(arm.lower.quaternion, f));
+    });
+  }
+
+  function updateRig(dt, t, moving, speed, lift) {
+    const r = hero.rig;
+    const target = { idle: moving ? 0 : 1, walk: 0, run: moving ? 1 : 0 };
+    const kk = 1 - Math.exp(-dt * 10);
+    Object.keys(r.acts).forEach((k) => {
+      const A = r.acts[k];
+      A.w += ((target[k] || 0) - A.w) * kk;
+      A.a.setEffectiveWeight(A.w);
+    });
+    if (r.acts.run) r.acts.run.a.timeScale = speed ? 1.0 : 0.7;
+    r.mixer.update(dt);
+    hero.cape.rotation.x = moving ? -0.38 + Math.sin(t * 7) * 0.06 : -0.06 + Math.sin(t * 1.2) * 0.03;
+    if (hero.focus > 0.01) handsOnHead(Math.min(1, hero.focus));
+    hero.mind.position.copy(hero.body.worldToLocal(hero.head.getWorldPosition(_ik.h)));
   }
 
   // point de passage → position vivante (les îles tanguent, les pierres flottent)
@@ -1160,6 +1554,18 @@
     let d = hero.facing - g.rotation.y;
     d = Math.atan2(Math.sin(d), Math.cos(d));
     g.rotation.y += d * (1 - Math.exp(-dt * 8));
+    hero.focus += (hero.focusTarget - hero.focus) * (1 - Math.exp(-dt * 4));
+    if (hero.rig) updateRig(dt, t, moving, speed, lift);
+    else animateProceduralHero(t, moving, speed, lift);
+    const f = hero.focus;
+    hero.mind.material.opacity = Math.max(0, f - 0.5) * 2 * (0.7 + Math.sin(t * 3) * 0.3);
+    hero.mind.scale.setScalar(0.35 + f * 0.35 + Math.sin(t * 3) * 0.04);
+    const accent = new THREE.Color(opts.levelInfo(selected).accent);
+    hero.scarf.color.lerp(accent, 1 - Math.exp(-dt * 2));
+    hero.emblem.material.color.lerp(accent, 1 - Math.exp(-dt * 2));
+  }
+
+  function animateProceduralHero(t, moving, speed, lift) {
     // marche, respiration, cape qui flotte derrière lui
     const w = t * 8.5;
     const stride = speed ? Math.sin(w) * 0.55 : lift > 0.05 ? 0.35 : 0;
@@ -1170,7 +1576,6 @@
     hero.body.scale.y = 1 + (moving ? 0 : Math.sin(t * 1.8) * 0.012);
     hero.cape.rotation.x = moving ? -0.32 + Math.sin(t * 7) * 0.06 : -0.04 + Math.sin(t * 1.2) * 0.03;
     // bras : balancier à la marche, mains sur la tête en mode focus
-    hero.focus += (hero.focusTarget - hero.focus) * (1 - Math.exp(-dt * 4));
     const f = hero.focus;
     hero.arms.forEach((arm) => {
       const side = arm.userData.side;
@@ -1180,11 +1585,6 @@
     });
     hero.head.rotation.y = moving || f > 0.05 ? 0 : Math.sin(t * 0.35) * 0.35;
     hero.head.rotation.x = -0.12 * f; // il baisse légèrement la tête, concentré
-    hero.mind.material.opacity = Math.max(0, f - 0.5) * 2 * (0.7 + Math.sin(t * 3) * 0.3);
-    hero.mind.scale.setScalar(0.35 + f * 0.35 + Math.sin(t * 3) * 0.04);
-    const accent = new THREE.Color(opts.levelInfo(selected).accent);
-    hero.scarf.color.lerp(accent, 1 - Math.exp(-dt * 2));
-    hero.emblem.material.color.lerp(accent, 1 - Math.exp(-dt * 2));
   }
 
   // ------------------------------------------------------------------
@@ -1501,6 +1901,7 @@
     post.material.uniforms.texel.value.set(1 / (w * pr), 1 / (h * pr));
   }
   function renderFrame() {
+    renderer.info.reset();
     if (!post) { renderer.render(scene, camera); return; }
     // en gros plan (mode concentration), le flou se resserre autour du visage
     post.material.uniforms.strength.value = calm ? 0.35 : 1;
@@ -1605,6 +2006,7 @@
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.domElement.className = 'world-canvas';
+    renderer.info.autoReset = false; // (statistiques de la scène complète, pas de la seule passe finale)
     setupPost();
     host.appendChild(renderer.domElement);
 
@@ -1653,6 +2055,7 @@
     if (window.ResizeObserver) new ResizeObserver(resize).observe(host); // barre d'adresse, plein écran : la scène suit la vraie hauteur
     resize();
     World.ok = true;
+    loadAssets(); // modèles 3D en arrière-plan ; le monde procédural reste en place s'ils manquent
     return true;
   };
 
@@ -1717,9 +2120,11 @@
   World.stop = function () { running = false; cancelAnimationFrame(raf); };
   // outils de test
   World.advance = function (sec) { for (let i = 0; i < sec * 30; i++) tick(1 / 30, simTime + 1 / 30); };
+  World._scene = () => scene;
   World.wander = (c, dx, dz) => { const p = centerOf(c); wanderTo(c, new THREE.Vector3(p.x + dx, 0, p.z + dz)); };
   World.debug = () => ({ done, selected, free: !!hero.free, route: hero.route ? hero.route.length : 0, chapters: chapters.length,
-    pos: hero.group.position.toArray().map((v) => +v.toFixed(2)) });
+    pos: hero.group.position.toArray().map((v) => +v.toFixed(2)), models: assets.status, rig: !!hero.rig, modelError: assets.error,
+    calls: renderer.info.render.calls, tris: renderer.info.render.triangles });
 
   document.addEventListener('visibilitychange', () => {
     if (!World.ok) return;
