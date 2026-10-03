@@ -13,7 +13,6 @@
 <link rel="preload" href="assets/fonts/marcellus-latin-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/games/demineur.css">
-<link rel="stylesheet" href="css/games/bataille.css">
 <link rel="stylesheet" href="css/games/rushhour.css">
 <link rel="stylesheet" href="css/games/simon.css">
 <!-- peau cartoon de toute l'interface (police Fredoka, SIL OFL) : TOUJOURS la dernière feuille -->
@@ -109,6 +108,8 @@
       <span class="brain-txt"><small>niveau</small><span id="level-num">1</span></span>
       <i class="brain-xp"><b id="brain-xp-mini"></b></i>
     </button>
+    <!-- défi du jour : la même grille pour tout le monde, une par jour (icône du jeu, coche, série de jours) -->
+    <button id="open-daily" class="ghost-icon corner corner-left daily-btn" aria-label="Défi du jour"></button>
     <!-- garde-robe : apparence d'Ulysse -->
     <button id="open-wardrobe" class="ghost-icon corner" aria-label="Apparence du personnage">
       <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3.5 4 6l1.6 4.2L7.5 9.4V20.5h9V9.4l1.9.8L20 6l-5-2.5c-.5 1.4-1.6 2.2-3 2.2S9.5 4.9 9 3.5z" fill="currentColor" opacity=".22"/><path d="M9 3.5 4 6l1.6 4.2L7.5 9.4V20.5h9V9.4l1.9.8L20 6l-5-2.5c-.5 1.4-1.6 2.2-3 2.2S9.5 4.9 9 3.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
@@ -298,7 +299,10 @@
         <svg class="ic ld-laurel" viewBox="0 0 512 512"><use href="assets/ui/icons.svg#g-laurels"/></svg>
         <svg class="ic ld-star" viewBox="0 0 256 256"><use href="assets/ui/icons.svg#i-star"/></svg>
       </div>
-      <p id="ld-title" class="ld-title">Niveau</p>      <div id="ld-time" class="ld-time" hidden></div>
+      <p id="ld-title" class="ld-title">Niveau</p>
+      <!-- 1 à 3 étoiles selon le temps (et les indices) ; elles éclosent une à une -->
+      <div id="ld-stars" class="ld-stars" hidden></div>
+      <div id="ld-time" class="ld-time" hidden></div>
       <div id="ld-skills" class="ld-skills"></div>
       <button id="ld-share" class="ld-share" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-share-network"/></svg>partager mon temps</button>
       <button id="ld-next" class="next-btn" aria-label="Niveau suivant">
@@ -326,7 +330,6 @@
 <script src="js/games/coffre.js"></script>
 <script src="js/games/tuyaux.js"></script>
 <script src="js/games/demineur.js"></script>
-<script src="js/games/bataille.js"></script>
 <script src="js/games/rushhour.js"></script>
 <script src="js/games/simon.js"></script>
 <script src="js/tutorials.js"></script>

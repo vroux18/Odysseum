@@ -128,3 +128,13 @@
 .simon-prog i.in.sung { background: color-mix(in srgb, var(--game) 45%, transparent) !important; }
 .simon-prog i.done { background: var(--game) !important; opacity: 1 !important; box-shadow: 0 0 10px 2px color-mix(in srgb, var(--game) 60%, transparent);
   transform: rotate(var(--a)) translateX(calc(var(--s) * .15)) scale(1.35) !important; }
+
+/* centre v2 : trois perles d'étape, plus de lyre ni de couronne de notes */
+.simon-lyre, .simon-lives, .simon-prog { display: none !important; }
+.simon-phases { display: flex; gap: calc(var(--s) * .016); align-items: center; justify-content: center; }
+.simon-phases i { flex: none; width: calc(var(--s) * .036); height: calc(var(--s) * .036); border-radius: 50%; background: #efe9f7;
+  box-shadow: inset 0 2px 0 rgba(80, 60, 140, .14); transition: background .4s, box-shadow .4s, transform .4s var(--spring, ease); }
+.simon-phases i.now { box-shadow: inset 0 0 0 2.5px var(--game); }
+.simon-phases i.done { background: var(--game); box-shadow: inset 0 2.5px 0 rgba(255, 255, 255, .45), 0 0 10px 2px color-mix(in srgb, var(--game) 55%, transparent); }
+.simon-phases i.pop { animation: simon-pop .5s var(--spring, ease); }
+@keyframes simon-pop { 0% { transform: scale(.4); } 60% { transform: scale(1.35); } 100% { transform: none; } }

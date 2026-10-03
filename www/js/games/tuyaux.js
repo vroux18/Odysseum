@@ -171,7 +171,20 @@
             ctx.stroke();
             return;
           }
-          arms.forEach(([dx, dy]) => { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(dx * half, dy * half); ctx.stroke(); });
+          // (on dépasse d'un demi-pixel du bord de la case : pas de couture visible avec la voisine)
+          arms.forEach(([dx, dy]) => { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(dx * (half + 0.6), dy * (half + 0.6)); ctx.stroke(); });
+          // jonctions en T ou en croix : chaque angle rentrant s'arrondit (congé), comme un vrai raccord moulé
+          if (arms.length >= 3) {
+            for (let a = 0; a < arms.length; a++) for (let b = a + 1; b < arms.length; b++) {
+              const [ax, ay] = arms[a], [bx, by] = arms[b];
+              if (ax * bx + ay * by !== 0) continue; // seulement les bras perpendiculaires
+              ctx.beginPath();
+              ctx.moveTo(ax * half, ay * half);
+              ctx.arcTo(0, 0, bx * half, by * half, cell * 0.36);
+              ctx.lineTo(bx * half, by * half);
+              ctx.stroke();
+            }
+          }
           // terminal : un rond, dont l'anneau extérieur reste visible (le tracé large dépasse le fin)
           const r = deg === 1 ? cell * 0.3 + (width - w) / 2 : width / 2;
           ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();

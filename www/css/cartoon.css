@@ -37,7 +37,7 @@
   --k-edge: #d9cfe8;       /* bord épais lilas sous les bulles blanches */
   --k-well: #f1ecf8;       /* creux (pistes, onglets éteints) */
   /* une teinte par capacité */
-  --sk-logique: #f2773f; --sk-espace: #5cc93b; --sk-anticipation: #3d8ee8; --sk-raisonnement: #ffc81f; --sk-memoire: #ff7ac8;
+  --sk-logique: #f2773f; --sk-espace: #4cb82e; --sk-anticipation: #3d8ee8; --sk-raisonnement: #8f7cf0; --sk-memoire: #ff6fb5;
   /* police, rayons, tailles */
   --k-font: 'Fredoka', 'Nunito', 'Segoe UI', system-ui, sans-serif;
   --k-r-sm: 14px; --k-r-md: 20px; --k-r-lg: 28px; --k-r-pill: 999px;
@@ -90,12 +90,13 @@ svg.ic use { stroke: currentColor; stroke-width: 9px; stroke-linejoin: round; st
 /* pastille du niveau (référence du style) : même police arrondie que tout le reste */
 #home #open-brain #level-num { font: 700 15px/1 var(--k-font) !important; }
 #home #open-settings, #home #open-wardrobe { top: calc(16px + env(safe-area-inset-top, 0px)); width: var(--k-btn); height: var(--k-btn); }
-#home #open-settings { right: 14px; color: var(--k-ink); --duo: var(--k-sky); --duo-o: .9; }
-#home #open-wardrobe { right: 76px; color: #d24d84; }
-#home #open-wardrobe svg path:first-child { fill: var(--k-coral); opacity: .9; }
+/* boutons utilitaires : sobres (encre + teinte lilas) ; la couleur est réservée au jeu et aux capacités */
+#home #open-settings { right: 14px; color: var(--k-ink); --duo: var(--k-edge); --duo-o: .9; }
+#home #open-wardrobe { right: 76px; color: var(--k-ink); }
+#home #open-wardrobe svg path:first-child { fill: var(--k-edge); opacity: .9; }
 #home #open-wardrobe svg path:last-child { stroke-width: 2.2; }
-#home #open-library { width: 58px; height: 58px; right: 14px; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); color: #2f8a1d; --duo: var(--k-grass); --duo-o: .9; }
-#home #cam-mode { width: var(--k-btn); height: var(--k-btn); left: 14px; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); color: #0f6fa8; --duo: var(--k-sky); --duo-o: .9; }
+#home #open-library { width: 58px; height: 58px; right: 14px; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); color: var(--k-ink); --duo: var(--k-edge); --duo-o: .9; }
+#home #cam-mode { width: var(--k-btn); height: var(--k-btn); left: 14px; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); color: var(--k-ink); --duo: var(--k-edge); --duo-o: .9; }
 #home #cam-mode.on { background: var(--k-sea) !important; border-color: #fff !important; color: #fff; --duo: #fff; --duo-o: .35;
   box-shadow: 0 5px 0 #0f6fa8, var(--k-drop) !important; }
 #home #open-settings svg.ic, #home #open-wardrobe svg, #home #cam-mode svg.ic { width: 26px !important; height: 26px !important; }
@@ -487,3 +488,64 @@ svg.ic use { stroke: currentColor; stroke-width: 9px; stroke-linejoin: round; st
   #home .level-arrow.prev { left: calc(50% - 42px - 10px - 46px); }
   #home .level-arrow.next { left: calc(50% + 42px + 10px); }
 }
+
+/* ---------- Étoiles de score (1 à 3, selon le temps) ---------- */
+/* or réservé aux étoiles ; les étoiles manquantes restent en creux gris */
+.mini-stars, .big-stars { display: inline-flex; align-items: flex-end; justify-content: center; gap: 1px; pointer-events: none; }
+.mini-stars svg, .big-stars svg { fill: var(--k-well); stroke: var(--k-edge); stroke-width: 1.6; stroke-linejoin: round; overflow: visible; }
+.mini-stars svg.on, .big-stars svg.on { fill: var(--k-sun); stroke: var(--k-sun-dk); }
+.mini-stars svg { width: 11px; height: 11px; }
+.mini-stars svg:nth-child(2) { transform: translateY(-2px); }
+/* fin de niveau : trois grosses étoiles sous le titre, qui éclosent une à une */
+.ld-stars { display: flex; justify-content: center; margin: -2px 0 2px; }
+.ld-stars[hidden] { display: none; }
+.big-stars { gap: 6px; }
+.big-stars svg { width: 50px; height: 50px; stroke-width: 1.4; filter: drop-shadow(0 3px 0 var(--k-edge));
+  transform: scale(0); animation: k-star-pop .55s var(--k-ease) forwards; animation-delay: var(--d, 0s); }
+.big-stars svg.on { filter: drop-shadow(0 3px 0 var(--k-sun-dk)); }
+.big-stars svg:nth-child(2) { width: 62px; height: 62px; margin-bottom: 8px; }
+@keyframes k-star-pop { 0% { transform: scale(0) rotate(-40deg); } 60% { transform: scale(1.25) rotate(8deg); } 100% { transform: scale(1) rotate(0); } }
+/* grille de palier enchaînée : les étoiles éclosent un instant au-dessus du plateau */
+.pop-stars { position: fixed; left: 0; right: 0; top: 34%; z-index: 30; display: flex; justify-content: center; pointer-events: none; }
+.pop-stars[hidden] { display: none; }
+.pop-stars .big-stars { padding: 10px 16px 12px; border-radius: var(--k-r-lg); background: #fff; box-shadow: 0 5px 0 var(--k-edge), var(--k-drop); }
+.pop-stars .big-stars svg { width: 40px; height: 40px; }
+.pop-stars .big-stars svg:nth-child(2) { width: 50px; height: 50px; margin-bottom: 6px; }
+/* liste des niveaux : les étoiles d'un niveau réussi, posées sous la bulle */
+.lv { position: relative; }
+.lv .mini-stars { position: absolute; left: 50%; bottom: -5px; transform: translateX(-50%); padding: 1px 3px; border-radius: var(--k-r-pill); background: #fff; box-shadow: 0 2px 0 var(--k-edge); }
+.lv .mini-stars svg { width: 9px; height: 9px; }
+.lv-grid { row-gap: 14px; }
+
+/* ---------- Défi du jour : petite bulle blanche sous la pastille du niveau ---------- */
+#home #open-daily { top: calc(78px + env(safe-area-inset-top, 0px)); left: 18px; width: var(--k-btn-sm); height: var(--k-btn-sm); padding: 0; display: grid; place-items: center; overflow: visible; }
+.daily-ic { display: grid; place-items: center; }
+.daily-ic svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.daily-ic svg .f { fill: currentColor; stroke: none; }
+/* fait aujourd'hui : coche (pastille encre) en haut à droite, étoiles en dessous */
+.daily-check { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; background: var(--k-ink); border: 2px solid #fff; }
+.daily-check svg { width: 11px; height: 11px; fill: none; stroke: #fff; stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; }
+#open-daily .daily-stars { position: absolute; left: 50%; bottom: -12px; transform: translateX(-50%); padding: 1px 3px; border-radius: var(--k-r-pill); background: #fff; box-shadow: 0 2px 0 var(--k-edge); }
+#open-daily .daily-stars svg { width: 9px; height: 9px; }
+/* série de jours : petite flamme et son nombre, à droite de la bulle */
+.daily-flame { position: absolute; left: calc(100% + 2px); top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; gap: 1px; padding: 2px 6px 2px 3px;
+  border-radius: var(--k-r-pill); background: #fff; box-shadow: 0 3px 0 var(--k-edge); font: 700 13px/1 var(--k-font); font-style: normal; color: var(--k-ink); }
+.daily-flame svg { width: 14px; height: 14px; fill: var(--k-sun); stroke: var(--k-sun-dk); stroke-width: 1.6; stroke-linejoin: round; }
+#open-daily:not(.done) .daily-ic { animation: k-daily-breathe 2.6s ease-in-out infinite; }
+@keyframes k-daily-breathe { 50% { transform: scale(1.12); } }
+/* rangée en tête de la liste des mini-jeux */
+.daily-row { position: relative; width: 100%; display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 8px 12px; min-height: 56px; border: 0; cursor: pointer;
+  border-radius: var(--k-r-md); background: #fff; box-shadow: inset 0 0 0 3px var(--k-sun), 0 4px 0 var(--k-edge), var(--k-drop-sm); color: var(--k-ink); }
+.daily-row:active { transform: translateY(3px); box-shadow: inset 0 0 0 3px var(--k-sun), 0 1px 0 var(--k-edge); }
+.daily-row .daily-ic { width: 40px; height: 40px; border-radius: 50%; background: var(--k-well); }
+.daily-row .daily-check { position: static; }
+.daily-row .daily-flame { position: static; transform: none; box-shadow: none; background: var(--k-well); }
+.daily-row .mini-stars svg { width: 14px; height: 14px; }
+.daily-row .daily-go { margin-left: auto; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--k-ink); color: #fff; --duo: #fff; --duo-o: .3; }
+.daily-row .daily-go svg.ic { width: 18px; height: 18px; }
+@media (prefers-reduced-motion: reduce) {
+  .big-stars svg { animation: none; transform: none; }
+  #open-daily .daily-ic { animation: none; }
+}
+html.a11y-motion .big-stars svg { animation: none; transform: none; }
+html.a11y-motion #open-daily .daily-ic { animation: none; }

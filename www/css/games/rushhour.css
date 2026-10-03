@@ -204,3 +204,10 @@
   .rh-fx, .sail .rh-oar { display: none; }
 }
 :root.a11y-motion .rh-fx, :root.a11y-motion .sail .rh-oar { display: none; }
+
+/* le navire d'Ulysse se repère tout de suite : liseré blanc, halo doré qui respire ; les autres bateaux plus discrets */
+.rh-boat:not(.hero) svg { filter: saturate(.55) brightness(1.06); opacity: .88; }
+.rh-boat.hero { z-index: 3; }
+.rh-boat.hero svg { filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 7px rgba(255, 190, 40, .85)); animation: rh-hero-glow 2.4s ease-in-out infinite; }
+@keyframes rh-hero-glow { 50% { filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 13px rgba(255, 190, 40, 1)); } }
+@media (prefers-reduced-motion: reduce) { .rh-boat.hero svg { animation: none; } }

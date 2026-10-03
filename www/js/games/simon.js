@@ -1,6 +1,6 @@
 // Sirènes : le chant des Sirènes, version Simon.
 // Les coquilles chantent une suite de notes ; on la rejoue. Chaque réussite ajoute une note.
-// Une erreur ne coûte qu'une perle (3 en tout) ; sans perle, une nouvelle mélodie recommence, en douceur.
+// Le chant se gagne en 3 étapes (3 perles au centre) ; une erreur fait tout reprendre depuis le début.
 (function () {
   'use strict';
   const C = window.Carnet;
@@ -13,7 +13,7 @@
   };
   // teintes marines : nacre rose, lagon, sable, algue, glycine, corail
   const COLORS = ['#e39bb3', '#79b2cc', '#e2bf74', '#8fbf8a', '#ab97d6', '#eda77c'];
-  const LIVES = 3;
+  const PHASES = 3; // étapes d'un chant : une perle s'allume au centre à chacune
   const START = 2; // longueur de départ d'une mélodie
 
   // ------------------------------------------------------------------
@@ -120,7 +120,6 @@
     let seq = puzzle.seqs[0];
     let len = Math.min(START, target);
     let pos = 0;           // notes déjà rejouées dans le tour en cours
-    let lives = LIVES;
     let phase = 'wait';    // wait | listen | turn | pause | won
     let hinted = -1;
     let dead = false;
@@ -159,23 +158,13 @@
     // centre : la lyre, qui s'illumine quand c'est à toi
     const core = document.createElement('div');
     core.className = 'simon-core';
-    core.innerHTML = '<svg viewBox="0 0 24 24" class="simon-lyre" aria-hidden="true">' +
-      '<path d="M7 4c-2.5 2-2.5 7 1 9v6h8v-6c3.5-2 3.5-7 1-9"/><path d="M8 7h8M10 7v12M12 7v12M14 7v12M7 19h10"/></svg>' +
-      '<div class="simon-lives"></div>';
+    core.innerHTML = '<div class="simon-phases"></div>';
     ring.appendChild(core);
-    const livesEl = core.querySelector('.simon-lives');
-
-    // progression : une perle par note à atteindre, en couronne autour du centre
-    const prog = document.createElement('div');
-    prog.className = 'simon-prog';
-    const dots = [];
-    for (let k = 0; k < target; k++) {
-      const d = document.createElement('i');
-      d.style.setProperty('--a', (-90 + k * 360 / target) + 'deg');
-      prog.appendChild(d);
-      dots.push(d);
-    }
-    ring.appendChild(prog);
+    const phasesEl = core.querySelector('.simon-phases');
+    // longueurs à atteindre pour valider chaque étape (la dernière = le chant entier)
+    const marks = [...Array(PHASES).keys()].map((k) => Math.max(START, Math.round(target * (k + 1) / PHASES)));
+    const phaseDots = marks.map(() => { const i = document.createElement('i'); phasesEl.appendChild(i); return i; });
+    let reached = 0; // longueur la plus longue rejouée sans faute
     host.appendChild(box);
 
     // taille : tient dans l'hôte, 420 px au plus
@@ -192,16 +181,13 @@
     function render() {
       box.classList.toggle('turn', phase === 'turn');
       box.classList.toggle('listen', phase === 'listen');
-      dots.forEach((d, k) => {
-        d.className = k < len ? (phase === 'turn' && k < pos ? 'done' : 'in') : '';
-        if (phase === 'won') d.className = 'done';
+      const doneN = phase === 'won' ? PHASES : marks.filter((m) => reached >= m).length;
+      phaseDots.forEach((d, k) => {
+        const was = d.classList.contains('done');
+        d.classList.toggle('done', k < doneN);
+        d.classList.toggle('now', k === doneN && phase !== 'won');
+        if (!was && k < doneN) { d.classList.remove('pop'); void d.offsetWidth; d.classList.add('pop'); }
       });
-      livesEl.innerHTML = '';
-      for (let k = 0; k < LIVES; k++) {
-        const i = document.createElement('i');
-        if (k >= lives) i.className = 'lost';
-        livesEl.appendChild(i);
-      }
       pads.forEach((p, i) => p.classList.toggle('hinted', i === hinted));
     }
 
@@ -221,7 +207,7 @@
       phase = 'listen'; pos = 0; render(); api.onChange();
       step = step || puzzle.step;
       for (let k = 0; k < len; k++) {
-        later(() => { light(seq[k], step * 0.62); if (dots[k]) { dots[k].classList.add('sung'); } }, 380 + k * step); // la perle de la note s'allume pendant le chant
+        later(() => light(seq[k], step * 0.62), 380 + k * step);
       }
       later(() => { phase = 'turn'; render(); api.onChange(); }, 380 + (len - 1) * step + step * 0.7);
     }
@@ -255,6 +241,7 @@
       if (i === seq[pos]) {
         pos++;
         if (pos >= len) {
+          reached = Math.max(reached, len);
           if (len >= target) {
             phase = 'won'; render();
             later(() => api.onWin(), 350);
@@ -265,29 +252,21 @@
         } else { render(); api.onChange(); }
         return;
       }
-      // erreur : tout ondule doucement, puis le chant reprend
+      // erreur : tout ondule, les perles s'éteignent et le chant reprend depuis le début
       phase = 'pause';
       hinted = -1;
-      lives--;
       p.classList.add('miss');
       later(() => p.classList.remove('miss'), 600);
       wobble();
       if (C.sfx.error) C.sfx.error();
       render(); api.onChange();
-      if (lives > 0) {
-        later(() => sing(), 1300);
-      } else {
-        // plus de perles : une nouvelle mélodie, qui repart de deux notes
-        later(() => {
-          seqIndex = (seqIndex + 1) % puzzle.seqs.length;
-          seq = puzzle.seqs[seqIndex];
-          len = Math.min(START, target);
-          lives = LIVES;
-          box.classList.remove('renew'); void box.offsetWidth; box.classList.add('renew');
-          render();
-          later(() => sing(), 900);
-        }, 1100);
-      }
+      later(() => {
+        len = Math.min(START, target);
+        reached = 0;
+        box.classList.remove('renew'); void box.offsetWidth; box.classList.add('renew');
+        render();
+        later(() => sing(), 900);
+      }, 1100);
     }
 
     const release = (e) => {
@@ -327,7 +306,7 @@
         if (phase === 'won') return;
         clearAll();
         seqIndex = 0; seq = puzzle.seqs[0];
-        len = Math.min(START, target); pos = 0; lives = LIVES; hinted = -1;
+        len = Math.min(START, target); pos = 0; reached = 0; hinted = -1;
         phase = 'wait'; render(); api.onChange();
         whenReady(() => sing());
       },
@@ -400,7 +379,7 @@
         'Les coquilles <b>chantent</b> une suite de notes : écoute et regarde.',
         'Quand le <b>centre s\'illumine</b>, c\'est à toi : rejoue la même suite.',
         'Chaque réussite ajoute <b>une note</b>. Atteins la longueur visée pour gagner.',
-        'Une erreur ? Le chant reprend. Après trois, une nouvelle mélodie commence, tout doucement.'
+        'Trois perles au centre : une par étape. Une erreur ? Tout reprend depuis le début.'
       ]
     },
     tutorial: [
@@ -410,7 +389,7 @@
         text: 'Quand le <b>centre s\'illumine</b>, rejoue la même suite en touchant les coquilles.' },
       { art: '<svg viewBox="0 0 120 120" class="tuto-art">' + tDots(3, 4, 40) + tDots(4, 4, 62) +
           '<path d="M52 84h16M60 76v16" stroke="#c7849f" stroke-width="3" stroke-linecap="round"/></svg>',
-        text: 'Chaque réussite ajoute <b>une note</b>. Une erreur ? Le chant reprend, sans pression.' }
+        text: 'Chaque réussite ajoute <b>une note</b>. Une erreur ? Le chant reprend depuis le début.' }
     ],
     params,
     generate,

@@ -287,6 +287,10 @@
       // le navire d'Ulysse : une ligne d'or le long du pont et l'œil peint à la proue
       s += '<path d="M' + (W * 0.62).toFixed(2) + ' ' + (W / 2).toFixed(2) + 'H' + (L - W * 0.9).toFixed(2) + '" stroke="' + GOLD + '" stroke-width="' + (W * 0.09).toFixed(2) + '" stroke-linecap="round"/>';
       s += '<circle cx="' + (L - W * 0.55).toFixed(2) + '" cy="' + (W / 2).toFixed(2) + '" r="' + (W * 0.1).toFixed(2) + '" fill="' + GOLD + '"/>';
+      // grande voile blanche gonflée, vue d'en haut : on reconnaît le navire d'Ulysse au premier coup d'œil
+      const sx = (L * 0.3).toFixed(2), bx = (L * 0.5).toFixed(2);
+      s += '<path class="rh-sail" d="M' + sx + ' ' + (W * 0.02).toFixed(2) + 'Q' + bx + ' ' + (W / 2).toFixed(2) + ' ' + sx + ' ' + (W * 0.98).toFixed(2) + 'Z" fill="#fff" stroke="' + GOLD + '" stroke-width="' + (W * 0.05).toFixed(2) + '"/>';
+      s += '<circle cx="' + sx + '" cy="' + (W / 2).toFixed(2) + '" r="' + (W * 0.09).toFixed(2) + '" fill="#8a5d3b"/>';
       // les rames, rangées le long de la coque : elles n'apparaissent qu'au départ (classe .sail)
       const oh = (W * 0.34).toFixed(2), ow = (W * 0.075).toFixed(2);
       [0.34, 0.5].forEach((t, k) => {

@@ -250,6 +250,8 @@
     tap: () => { const now = Date.now(); if (now - (sfx.lastTap || 0) < 90) return; sfx.lastTap = now; chime(midi(67), 0.35, 0.009); },
     place: () => { chime(midi(72), 1.2, 0.022); vibrate(4); },
     error: () => { chime(midi(55), 0.7, 0.016); vibrate(8); },
+    // étoile gagnée en fin de niveau : une note qui monte d'une étoile à l'autre (i = 0, 1, 2)
+    star: (i) => { chime(midi([72, 76, 79][i] || 84), 1.4, 0.03); vibrate(6); },
     win: () => {
       [60, 64, 67, 72].forEach((m, i) => setTimeout(() => chime(midi(m), 3.2, 0.028), i * 320));
       vibrate(15);

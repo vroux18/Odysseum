@@ -2059,6 +2059,75 @@
     if (won && was && !was.done) ev.grow = 0;
   }
   function refreshEvents() { chapters.forEach((ch) => { if (ch) applyEvent(ch); }); }
+
+  // ------------------------------------------------------------------
+  // Étoiles de score : 1 à 3 petites étoiles dorées flottent au-dessus de chaque pierre réussie.
+  // Un seul nuage de points pour toute la carte (un appel de dessin), tourné vers la caméra :
+  // les étoiles s'alignent sur l'horizontale de l'écran à chaque image.
+  // ------------------------------------------------------------------
+  const starState = {};  // L → nombre d'étoiles (1..3)
+  const starBorn = {};   // L → instant d'apparition (les étoiles neuves montent de la pierre)
+  let starPts = null, starCap = 0;
+  function starSprite() {
+    return canvasTexture(64, 64, (g) => {
+      const pts = [];
+      for (let k = 0; k < 10; k++) {
+        const a = -Math.PI / 2 + k * Math.PI / 5, r = k % 2 ? 11.5 : 26;
+        pts.push([32 + Math.cos(a) * r, 34 + Math.sin(a) * r]);
+      }
+      const path = () => { g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath(); };
+      g.lineJoin = 'round';
+      // bord épais orangé (comme les bulles de l'interface), puis l'or, puis un petit reflet
+      path(); g.strokeStyle = '#e08f00'; g.lineWidth = 9; g.stroke();
+      path(); g.fillStyle = '#ffc93d'; g.fill();
+      g.fillStyle = 'rgba(255,255,255,.75)';
+      g.beginPath(); g.ellipse(26, 26, 4.5, 3, -0.6, 0, Math.PI * 2); g.fill();
+    });
+  }
+  function ensureStarPts(n) {
+    if (starPts && starCap >= n) return;
+    starCap = Math.max(48, Math.ceil(n * 1.5));
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(starCap * 3), 3));
+    geo.setDrawRange(0, 0);
+    if (starPts) { starPts.geometry.dispose(); starPts.geometry = geo; return; }
+    const tex = starSprite();
+    tex.encoding = THREE.sRGBEncoding;
+    starPts = new THREE.Points(geo, new THREE.PointsMaterial({ map: tex, size: 0.34, sizeAttenuation: true, transparent: true,
+      alphaTest: 0.35, depthWrite: false, toneMapped: false }));
+    starPts.frustumCulled = false; // (positions réécrites à chaque image)
+    starPts.renderOrder = 3;
+    scene.add(starPts);
+  }
+  let _sr = null; // (THREE n'est connu qu'après World.init)
+  function updateStars(t) {
+    if (!starPts) return;
+    _sr = _sr || new THREE.Vector3();
+    _sr.setFromMatrixColumn(camera.matrixWorld, 0); _sr.y = 0;
+    if (_sr.lengthSq() < 1e-6) _sr.set(1, 0, 0); else _sr.normalize();
+    const P = starPts.geometry.attributes.position, A = P.array;
+    let i = 0;
+    for (const key in starState) {
+      const L = +key, n = starState[key];
+      if (!(n > 0) || L >= done) continue;
+      const ch = chapters[chapterOf(L)];
+      if (!ch || ch.fade < 0.3) continue;
+      if (L === selected && !hero.route && !hero.free) continue; // Ulysse s'y tient : pas d'étoiles dans sa tête
+      const p = nodePos(L);
+      if (starBorn[L] === -1) starBorn[L] = t;
+      const age = starBorn[L] != null ? Math.min(1, (t - starBorn[L]) / 0.9) : 1;
+      if (age >= 1) delete starBorn[L];
+      const rise = 1 + 2.2 * Math.pow(age - 1, 3) + 1.2 * Math.pow(age - 1, 2); // petit rebond en arrivant
+      const bob = calm ? 0 : Math.sin(t * 1.7 + L * 1.3) * 0.035;
+      for (let s = 0; s < n && i < starCap; s++, i++) {
+        const off = (s - (n - 1) / 2) * 0.27;
+        const y = p.y + (0.12 + 0.3 * rise) + (n === 3 && s === 1 ? 0.08 : 0) + bob;
+        A[i * 3] = p.x + _sr.x * off; A[i * 3 + 1] = y; A[i * 3 + 2] = p.z + _sr.z * off;
+      }
+    }
+    starPts.geometry.setDrawRange(0, i);
+    P.needsUpdate = true;
+  }
   function animateEvent(ch, dt, t) {
     const ev = ch.event;
     if (!ev || !ev.st) return;
@@ -3181,6 +3250,8 @@
     const so = sunOffset();
     sun.position.set(cam.tx + so.x, so.y, cam.tz + so.z);
     sun.target.position.set(cam.tx, 0, cam.tz);
+    camera.updateMatrixWorld();
+    updateStars(simTime);
     renderFrame();
   }
 
@@ -3577,6 +3648,18 @@
   World.setEvents = function (list) {
     (list || []).forEach((e) => { if (e && e.c != null) evState[e.c] = Object.assign({}, e); });
     if (World.ok) refreshEvents();
+  };
+  // Étoiles de score des niveaux réussis : map = { L: 1..3 } ; animate = les étoiles gagnées montent de la pierre
+  World.setStars = function (map, animate) {
+    let total = 0;
+    Object.keys(map || {}).forEach((k) => {
+      const n = Math.max(0, Math.min(3, Math.round(+map[k] || 0)));
+      if (animate && n > (starState[k] || 0)) starBorn[k] = -1;
+      if (n) starState[k] = n; else delete starState[k];
+    });
+    Object.keys(starState).forEach((k) => { if (!map || map[k] == null) delete starState[k]; });
+    Object.values(starState).forEach((n) => { total += n; });
+    if (World.ok) ensureStarPts(total);
   };
   // position monde du totem d'une île (tests, caméra)
   World.eventPos = (c) => { const ch = chapters[c]; if (!ch || !ch.event) return null; const v = new THREE.Vector3(); ch.event.group.getWorldPosition(v); return v; };

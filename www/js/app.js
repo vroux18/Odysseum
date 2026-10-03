@@ -5,12 +5,15 @@
   const C = window.Carnet;
   const $ = (sel) => document.querySelector(sel);
 
-  // Teintes vives propres à chaque jeu (palette cartoon, reprise dans css/cartoon.css) ;
-  // une famille de couleur par capacité : déduction orangés, espace vert/rose, anticipation bleus, hypothèses jaune/violet/bleu, mémoire rose.
+  // Une seule couleur par capacité, partagée par tous ses jeux (reprise dans css/cartoon.css) :
+  // déduction orange, espace vert, anticipation bleu, hypothèses violet, mémoire rose.
+  const SK_COL = { logique: '#f2773f', espace: '#4cb82e', anticipation: '#3d8ee8', raisonnement: '#8f7cf0', memoire: '#ff6fb5' };
   const ACCENT = {
-    flux: '#3d8ee8', reines: '#f2773f', astres: '#ffb21f', paves: '#5cc93b',
-    pixels: '#ff5d8f', serpent: '#1fc2ae', lumieres: '#ffc81f', coffre: '#8f7cf0',
-    tuyaux: '#c86fd6', demineur: '#ff5d5d', bataille: '#1d9be0', rushhour: '#e0953a', simon: '#ff7ac8'
+    reines: SK_COL.logique, astres: SK_COL.logique, demineur: SK_COL.logique,
+    paves: SK_COL.espace, pixels: SK_COL.espace, tuyaux: SK_COL.espace,
+    flux: SK_COL.anticipation, serpent: SK_COL.anticipation, rushhour: SK_COL.anticipation,
+    lumieres: SK_COL.raisonnement, coffre: SK_COL.raisonnement, bataille: SK_COL.raisonnement,
+    simon: SK_COL.memoire
   };
   // Icônes au trait, toutes sur la même grille 24×24.
   const ICON = {
@@ -41,6 +44,50 @@
   const variantsOf = (g) => g.variants || [{ id: 'classic', name: 'Classique' }];
   const rulesOf = (g, v) => (Array.isArray(g.rules) ? g.rules : g.rules[v] || g.rules.classic);
   const dataKey = (g, v) => (v === 'classic' ? g.id : g.id + ':' + v);
+
+  // ------------------------------------------------------------------
+  // Étoiles (1 à 3) selon le temps : chaque grille a un temps « cible » en secondes,
+  // déduit de sa taille ; une série (niveau, boss) additionne ceux de ses grilles.
+  // 3★ ≤ cible, 2★ ≤ 2 × cible, sinon 1★ ; chaque astuce retire une étoile (au moins 1).
+  // Grille résolue d'office (bouton de test) : 0 étoile, aucun record touché.
+  // ------------------------------------------------------------------
+  const sq = (n) => (n || 5) * (n || 5);
+  const TARGET = {
+    reines: (p) => 8 + 0.85 * sq(p.n),                         // 8×8 ≈ 62 s
+    flux: (p) => 6 + 0.9 * sq(p.n) + 8 * (p.bridges || 0),     // 7×7 ≈ 50 s
+    tuyaux: (p) => 5 + 0.8 * sq(p.n),                          // 6×6 ≈ 34 s
+    astres: (p) => 6 + 1.2 * sq(p.n),                          // 6×6 ≈ 49 s
+    paves: (p) => 6 + 0.7 * sq(p.n) + 3 * (p.mystery || 0),    // 8×8 ≈ 51 s
+    pixels: (p) => 8 + 1.0 * sq(p.n),                          // 10×10 ≈ 108 s
+    serpent: (p) => 6 + 0.9 * sq(p.n),                         // 8×8 ≈ 64 s
+    lumieres: (p) => 6 + 4 * (p.presses || 4),                 // 12 appuis ≈ 54 s
+    coffre: (p) => 10 + 6 * (p.len || 4) + 2 * (p.symbols || 6), // code de 5 parmi 7 ≈ 54 s
+    demineur: (p) => 8 + 0.8 * sq(p.n),                        // 9×9 ≈ 73 s
+    bataille: (p) => 8 + 1.0 * sq(p.n),                        // 8×8 ≈ 72 s
+    rushhour: (p) => 10 + 4 * ((p.band && p.band[0]) || 6),    // 10 coups ≈ 50 s
+    // mémoire : chaque tour rejoue le chant (une note de plus), puis le joueur le répète
+    simon: (p) => {
+      let t = 4;
+      for (let l = 2; l <= (p.target || 6); l++) t += l * ((p.step || 600) / 1000 + 0.55) + 1.2;
+      return t;
+    }
+  };
+  const targetTime = (id, p) => Math.max(12, Math.round(TARGET[id] && p ? TARGET[id](p) : 45));
+  function starsFor(time, target, hints) {
+    const s = time <= target ? 3 : time <= 2 * target ? 2 : 1;
+    return Math.max(1, s - (hints || 0));
+  }
+  // petite rangée de 3 étoiles (dessin vectoriel), les manquantes en gris
+  const STAR_D = 'M12 2.6l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z';
+  const starRow = (n, cls) => '<span class="' + (cls || 'mini-stars') + '" aria-label="' + n + ' / 3">' +
+    [0, 1, 2].map((i) => '<svg viewBox="0 0 24 24" class="' + (i < n ? 'on' : '') + '"><path d="' + STAR_D + '"/></svg>').join('') + '</span>';
+  const keepBest = (obj, key, n) => { if (n > (obj[key] || 0)) obj[key] = n; };
+  // étoiles d'un niveau de palier : C.store.tierStars[jeu][palier][k]
+  function tierStarsOf(id, tierId) {
+    const S = (C.store.tierStars = C.store.tierStars || {});
+    const g = (S[id] = S[id] || {});
+    return (g[tierId] = g[tierId] || {});
+  }
 
   // ------------------------------------------------------------------
   // La quête principale :
@@ -283,12 +330,14 @@
     $('#play').classList.remove('done');
     $('#play').classList.toggle('mega', info.event != null); // grande grille : cases plus serrées
     $('#play-icon').innerHTML = icon(g.id);
-    $('#play-level').textContent = info.event != null ? 'méga' : info.tier ? info.tier.name.toLowerCase() + ' · ' + info.tier.k : info.free ? (info.focus ? 'concentration' : 'jeu libre') : (info.boss ? 'épreuve · niveau ' : 'niveau ') + (info.L + 1);
+    $('#play-level').textContent = info.event != null ? 'méga' : info.daily ? 'défi du jour' : info.tier ? info.tier.name.toLowerCase() + ' · ' + info.tier.k : info.free ? (info.focus ? 'concentration' : 'jeu libre') : (info.boss ? 'épreuve · niveau ' : 'niveau ') + (info.L + 1);
     // passage d'un mini-jeu au suivant dans une série : la grille arrive par la droite
     $('#board').classList.toggle('next-step', stepIndex > 0 || !!info.chain || !!info.focus);
     $('#board').classList.remove('leaving');
     $('#play-name').textContent =g.name + (variant !== 'classic' ? ' · ' + variantsOf(g).find((v) => v.id === variant).name : '');
     $('#tools').hidden = true;
+    // chrono des étoiles : temps de jeu, temps cible et astuces, cumulés sur toute la série
+    if (stepIndex === 0 || !info.run) info.run = { time: 0, target: 0, hints: 0 };
     hideTip();
     $('#win').hidden = true;
     $('#level-done').hidden = true;
@@ -317,7 +366,9 @@
         const nx = nextTier(g.id);
         if (nx) { mark = nx; genLevel = tierLevel(nx.tier, nx.k); seed = 'palier:' + g.id + ':' + nx.tier.id + ':' + nx.k; }
       }
-      const puzzle = g.generate(C.makeRng(seed), step.params || g.params(genLevel, variant)); // (événement : paramètres « méga »)
+      const prm = step.params || g.params(genLevel, variant); // (événement : paramètres « méga »)
+      const puzzle = g.generate(C.makeRng(seed), prm);
+      const target = targetTime(g.id, prm);
       host.innerHTML = '';
       let elapsed = 0, won = false, tool = 'fill', hints = 0, auto = false;
       const tick = setInterval(() => {
@@ -336,8 +387,13 @@
           const d = C.gameData(dataKey(g, variant));
           d.solved++;
           d.totalTime += elapsed;
-          gainXp(g, step.level, info.event != null ? 2 : info.boss ? 1.5 : 1, elapsed, hints, auto);
-          if (mark) tierMark(g.id, mark.tier.id, mark.k);
+          gainXp(g, step.level, info.event != null ? 2 : info.daily || info.boss ? 1.5 : 1, elapsed, hints, auto);
+          info.run.time += elapsed; info.run.target += target; info.run.hints += hints;
+          if (mark) {
+            tierMark(g.id, mark.tier.id, mark.k);
+            // la grille de la quête est aussi un niveau de palier : ses étoiles y comptent
+            if (!auto) keepBest(tierStarsOf(g.id, mark.tier.id), mark.k, starsFor(elapsed, target, hints));
+          }
           C.save();
           host.classList.add('solved');
           if (stepIndex + 1 < info.steps.length) {
@@ -387,7 +443,9 @@
       }
 
       session = {
-        g, variant, inst, info,
+        g, variant, inst, info, target,
+        // (tests) lire ou régler le temps écoulé sur la grille en cours
+        elapsed(v) { if (v != null) elapsed = v; return elapsed; },
         hint() {
           if (won || hints >= MAX_HINTS) { C.sfx.error && C.sfx.error(); return; }
           const res = inst.hint();
@@ -411,14 +469,26 @@
     }, 60);
   }
 
-  let pendingProgress = false;
+  let pendingProgress = false, pendingWalk = false;
   // Niveau réussi : la grille s'illumine, puis le niveau suivant s'enchaîne tout seul.
   // La carte rattrapera la progression au retour (Ulysse avancera jusqu'à la bonne pierre).
   function finishLevel(info) {
+    // étoiles de la série (0 si résolue d'office : rien n'est enregistré)
+    const run = info.run || { time: 0, target: 0, hints: 0 };
+    info.stars = info.assisted ? 0 : starsFor(run.time, run.target, run.hints);
+    if (info.daily) { // défi du jour : jour coché, série de jours, récapitulatif puis retour à la carte
+      if (!info.assisted) recordDaily(info.daily, info.stars, run.time);
+      C.save();
+      $('#play').classList.add('done');
+      clearTimeout(finishLevel.timer);
+      finishLevel.timer = setTimeout(() => { if (!screens.play.hidden) showLevelDone(info); }, 1400);
+      return;
+    }
     if (info.event != null) { // événement spécial : la coupe est gagnée, récapitulatif puis retour à la carte
       const t = Math.round((performance.now() - (info.tStart || performance.now())) / 1000);
-      const prev = EV[info.event];
-      EV[info.event] = { done: true, time: prev && prev.time ? Math.min(prev.time, t) : t };
+      const prev = EV[info.event] || {};
+      EV[info.event] = { done: true, time: info.assisted ? prev.time || null : prev.time ? Math.min(prev.time, t) : t, stars: prev.stars || 0 };
+      keepBest(EV[info.event], 'stars', info.stars);
       C.save();
       $('#play').classList.add('done');
       clearTimeout(finishLevel.timer);
@@ -428,13 +498,16 @@
     if (info.tier) { // niveau d'un palier : on le coche et on enchaîne sur le suivant
       const s = info.steps[0];
       tierMark(s.id, info.tier.id, info.tier.k);
+      if (!info.assisted) keepBest(tierStarsOf(s.id, info.tier.id), info.tier.k, info.stars);
+      C.save();
       $('#play').classList.add('done');
       clearTimeout(finishLevel.timer);
+      popStars(info.stars); // les étoiles de la grille éclosent un instant au-dessus du plateau
       // enchaînement rapide, comme dans la quête : la grille finie glisse, la suivante arrive
-      setTimeout(() => { if (!screens.play.hidden) $('#board').classList.add('leaving'); }, 900);
+      setTimeout(() => { if (!screens.play.hidden) $('#board').classList.add('leaving'); }, 1400);
       finishLevel.timer = setTimeout(() => {
         if (!screens.play.hidden) startTier(s.id, info.tier.id, Math.min(TIER_SIZE, info.tier.k + 1), true);
-      }, 1200);
+      }, 1700);
       return;
     }
     if (info.free) { // jeu libre : on enchaîne sur le niveau suivant du même jeu
@@ -451,9 +524,12 @@
       }, 1200);
       return;
     }
+    if (!info.assisted) keepBest((J.stars = J.stars || {}), info.L, info.stars);
     if (info.L === J.done) {
       J.done++;
       pendingProgress = true;
+    } else {
+      pendingWalk = true; // niveau rejoué : au retour, Ulysse marche jusqu'à la pierre suivante
     }
     const next = info.L + 1;
     selected = next;
@@ -514,13 +590,25 @@
     }
     const before = info.xpStart || {};
     const rows = SKILLS.filter((sk) => (C.store.xp[sk.id] || 0) > (before[sk.id] || 0));
-    $('#ld-title').textContent = info.event != null ? 'Méga ' + game(info.id).name : info.boss ? 'Épreuve réussie' : 'Niveau ' + (info.L + 1);
+    $('#ld-title').textContent = info.daily ? game(info.steps[0].id).name : info.event != null ? 'Méga ' + game(info.id).name : info.boss ? 'Épreuve réussie' : 'Niveau ' + (info.L + 1);
+    // trois grosses étoiles sous le titre : elles éclosent une à une (les manquantes restent grises)
+    const ldStars = $('#ld-stars');
+    const hasStars = info.stars != null;
+    ldStars.hidden = !hasStars;
+    if (hasStars) {
+      ldStars.innerHTML = starRow(info.stars, 'big-stars');
+      ldStars.querySelectorAll('svg').forEach((s, i) => {
+        s.style.setProperty('--d', (0.25 + i * 0.32) + 's');
+        if (i < info.stars) setTimeout(() => { if (!$('#level-done').hidden) C.sfx.star && C.sfx.star(i); }, 250 + i * 320 + 180);
+      });
+    }
+    const delay0 = hasStars ? 1.25 : 0.35; // les lignes d'XP arrivent après les étoiles
     box.innerHTML = rows.map((sk, i) => {
       const was = levelFrom(before[sk.id] || 0, 40), now = skillStats(sk);
       const gain = (C.store.xp[sk.id] || 0) - (before[sk.id] || 0);
       const startW = now.level > was.level ? 0 : Math.round(was.frac * 100);
       // une ligne de registre : emblème de la capacité, nom et niveau, jauge à crans, gain en pièce d'or
-      return '<div class="ld-row ld2" style="--game:' + ACCENT[sk.games[0]] + ';--d:' + (0.35 + i * 0.45) + 's">' +
+      return '<div class="ld-row ld2" style="--game:' + ACCENT[sk.games[0]] + ';--d:' + (delay0 + i * 0.45) + 's">' +
         '<span class="ld-medal"><svg viewBox="0 0 24 24">' + (SKILL_ICON[sk.id] || '') + '</svg></span>' +
         '<div class="ld-mid"><div class="ld-head"><span>' + sk.name + '</span>' +
         (now.level > was.level ? '<small class="ld-up">niveau ' + now.level + '</small>' : '<small>niv. ' + now.level + '</small>') + '</div>' +
@@ -544,7 +632,7 @@
         };
         requestAnimationFrame(count);
         if (row.querySelector('.ld-up')) setTimeout(() => { row.classList.add('leveled'); C.sfx.win(); }, 900);
-      }, 350 + i * 450);
+      }, delay0 * 1000 + i * 450);
     });
   }
 
@@ -621,18 +709,101 @@
     if (worldReady) {
       C.world.endConcentrate();
       C.world.start();
+      refreshStars(true); // étoiles gagnées : elles montent de la pierre
       if (pendingProgress) {
         C.world.progress(J.done, true);
         standing = false; // le bouton réapparaît à l'arrivée sur la nouvelle pierre
+      } else if (pendingWalk && C.world.select) {
+        C.world.select(selected); // niveau rejoué : Ulysse rejoint la pierre suivante
       }
     } else if (pendingProgress) {
       selected = J.done;
     }
     pendingProgress = false;
+    pendingWalk = false;
+    const pop = $('#pop-stars'); if (pop) pop.hidden = true;
+    renderDaily();
     $('#play').classList.remove('mega');
     refreshEvents(); // une île atteinte ouvre son totem ; un événement réussi devient une coupe
     renderPlay();
     renderBadge();
+  }
+
+  // étoiles des niveaux de la quête sur la carte (animate : les nouvelles montent de leur pierre)
+  function refreshStars(animate) {
+    if (worldReady && C.world.setStars) C.world.setStars(J.stars || {}, !!animate);
+  }
+  // fin d'une grille de palier (enchaînée, sans récapitulatif) : les étoiles éclosent sur le plateau
+  function popStars(n) {
+    let el = $('#pop-stars');
+    if (!el) { el = document.createElement('div'); el.id = 'pop-stars'; el.className = 'pop-stars'; document.body.appendChild(el); } // (hors de #play, qui s'estompe à la fin)
+    el.innerHTML = starRow(n, 'big-stars');
+    el.querySelectorAll('svg').forEach((s, i) => {
+      s.style.setProperty('--d', (0.1 + i * 0.2) + 's');
+      if (i < n) setTimeout(() => C.sfx.star && C.sfx.star(i), 100 + i * 200 + 150);
+    });
+    el.hidden = false;
+    clearTimeout(popStars.timer);
+    popStars.timer = setTimeout(() => { el.hidden = true; }, 1600);
+  }
+
+  // ------------------------------ Défi du jour ------------------------------
+  // Une grille par jour (date locale), la même pour tous : jeu tiré par la date, graine « daily:AAAA-MM-JJ ».
+  // Difficulté un peu au-dessus de la quête du joueur. Réussi : jour coché, série de jours, XP ×1,5.
+  // C.store.daily = { days: { date: { date, stars, time } }, streak, last, best }
+  const DAY = (C.store.daily = C.store.daily || {});
+  DAY.days = DAY.days || {};
+  const dayBefore = (key) => { const [y, m, d] = key.split('-').map(Number); return C.todayKey(new Date(y, m - 1, d - 1)); };
+  function dailyInfo(date) {
+    date = date || C.todayKey();
+    const seed = 'daily:' + date;
+    const id = ORDER[C.hashString(seed) % ORDER.length];
+    const level = Math.max(8, Math.min(32, levelInfo(J.done).steps[0].level + 5)); // moyen-difficile
+    return { L: -1, free: true, daily: date, id, accent: ACCENT[id], seed, steps: [{ id, variant: 'classic', level, seed }] };
+  }
+  // série en cours : vivante si le dernier défi réussi date d'aujourd'hui ou d'hier
+  function dailyStreak() {
+    const today = C.todayKey();
+    return DAY.last === today || DAY.last === dayBefore(today) ? DAY.streak || 0 : 0;
+  }
+  function recordDaily(date, stars, time) {
+    const prev = DAY.days[date];
+    if (!prev) {
+      DAY.streak = DAY.last === dayBefore(date) ? (DAY.streak || 0) + 1 : DAY.last === date ? DAY.streak || 1 : 1;
+      DAY.last = date;
+      DAY.best = Math.max(DAY.best || 0, DAY.streak);
+    }
+    DAY.days[date] = { date, stars: Math.max(stars, prev ? prev.stars : 0), time: prev && prev.time ? Math.min(prev.time, time) : time };
+    // on ne garde que les deux derniers mois
+    const keys = Object.keys(DAY.days).sort();
+    keys.slice(0, Math.max(0, keys.length - 62)).forEach((k) => delete DAY.days[k]);
+  }
+  function startDaily() {
+    const info = dailyInfo();
+    info.xpStart = Object.assign({}, C.store.xp);
+    ['#library', '#levels', '#brain'].forEach((s) => { const el = $(s); if (el) el.hidden = true; });
+    C.sfx.tap();
+    playStep(info, 0);
+  }
+  const CHECK = '<svg viewBox="0 0 24 24"><path d="M5.5 12.5l4 4 9-9.5"/></svg>';
+  const FLAME = '<svg viewBox="0 0 24 24"><path d="M12 2.8c.6 3.4 4.6 5.6 4.6 10.4a4.6 4.6 0 0 1-9.2 0c0-2.2 1-3.6 2.2-4.8.2 1.6.9 2.6 1.9 3 .2-3.3-.6-5.8.5-8.6z"/></svg>';
+  // contenu du bouton (et de la rangée de la liste) : icône du jeu, coche + étoiles une fois fait, flamme de la série
+  function dailyBadges() {
+    const info = dailyInfo(), rec = DAY.days[info.daily], streak = dailyStreak();
+    return {
+      info, rec, streak,
+      html: '<span class="daily-ic" style="color:' + info.accent + '">' + icon(info.id) + '</span>' +
+        (rec ? '<i class="daily-check">' + CHECK + '</i>' + starRow(rec.stars, 'mini-stars daily-stars') : '') +
+        (streak > 0 ? '<i class="daily-flame">' + FLAME + '<b>' + streak + '</b></i>' : '')
+    };
+  }
+  function renderDaily() {
+    const b = $('#open-daily');
+    if (!b) return;
+    const d = dailyBadges();
+    b.innerHTML = d.html;
+    b.classList.toggle('done', !!d.rec);
+    b.setAttribute('aria-label', 'Défi du jour · ' + game(d.info.id).name);
   }
 
   // ------------------------ Liste des mini-jeux ------------------------
@@ -644,6 +815,14 @@
     document.querySelectorAll('.lib-mode button').forEach((b) => b.classList.toggle('on', b.dataset.mode === libMode));
     const gl = $('#game-list');
     gl.innerHTML = '';
+    // en tête : le défi du jour, petite rangée mise en avant
+    const dd = dailyBadges();
+    const row = document.createElement('button');
+    row.className = 'daily-row' + (dd.rec ? ' done' : '');
+    row.setAttribute('aria-label', 'Défi du jour · ' + game(dd.info.id).name);
+    row.innerHTML = dd.html + '<span class="daily-go">' + UI('play') + '</span>';
+    row.addEventListener('click', startDaily);
+    gl.appendChild(row);
     // rangés par capacité : un petit titre coloré, puis les cartes de ses mini-jeux
     let group = null;
     const byCat = [];
@@ -783,9 +962,12 @@
     const k = TIERS.findIndex((t) => t.id === lv.tier);
     const done = tierDone(lv.id, lv.tier), open = tierOpen(lv.id, k);
     let h = open ? '' : '<p class="lv-note">' + LOCK + 'Réussis ' + TIER_UNLOCK + ' niveaux ' + TIERS[k - 1].name.toLowerCase() + ' pour ouvrir ce palier.</p>';
+    const tstars = tierStarsOf(lv.id, lv.tier);
     for (let i = 1; i <= TIER_SIZE; i++) {
       const st = !open ? 'locked' : i <= done ? 'done' : i === done + 1 ? 'next' : 'locked';
-      h += '<button class="lv ' + st + '" data-k="' + i + '"' + (st === 'locked' ? ' disabled' : '') + ' style="--i:' + Math.min(i, 40) + '">' + i + '</button>';
+      // niveau réussi : ses meilleures étoiles sous le numéro
+      const stars = st === 'done' && tstars[i] ? starRow(tstars[i]) : '';
+      h += '<button class="lv ' + st + '" data-k="' + i + '"' + (st === 'locked' ? ' disabled' : '') + ' style="--i:' + Math.min(i, 40) + '">' + i + stars + '</button>';
     }
     const grid = $('#lv-grid');
     grid.innerHTML = h;
@@ -1373,7 +1555,9 @@
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const o = openSheet(); if (o) o.hidden = true; } });
 
   // exposé pour les tests
-  window.Odysseum = { levelInfo, journey: J, eventInfo, eventList, startEvent };
+  window.Odysseum = { levelInfo, journey: J, eventInfo, eventList, startEvent,
+    session: () => session, targetTime, starsFor, dailyInfo, startDaily, renderDaily, dailyStreak, refreshStars, startLevel, startTier, openLevels };
+  $('#open-daily').addEventListener('click', startDaily);
 
   // appli installée depuis Chrome : toujours à jour (voir sw.js) ; inutile dans l'APK
   if ('serviceWorker' in navigator && location.protocol === 'https:' && !window.Capacitor) {
@@ -1382,6 +1566,9 @@
 
   initWorld();
   refreshEvents();
+  refreshStars(false);
+  renderDaily();
+  setInterval(() => { if (!screens.home.hidden) renderDaily(); }, 60 * 1000); // minuit passé : nouveau défi
   applyTheme();
   applyA11y();
   show('home');
