@@ -197,6 +197,33 @@
     // le temps de lire : plus long pour une explication plus longue
     showTip.timer = setTimeout(hideTip, Math.max(7000, Math.min(12000, (r.text || '').length * 70)));
   }
+  // Surlignages posés par-dessus un plateau dessiné (canvas) ou une zone de plusieurs cases :
+  // boxes = [{ x, y, w, h, kind: 'where' | 'why', round, label }] en pixels CSS relatifs à `ref`.
+  // Renvoie { where, why, clear } à fusionner dans l'astuce.
+  C.hintBoxes = function (ref, boxes) {
+    const host = ref.parentNode;
+    if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+    const hr = host.getBoundingClientRect(), rr = ref.getBoundingClientRect();
+    const k = ref.offsetWidth ? rr.width / ref.offsetWidth : 1; // plateau éventuellement mis à l'échelle
+    const layer = document.createElement('div');
+    layer.className = 'hint-layer';
+    layer.style.left = (rr.left - hr.left) + 'px';
+    layer.style.top = (rr.top - hr.top) + 'px';
+    layer.style.width = rr.width + 'px';
+    layer.style.height = rr.height + 'px';
+    const out = { where: [], why: [], clear: () => layer.remove() };
+    boxes.forEach((b) => {
+      const d = document.createElement('i');
+      d.className = 'hint-box' + (b.round ? ' round' : '') + (b.line ? ' line' : '');
+      d.style.left = b.x * k + 'px'; d.style.top = b.y * k + 'px';
+      d.style.width = b.w * k + 'px'; d.style.height = b.h * k + 'px';
+      if (b.label) d.textContent = b.label;
+      layer.appendChild(d);
+      (b.kind === 'where' ? out.where : out.why).push(d);
+    });
+    host.appendChild(layer);
+    return out;
+  };
 
   function playStep(info, stepIndex) {
     if (session) session.stop();
@@ -211,11 +238,11 @@
     $('#play-icon').innerHTML = icon(g.id);
     $('#play-level').textContent = info.tier ? info.tier.name.toLowerCase() + ' · ' + info.tier.k : info.free ? (info.focus ? 'concentration' : 'jeu libre') : (info.boss ? 'épreuve · niveau ' : 'niveau ') + (info.L + 1);
     // passage d'un mini-jeu au suivant dans une série : la grille arrive par la droite
-    $('#board').classList.toggle('next-step', stepIndex > 0);
+    $('#board').classList.toggle('next-step', stepIndex > 0 || !!info.chain || !!info.focus);
     $('#board').classList.remove('leaving');
     $('#play-name').textContent =g.name + (variant !== 'classic' ? ' · ' + variantsOf(g).find((v) => v.id === variant).name : '');
     $('#tools').hidden = true;
-    $('#hint-tip').hidden = true;
+    hideTip();
     $('#win').hidden = true;
     $('#level-done').hidden = true;
     // boss : trois petits points indiquent l'épreuve en cours
@@ -346,9 +373,11 @@
       tierMark(s.id, info.tier.id, info.tier.k);
       $('#play').classList.add('done');
       clearTimeout(finishLevel.timer);
+      // enchaînement rapide, comme dans la quête : la grille finie glisse, la suivante arrive
+      setTimeout(() => { if (!screens.play.hidden) $('#board').classList.add('leaving'); }, 900);
       finishLevel.timer = setTimeout(() => {
-        if (!screens.play.hidden) startTier(s.id, info.tier.id, Math.min(TIER_SIZE, info.tier.k + 1));
-      }, 2300);
+        if (!screens.play.hidden) startTier(s.id, info.tier.id, Math.min(TIER_SIZE, info.tier.k + 1), true);
+      }, 1200);
       return;
     }
     if (info.free) { // jeu libre : on enchaîne sur le niveau suivant du même jeu
@@ -357,11 +386,12 @@
       C.save();
       $('#play').classList.add('done');
       clearTimeout(finishLevel.timer);
+      setTimeout(() => { if (!screens.play.hidden) $('#board').classList.add('leaving'); }, 900);
       finishLevel.timer = setTimeout(() => {
         if (screens.play.hidden) return;
         if (info.focus) startFocus(SKILLS.find((sk) => sk.id === info.focus)); // focus : un autre jeu de la même capacité
         else startFree(game(s.id), s.variant);
-      }, 2300);
+      }, 1200);
       return;
     }
     if (info.L === J.done) {
@@ -632,12 +662,12 @@
     TIERS.forEach((t, k) => { const d = tierDone(id, t.id); if (tierOpen(id, k) && d < TIER_SIZE) nx = { tier: t, k: d + 1 }; });
     return nx;
   }
-  function startTier(id, tierId, k) {
+  function startTier(id, tierId, k, chain) {
     const t = TIERS.find((x) => x.id === tierId);
     $('#levels').hidden = true;
     $('#brain').hidden = true;
     $('#library').hidden = true;
-    playStep({ L: -1, free: true, tier: { id: tierId, k, name: t.name }, seed: 'palier:' + id + ':' + tierId + ':' + k,
+    playStep({ L: -1, free: true, chain: !!chain, tier: { id: tierId, k, name: t.name }, seed: 'palier:' + id + ':' + tierId + ':' + k,
       steps: [{ id, variant: 'classic', level: tierLevel(t, k) }] }, 0);
   }
 
@@ -1016,7 +1046,7 @@
   $('#btn-reset').addEventListener('click', () => session && session.inst.reset());
   $('#btn-hint').addEventListener('click', () => session && session.hint());
   $('#btn-autosolve').addEventListener('click', () => session && session.solve());
-  $('#hint-tip').addEventListener('click', () => { $('#hint-tip').hidden = true; });
+  $('#hint-tip').addEventListener('click', hideTip);
   $('#btn-rules').addEventListener('click', () => session && openTutorial(session.g, session.variant, false));
   $('#rules-close').addEventListener('click', nextTuto);
   // carte du cerveau : toucher une capacité lance le mode focus
