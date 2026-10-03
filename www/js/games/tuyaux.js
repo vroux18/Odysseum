@@ -143,7 +143,7 @@
         ctx.setLineDash([]);
       }
       const w = cell * 0.3;                 // tuyaux larges et creux
-      const lw = Math.max(1.2, cell * 0.025); // épaisseur du contour
+      const lw = Math.max(2, cell * 0.045); // contour plus épais et plus clair // épaisseur du contour
       for (let i = 0; i < n * n; i++) {
         const cx = pad + ((i % n) + 0.5) * cell, cy = pad + (Math.floor(i / n) + 0.5) * cell;
         const m = cur[i];
@@ -176,7 +176,7 @@
           const r = deg === 1 ? cell * 0.3 + (width - w) / 2 : width / 2;
           ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
         };
-        ctx.globalAlpha = 0.5;
+        ctx.globalAlpha = 0.92;
         stroke(w + lw * 2, outline);
         ctx.globalAlpha = 1;
         stroke(w, bg);
@@ -184,12 +184,12 @@
           stroke(w, mix(bg, accent, glow[i] * 0.85));
         }
         if (i === puzzle.src) { // la source : pleine, avec un œil
-          ctx.beginPath(); ctx.arc(0, 0, cell * 0.3 + lw, 0, Math.PI * 2); ctx.globalAlpha = 0.5; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
+          ctx.beginPath(); ctx.arc(0, 0, cell * 0.3 + lw, 0, Math.PI * 2); ctx.globalAlpha = 0.92; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
           ctx.beginPath(); ctx.arc(0, 0, cell * 0.3, 0, Math.PI * 2); ctx.fillStyle = accent; ctx.fill();
-          ctx.beginPath(); ctx.arc(0, 0, cell * 0.11 + lw, 0, Math.PI * 2); ctx.globalAlpha = 0.5; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
+          ctx.beginPath(); ctx.arc(0, 0, cell * 0.11 + lw, 0, Math.PI * 2); ctx.globalAlpha = 0.92; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
           ctx.beginPath(); ctx.arc(0, 0, cell * 0.11, 0, Math.PI * 2); ctx.fillStyle = bg; ctx.fill();
         } else if (deg === 1 && lit) { // terminal alimenté
-          ctx.beginPath(); ctx.arc(0, 0, cell * 0.1, 0, Math.PI * 2); ctx.globalAlpha = 0.5; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
+          ctx.beginPath(); ctx.arc(0, 0, cell * 0.1, 0, Math.PI * 2); ctx.globalAlpha = 0.92; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
         }
         ctx.restore();
       }
