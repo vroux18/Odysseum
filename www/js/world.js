@@ -40,6 +40,72 @@
     paint(c.getContext('2d'), w, h);
     return new THREE.CanvasTexture(c);
   }
+  // Textures discrètes générées par le code (aucune image à charger).
+  // Elles se multiplient avec la couleur du matériau : blanc = neutre, gris = grain.
+  const texCache = {};
+  let seaTex = null;
+  function texture(kind, rep, repX, repY) {
+    const key = kind + ':' + rep + ':' + (repX || '') + ':' + (repY || '');
+    if (texCache[key]) return texCache[key];
+    const S = 256;
+    const r = C.makeRng('texture:' + kind);
+    const tex = canvasTexture(S, S, (g) => {
+      g.fillStyle = kind === 'eau' ? '#e2e8ea' : '#ffffff';
+      g.fillRect(0, 0, S, S);
+      const dots = (count, size, alpha, light) => {
+        for (let i = 0; i < count; i++) {
+          g.fillStyle = light ? 'rgba(255,255,255,' + alpha * (0.5 + r()) + ')' : 'rgba(40,45,40,' + alpha * (0.5 + r()) + ')';
+          const s = size * (0.5 + r());
+          g.fillRect(r() * S, r() * S, s, s);
+        }
+      };
+      if (kind === 'herbe') {
+        dots(900, 3, 0.05);
+        // petits brins d'herbe
+        g.lineWidth = 1.2;
+        for (let i = 0; i < 260; i++) {
+          const x = r() * S, y = r() * S, h = 3 + r() * 6;
+          g.strokeStyle = 'rgba(30,60,30,' + (0.06 + r() * 0.08) + ')';
+          g.beginPath(); g.moveTo(x, y); g.lineTo(x + (r() - 0.5) * 3, y - h); g.stroke();
+        }
+      } else if (kind === 'sable') {
+        dots(2200, 1.6, 0.06);
+        dots(400, 1.6, 0.4, true);
+      } else if (kind === 'pierre') {
+        dots(700, 2.5, 0.06);
+        for (let i = 0; i < 12; i++) { // fines fissures
+          g.strokeStyle = 'rgba(40,40,40,.08)'; g.lineWidth = 1;
+          let x = r() * S, y = r() * S;
+          g.beginPath(); g.moveTo(x, y);
+          for (let k = 0; k < 4; k++) { x += (r() - 0.5) * 40; y += (r() - 0.5) * 40; g.lineTo(x, y); }
+          g.stroke();
+        }
+      } else if (kind === 'roche') {
+        // strates horizontales
+        for (let y = 0; y < S; y += 6 + r() * 10) {
+          g.fillStyle = 'rgba(60,55,50,' + (0.03 + r() * 0.07) + ')';
+          g.fillRect(0, y, S, 2 + r() * 4);
+        }
+        dots(500, 2, 0.06);
+      } else if (kind === 'eau') {
+        // reflets de vagues
+        g.lineCap = 'round';
+        for (let i = 0; i < 70; i++) {
+          const x = r() * S, y = r() * S, w = 10 + r() * 28;
+          g.strokeStyle = 'rgba(255,255,255,' + (0.5 + r() * 0.5) + ')';
+          g.lineWidth = 1.2 + r() * 1.5;
+          g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + w / 2, y - 3, x + w, y); g.stroke();
+        }
+      }
+    });
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(repX || rep, repY || rep);
+    if (renderer) tex.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+    if (kind === 'eau') seaTex = tex;
+    texCache[key] = tex;
+    return tex;
+  }
+
   let glowTex = null, shadowTex = null;
   const glowTexture = () => glowTex || (glowTex = canvasTexture(64, 64, (g) => {
     const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
@@ -184,7 +250,9 @@
     geo.rotateX(-Math.PI / 2);
     seaPos = geo.attributes.position;
     seaBase = Float32Array.from(seaPos.array);
-    sea = new THREE.Mesh(geo, lambert('#cbdadd'));
+    const seaMat = lambert('#cbdadd');
+    seaMat.map = texture('eau', SEA_SIZE / 5);
+    sea = new THREE.Mesh(geo, seaMat);
     sea.receiveShadow = true;
     scene.add(sea);
   }
@@ -293,10 +361,11 @@
 
   function terrain(ch, colors) {
     const R = ch.r, rings = 16, segs = 44;
-    const pos = [], col = [], idx = [];
+    const pos = [], col = [], idx = [], uv = [];
     const push = (x, z, edge) => {
       const y = edge ? TOP : heightLocal(ch, x, z);
       pos.push(x, y, z);
+      uv.push(x * 0.3, z * 0.3); // texture d'herbe répétée environ tous les 3 mètres
       const t = Math.min(1, Math.max(0, (y - TOP) / 1.3));
       const c = edge ? colors.sand : colors.low.clone().lerp(colors.high, t);
       col.push(c.r, c.g, c.b);
@@ -322,6 +391,7 @@
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     geo.setIndex(idx);
     geo.computeVertexNormals();
     return geo;
@@ -622,7 +692,7 @@
       high: theme === 'dunes' ? new THREE.Color('#f4e6c8') : tint('#b9d99c', 0.45),
       sand: new THREE.Color('#f2ebde')
     };
-    const groundMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, transparent: true });
+    const groundMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, transparent: true, map: texture(theme === 'dunes' ? 'sable' : 'herbe', 1) });
     fadeMats.push(groundMat);
     const ground = new THREE.Mesh(terrain(ch, colors), groundMat);
     ground.receiveShadow = true;
@@ -638,13 +708,15 @@
       if (cp.getY(i) < 1.29) { cp.setX(i, cp.getX(i) + (rng() - 0.5) * 0.35); cp.setZ(i, cp.getZ(i) + (rng() - 0.5) * 0.35); }
     }
     cliffGeo.computeVertexNormals();
-    const cliff = new THREE.Mesh(cliffGeo, m('#ece6db'));
+    const cliffMat = lambert('#ece6db', { transparent: true, map: texture('roche', 1, 6, 1.4) });
+    fadeMats.push(cliffMat);
+    const cliff = new THREE.Mesh(cliffGeo, cliffMat);
     cliff.position.y = TOP - 1.3;
     cliff.receiveShadow = true;
     group.add(cliff);
 
     // plage claire au pied des falaises
-    const beachMat = new THREE.MeshLambertMaterial({ color: '#e9ebe4', transparent: true });
+    const beachMat = new THREE.MeshLambertMaterial({ color: '#e9ebe4', transparent: true, map: texture('sable', 1, 10, 3) });
     fadeMats.push(beachMat);
     const beach = new THREE.Mesh(new THREE.RingGeometry(r * 0.66, r * 1.03, 44), beachMat);
     beach.rotation.x = -Math.PI / 2;
@@ -659,7 +731,7 @@
     ch.nodes = order.map((p, k) => {
       const boss = k === PER - 1;
       const mesh = new THREE.Mesh(new THREE.CylinderGeometry(boss ? 0.44 : 0.29, boss ? 0.5 : 0.33, 0.12, boss ? 12 : 9),
-        lambert('#f4f2ed', { transparent: true }));
+        lambert('#f4f2ed', { transparent: true, map: texture('pierre', 1) }));
       mesh.position.set(p.x, heightLocal(ch, p.x, p.z) + 0.04, p.z);
       mesh.receiveShadow = mesh.castShadow = true;
       mesh.userData.level = c * PER + k;
@@ -742,7 +814,7 @@
     // montagnes lointaines, de part et d'autre de la route
     [-1, 1].forEach((side) => {
       const h = 6 + rng() * 6;
-      const mtn = new THREE.Mesh(new THREE.ConeGeometry(7 + rng() * 5, h, 6), lambert(mtnColor));
+      const mtn = new THREE.Mesh(new THREE.ConeGeometry(7 + rng() * 5, h, 6), lambert(mtnColor, { map: texture('roche', 1, 3, 2) }));
       mountains.push(mtn);
       mtn.position.set(ctr.x + (rng() - 0.5) * 8, h / 2 - 0.6, ctr.z + side * (30 + rng() * 10));
       mtn.rotation.y = rng() * 3;
@@ -1112,6 +1184,12 @@
     // la mer suit la caméra par pas de maille (sans faire glisser la houle)
     const cell = SEA_SIZE / SEA_SEG;
     sea.position.set(Math.round(cam.tx / cell) * cell, 0, Math.round(cam.tz / cell) * cell);
+    if (seaTex) {
+      // les reflets restent fixes dans le monde quand la mer suit la caméra, et dérivent lentement
+      const drift = calm ? 0 : t * 0.006;
+      seaTex.offset.x = drift + (sea.position.x / SEA_SIZE) * seaTex.repeat.x;
+      seaTex.offset.y = -(sea.position.z / SEA_SIZE) * seaTex.repeat.y;
+    }
     if (!calm || !World._seaStill) for (let i = 0; i < seaPos.count; i++) {
       const x = seaBase[i * 3] + sea.position.x, z = seaBase[i * 3 + 2] + sea.position.z;
       seaPos.setY(i, Math.sin(x * 0.25 + t * 0.6) * 0.09 + Math.cos(z * 0.3 + t * 0.45) * 0.08 - 0.05);
