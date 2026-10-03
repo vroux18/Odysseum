@@ -246,6 +246,8 @@
         previewEl.style.gridRow = (preview.r + 1) + ' / span ' + preview.h;
         previewEl.style.gridColumn = (preview.c + 1) + ' / span ' + preview.w;
         previewEl.dataset.size = preview.w * preview.h;
+        // l'aperçu prend déjà la couleur qu'aura le rectangle une fois posé
+        previewEl.style.background = FILLS[(preview.r * 31 + preview.c * 17 + preview.w * 7 + preview.h * 3) % FILLS.length];
       } else if (previewEl) { previewEl.remove(); previewEl = null; }
     }
 
