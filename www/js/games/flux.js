@@ -175,10 +175,11 @@
 
   function params(level, variant) {
     // débuts tout doux : 4×4, puis une rangée de plus tous les 5 niveaux
-    const n = Math.min(9, 4 + Math.floor((level - 1) / 5));
-    let bridges = n < 5 || level < 6 ? 0 : Math.min(3, 1 + Math.floor((level - 6) / 12));
-    if (variant === 'tore') bridges = level < 6 ? 0 : 1;
-    const colors = Math.max(3, Math.min(COLORS.length, n - 1 + (level % 2)));
+    // départ très doux : 4×4 à 3 couleurs, la grille grandit tous les 8 niveaux, les ponts n'arrivent qu'au niveau 16
+    const n = Math.min(9, 4 + Math.floor((level - 1) / 8));
+    let bridges = level < 16 ? 0 : Math.min(3, 1 + Math.floor((level - 16) / 12));
+    if (variant === 'tore') bridges = level < 16 ? 0 : 1;
+    const colors = Math.max(3, Math.min(COLORS.length, n - 2 + (level % 2)));
     return { n, bridges, colors, variant };
   }
 

@@ -142,8 +142,8 @@
         }
         ctx.setLineDash([]);
       }
-      const w = cell * 0.36;                 // tuyaux larges et creux
-      const lw = Math.max(1.6, cell * 0.035); // épaisseur du contour
+      const w = cell * 0.3;                 // tuyaux larges et creux
+      const lw = Math.max(1.2, cell * 0.025); // épaisseur du contour
       for (let i = 0; i < n * n; i++) {
         const cx = pad + ((i % n) + 0.5) * cell, cy = pad + (Math.floor(i / n) + 0.5) * cell;
         const m = cur[i];
@@ -166,17 +166,17 @@
             // coude : un seul tracé, l'angle extérieur s'arrondit
             ctx.beginPath();
             ctx.moveTo(arms[0][0] * half, arms[0][1] * half);
-            ctx.arcTo(0, 0, arms[1][0] * half, arms[1][1] * half, cell * 0.22);
+            ctx.arcTo(0, 0, arms[1][0] * half, arms[1][1] * half, cell * 0.1);
             ctx.lineTo(arms[1][0] * half, arms[1][1] * half);
             ctx.stroke();
             return;
           }
           arms.forEach(([dx, dy]) => { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(dx * half, dy * half); ctx.stroke(); });
           // terminal : un rond, dont l'anneau extérieur reste visible (le tracé large dépasse le fin)
-          const r = deg === 1 ? cell * 0.25 + (width - w) / 2 : width / 2;
+          const r = deg === 1 ? cell * 0.22 + (width - w) / 2 : width / 2;
           ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
         };
-        ctx.globalAlpha = 0.78;
+        ctx.globalAlpha = 0.5;
         stroke(w + lw * 2, outline);
         ctx.globalAlpha = 1;
         stroke(w, bg);
@@ -184,12 +184,12 @@
           stroke(w, mix(bg, accent, glow[i] * 0.85));
         }
         if (i === puzzle.src) { // la source : pleine, avec un œil
-          ctx.beginPath(); ctx.arc(0, 0, cell * 0.25 + lw, 0, Math.PI * 2); ctx.globalAlpha = 0.78; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
-          ctx.beginPath(); ctx.arc(0, 0, cell * 0.25, 0, Math.PI * 2); ctx.fillStyle = accent; ctx.fill();
-          ctx.beginPath(); ctx.arc(0, 0, cell * 0.09 + lw, 0, Math.PI * 2); ctx.globalAlpha = 0.78; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
+          ctx.beginPath(); ctx.arc(0, 0, cell * 0.22 + lw, 0, Math.PI * 2); ctx.globalAlpha = 0.5; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
+          ctx.beginPath(); ctx.arc(0, 0, cell * 0.22, 0, Math.PI * 2); ctx.fillStyle = accent; ctx.fill();
+          ctx.beginPath(); ctx.arc(0, 0, cell * 0.09 + lw, 0, Math.PI * 2); ctx.globalAlpha = 0.5; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
           ctx.beginPath(); ctx.arc(0, 0, cell * 0.09, 0, Math.PI * 2); ctx.fillStyle = bg; ctx.fill();
         } else if (deg === 1 && lit) { // terminal alimenté
-          ctx.beginPath(); ctx.arc(0, 0, cell * 0.08, 0, Math.PI * 2); ctx.globalAlpha = 0.78; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
+          ctx.beginPath(); ctx.arc(0, 0, cell * 0.08, 0, Math.PI * 2); ctx.globalAlpha = 0.5; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
         }
         ctx.restore();
       }
