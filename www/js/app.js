@@ -135,6 +135,13 @@
     playStep(info, 0);
   }
 
+  // 3 astuces par grille ; le petit chiffre sur l'ampoule les décompte
+  const MAX_HINTS = 3;
+  function renderHints(left) {
+    $('#hint-left').textContent = left;
+    $('#btn-hint').classList.toggle('empty', left <= 0);
+  }
+
   function playStep(info, stepIndex) {
     if (session) session.stop();
     const step = info.steps[stepIndex];
@@ -187,6 +194,8 @@
           if (won) return;
           won = true;
           C.sfx.win();
+          // succès : une lueur douce monte du fond, aux couleurs du jeu
+          const pl = $('#play'); pl.classList.remove('glow'); void pl.offsetWidth; pl.classList.add('glow');
           const d = C.gameData(dataKey(g, variant));
           d.solved++;
           d.totalTime += elapsed;
@@ -204,6 +213,7 @@
         }
       };
       const inst = g.create(host, puzzle, api);
+      renderHints(MAX_HINTS);
       // animations : apparition en cascade (en diagonale) et petit rebond au toucher
       const grid = host.querySelector('.cell-grid, .nono');
       if (grid) {
@@ -241,8 +251,10 @@
       session = {
         g, variant, inst, info,
         hint() {
-          if (!won && inst.hint()) {
+          if (won || hints >= MAX_HINTS) { C.sfx.error && C.sfx.error(); return; }
+          if (inst.hint()) {
             hints++;
+            renderHints(MAX_HINTS - hints);
             if (info.t0) info.penalty += 10; // compet : chaque indice coûte 10 secondes
           }
         },
@@ -318,10 +330,10 @@
   }, 250);
 
   function shareTime(info) {
-    const txt = 'Odysseum · niveau ' + (info.L + 1) + ' bouclé en ' + C.formatTime(info.time) + '. Tu fais mieux ?';
+    const txt = 'Odysseus · niveau ' + (info.L + 1) + ' bouclé en ' + C.formatTime(info.time) + '. Tu fais mieux ?';
     const url = 'https://vroux18.github.io/Odysseum/';
     if (navigator.share) {
-      navigator.share({ title: 'Odysseum', text: txt, url }).catch(() => { /* partage annulé */ });
+      navigator.share({ title: 'Odysseus', text: txt, url }).catch(() => { /* partage annulé */ });
     } else if (navigator.clipboard) {
       navigator.clipboard.writeText(txt + ' ' + url).then(() => showXp('message copié, colle-le à tes amis', '#5f9fd8')).catch(() => {});
     }
@@ -403,8 +415,8 @@
   }
 
   // ------------------------------ Expérience ------------------------------
-  // L'XP dépend de la façon de jouer : rapidité, indices utilisés. L'autosolve (outil de dev) en donne, sans notification.
-  function gainXp(g, level, boss, elapsed, hints, auto) {
+  // L'XP dépend de la façon de jouer : rapidité, indices utilisés. Pas de notification : le récapitulatif de fin de niveau la montre.
+  function gainXp(g, level, boss, elapsed, hints) {
     const sk = SKILLS.find((s) => s.games.includes(g.id));
     if (!sk) return;
     const base = 10 + Math.floor(level / 2);
@@ -412,10 +424,7 @@
     const speed = Math.max(0.6, Math.min(1.4, 1.4 - 0.6 * (elapsed / par)));
     const help = Math.max(0.25, 1 - 0.25 * hints);
     const gain = Math.max(1, Math.round(base * speed * help * (boss ? 1.5 : 1)));
-    const before = skillStats(sk).level;
     C.store.xp[sk.id] = (C.store.xp[sk.id] || 0) + gain;
-    const after = skillStats(sk).level;
-    if (!auto) showXp('+' + gain + ' <b>' + sk.name.toLowerCase() + '</b>' + (after > before ? ' · niveau ' + after : ''), ACCENT[sk.games[0]]);
   }
   function showXp(html, accent) {
     const t = $('#xp-toast');

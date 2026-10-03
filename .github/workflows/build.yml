@@ -58,7 +58,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: test-${{ github.run_number }}
-          name: Odysseum — test ${{ github.run_number }}
+          name: Odysseus — test ${{ github.run_number }}
           body: "Version de test générée automatiquement depuis ${{ github.sha }}."
           files: Odysseum.apk
           make_latest: true
