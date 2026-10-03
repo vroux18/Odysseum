@@ -1229,23 +1229,26 @@
     const list = eventList();
     if (!list.length) return;
     const h = document.createElement('h3');
-    h.className = 'lib-cat lib-cat-mega';
-    h.style.setProperty('--game', '#e2a21f');
-    h.textContent = 'Événements';
+    // (bien distinct de « Méga » : une grille spéciale par île, rangée sous le nom de l'île, teinte lagon)
+    h.className = 'lib-cat lib-cat-event';
+    h.style.setProperty('--game', '#1fa3a0');
+    h.textContent = 'Défis des îles';
     gl.appendChild(h);
     const group = document.createElement('div');
-    group.className = 'lib-group lib-mega';
+    group.className = 'lib-group lib-mega lib-events';
     gl.appendChild(group);
     list.forEach((e) => {
       const b = document.createElement('button');
-      b.className = 'tile mega-tile' + (e.open ? '' : ' locked') + (e.done ? ' won' : '');
+      b.className = 'tile mega-tile event-tile' + (e.open ? '' : ' locked') + (e.done ? ' won' : '');
       b.style.setProperty('--game', e.open ? e.accent : '#aab2bb');
       b.disabled = !e.open;
-      b.setAttribute('aria-label', 'Méga ' + game(e.id).name);
-      b.innerHTML = '<span class="tile-icon">' + icon(e.id) + '<i class="mega-badge">méga</i>' +
+      let isle = 'Île ' + (e.c + 1);
+      try { isle = voyageName(e.c); } catch (err) { /* liste pas encore prête */ }
+      b.setAttribute('aria-label', 'Défi de l\'île ' + isle + ' · ' + game(e.id).name);
+      b.innerHTML = '<span class="tile-icon">' + icon(e.id) + '<i class="event-badge">île ' + (e.c + 1) + '</i>' +
         (e.done ? '<i class="mega-cup">' + CUP + '</i>' : '') + '</span>' +
-        '<span class="tile-name">' + game(e.id).name + '</span>' +
-        '<span class="tile-lvl">' + (e.open ? e.n + '×' + e.n : LOCK) + '</span>';
+        '<span class="tile-name">' + isle + '</span>' +
+        '<span class="tile-lvl">' + (e.open ? game(e.id).name + ' ' + e.n + '×' + e.n : LOCK) + '</span>';
       b.addEventListener('click', () => startEvent(e.c));
       group.appendChild(b);
     });

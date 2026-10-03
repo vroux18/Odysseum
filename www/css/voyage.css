@@ -289,3 +289,12 @@
 #home #open-settings { right: var(--edge) !important; }
 #home #open-daily-top { left: var(--edge) !important; }
 .lvcard { padding-left: 20px !important; padding-right: 100px !important; }
+
+/* « Défis des îles » : distincts de la catégorie Méga (étiquette lagon « île N », nom de l'île) */
+.lib-cat-event { background: #1fa3a0 !important; box-shadow: 0 3px 0 #137572 !important; color: #fff !important; }
+.event-tile .event-badge { position: absolute; top: -6px; left: 50%; transform: translateX(-50%); padding: 2px 8px; border-radius: 999px;
+  background: #1fa3a0; color: #fff; font: 700 10px/1.2 var(--k-font, 'Fredoka', sans-serif); letter-spacing: .04em; text-transform: uppercase; white-space: nowrap;
+  box-shadow: 0 2px 0 #137572; font-style: normal; }
+.event-tile.locked .event-badge { background: #9aa3ad; box-shadow: none; }
+.event-tile .tile-name { font-size: 14px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.event-tile .tile-lvl { font-size: 11px !important; white-space: nowrap; }
