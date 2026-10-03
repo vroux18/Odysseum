@@ -1,0 +1,8 @@
+{
+  "appId": "com.ohmycad.carnet",
+  "appName": "Carnet",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#eef1f5"
+  }
+}
