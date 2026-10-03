@@ -3373,10 +3373,10 @@
   };
   World.cameraMode = () => camMode;
   // Îles du voyage (une par chapitre), dans l'ordre de l'Odyssée
-  const ISLAND_NAMES = ['Troie', 'Ismaros, chez les Cicones', 'Île des Lotophages', 'Île des Cyclopes', 'Éolie', 'Télépyle des Lestrygons',
-    'Île de Circé', 'Pays des Ombres', 'Île des Sirènes', 'Charybde et Scylla', 'Thrinacie, île du Soleil', 'Ogygie, île de Calypso',
-    'Schérie, chez les Phéaciens', 'Ithaque'];
-  const islandName = (i) => ISLAND_NAMES[i % ISLAND_NAMES.length] + (i >= ISLAND_NAMES.length ? ' (' + (Math.floor(i / ISLAND_NAMES.length) + 1) + 'e voyage)' : '');
+  // noms courts et simples, un mot par île
+  const ISLAND_NAMES = ['Troie', 'Le Marché', 'Les Lotus', 'Le Cyclope', 'Les Vents', 'Les Falaises',
+    'Circé', 'Les Brumes', 'Les Sirènes', 'Le Tourbillon', 'Le Soleil', 'Calypso', 'Le Palais', 'Ithaque'];
+  const islandName = (i) => ISLAND_NAMES[i % ISLAND_NAMES.length] + (i >= ISLAND_NAMES.length ? ' ' + (Math.floor(i / ISLAND_NAMES.length) + 1) : '');
   World.islands = () => {
     const here = hero.free ? hero.free.c : chapterOf(selected);
     const out = [];

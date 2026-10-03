@@ -1774,3 +1774,21 @@ svg.ic.ic-solid { --duo-o: 1; }
 /* titres du joueur et phrase complice de fin de niveau */
 .lb-rank { display: block; font-style: italic; font-size: 0.72em; opacity: 0.7; font-weight: 400; letter-spacing: 0.02em; }
 .ld-quip { margin: -4px 0 6px; font-style: italic; font-size: 0.85rem; opacity: 0.65; text-align: center; }
+
+/* bandeau niveau, version cartoon : bulle blanche bombée, cerveau + pièce dorée du niveau, jauge épaisse */
+#home #open-brain { height: 60px !important; padding: 0 16px 0 6px !important; gap: 12px !important; border-radius: 30px !important;
+  background: #fff !important; border: 3px solid #fff !important; color: #3a3550 !important;
+  box-shadow: 0 5px 0 #d9cfe8, 0 8px 18px rgba(80, 60, 140, .18) !important; transition: transform .15s ease, box-shadow .15s ease; }
+#home #open-brain:active { transform: translateY(3px); box-shadow: 0 2px 0 #d9cfe8, 0 4px 10px rgba(80, 60, 140, .16) !important; }
+#home #open-brain .brain-art { position: relative; width: 48px !important; height: 48px !important;
+  background: radial-gradient(circle at 40% 30%, #ffe3ee, #ffc2d7 80%) !important; box-shadow: inset 0 -3px 0 rgba(217, 120, 154, .35) !important; }
+#home #open-brain .brain-art svg { width: 36px !important; height: 32px !important; }
+#home #open-brain .brain-txt { position: absolute !important; left: 38px; bottom: 2px; padding: 0 !important; gap: 0 !important;
+  min-width: 26px; height: 26px; border-radius: 13px; display: grid !important; place-items: center;
+  background: linear-gradient(#ffd84d, #ffb31f); border: 2.5px solid #fff; box-shadow: 0 2px 0 #e08f00; }
+#home #open-brain .brain-txt small { display: none !important; }
+#home #open-brain #level-num { font: 700 14px/1 Jost, system-ui, sans-serif !important; color: #7a4a00; padding: 0 5px; letter-spacing: 0 !important; }
+#home #open-brain .brain-xp { position: relative !important; left: auto !important; right: auto !important; bottom: auto !important;
+  width: 74px; height: 12px !important; border-radius: 6px !important; background: #efe9f7 !important; box-shadow: inset 0 2px 0 rgba(80, 60, 140, .12); overflow: hidden; }
+#home #open-brain .brain-xp b { height: 100%; border-radius: 6px !important; background: linear-gradient(90deg, #ff7eb0, #ffc93d) !important;
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, .45) !important; min-width: 12px; }
