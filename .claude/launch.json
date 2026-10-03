@@ -2,10 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "carnet",
+      "name": "odysseum",
       "runtimeExecutable": "py",
-      "runtimeArgs": ["-m", "http.server", "8765", "--directory", "www"],
-      "port": 8765
+      "runtimeArgs": ["-m", "http.server", "8766", "--directory", "www"],
+      "port": 8766
     }
   ]
 }

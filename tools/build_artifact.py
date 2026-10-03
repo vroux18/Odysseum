@@ -1,13 +1,13 @@
 """Assemble www/ en un seul fichier HTML (CSS et JS intégrés) pour la page de test mobile.
 
-Usage : py tools/build_artifact.py  ->  dist/carnet.html
+Usage : py tools/build_artifact.py  ->  dist/odysseum.html
 """
 import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 WWW = ROOT / "www"
-OUT = ROOT / "dist" / "carnet.html"
+OUT = ROOT / "dist" / "odysseum.html"
 
 html = (WWW / "index.html").read_text(encoding="utf-8")
 
@@ -24,6 +24,9 @@ def inline_js(m):
 
 html = re.sub(r'<link rel="stylesheet" href="(css/[^"]+)">', inline_css, html)
 html = re.sub(r'<script src="(js/[^"]+)"></script>', inline_js, html)
+# Three.js : copie locale pour l'APK, CDN autorisé pour la page de test
+html = html.replace('<script src="vendor/three.min.js"></script>',
+                    '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>')
 
 # La page publiée reçoit déjà son squelette (doctype, head, body, meta).
 for pattern in [r"<!doctype html>\s*", r"<html[^>]*>\s*", r"</html>\s*", r"<head>\s*", r"</head>\s*",

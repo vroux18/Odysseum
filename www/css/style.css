@@ -84,6 +84,28 @@ svg .f { fill: currentColor; stroke: none; }
 
 .settings-btn { align-self: center; margin-top: auto; }
 
+/* ---------- Archipel (accueil 3D) ---------- */
+.home { position: relative; }
+.world { position: fixed; inset: 0; z-index: 0; background: #eef1f0; }
+.world-canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.corner { position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); right: 14px; z-index: 5; background: rgba(255, 255, 255, .55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.focus {
+  position: fixed; left: 50%; bottom: calc(34px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 16px;
+  padding: 18px 22px 20px; border-radius: 32px; width: max-content; max-width: calc(100% - 32px);
+  background: rgba(255, 255, 255, .62); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 24px 50px -30px rgba(75, 80, 84, .5);
+}
+.focus.in { animation: rise-in .7s var(--ease); }
+.focus-icon { width: 30px; height: 30px; color: var(--game); }
+.focus-icon svg { width: 100%; height: 100%; }
+.focus .switch-mode button.on { background: rgba(255, 255, 255, .9); }
+.focus-actions { display: flex; align-items: center; gap: 18px; }
+.orb-btn { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, .8); box-shadow: 0 10px 24px -16px rgba(0, 0, 0, .4); }
+.orb-btn span { width: 14px; height: 14px; border-radius: 50%; background: var(--game); box-shadow: 0 0 14px 4px color-mix(in srgb, var(--game) 60%, transparent); animation: breathe 3s ease-in-out infinite; }
+.fallback { padding-top: 40px; }
+@keyframes rise-in { from { opacity: 0; transform: translate(-50%, 20px); } }
+
 /* ---------- Partie ---------- */
 .topbar { display: flex; align-items: center; justify-content: space-between; }
 .play-icon { width: 26px; height: 26px; color: var(--game); opacity: .9; }

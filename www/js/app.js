@@ -53,27 +53,36 @@
   }
 
   // ------------------------------ Accueil ------------------------------
-  function renderHome() {
-    const now = new Date();
-    $('#today').textContent = now.getDate() + ' ' + MONTHS[now.getMonth()];
-    const daily = C.store.daily[C.todayKey()] || {};
+  const solvedCount = (g) => variantsOf(g).reduce((s, v) => s + C.gameData(dataKey(g, v.id)).solved, 0);
+  const dailyDone = (g) => (C.store.daily[C.todayKey()] || {})[g.id] != null;
+  let focusedGame = null;
+  let worldReady = false;
 
-    // anneau du jour : un point par jeu, plein quand la grille du jour est faite
-    const ring = $('#ring');
-    ring.querySelectorAll('.dot').forEach((d) => d.remove());
-    C.games.forEach((g, i) => {
-      const a = (i / C.games.length) * Math.PI * 2 - Math.PI / 2;
-      const b = document.createElement('button');
-      b.className = 'dot' + (daily[g.id] != null ? ' done' : '');
-      b.style.setProperty('--game', ACCENT[g.id]);
-      b.style.left = 50 + 46 * Math.cos(a) + '%';
-      b.style.top = 50 + 46 * Math.sin(a) + '%';
-      b.setAttribute('aria-label', g.name + ' du jour');
-      b.addEventListener('click', () => startGame(g, { daily: true, variant: dailyVariant(g) }));
-      ring.appendChild(b);
-    });
+  function initWorld() {
+    worldReady = !!(C.world && C.world.init($('#world'), {
+      games: C.games.map((g) => ({ id: g.id, name: g.name, accent: ACCENT[g.id] })),
+      onFocus: (id) => setFocus(id ? C.games.find((g) => g.id === id) : null)
+    }));
+    $('#fallback').hidden = worldReady;
+  }
 
+  function setFocus(game) {
+    focusedGame = game;
+    const f = $('#focus');
+    if (!game) { f.hidden = true; return; }
+    f.style.setProperty('--game', ACCENT[game.id]);
+    $('#focus-icon').innerHTML = icon(game.id);
+    $('#focus-daily').hidden = dailyDone(game);
+    f.hidden = false;
+    f.classList.remove('in'); void f.offsetWidth; f.classList.add('in');
+  }
+
+  function renderHome(animate) {
     document.querySelectorAll('.switch-mode button').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
+    if (worldReady) {
+      C.world.update(C.games.map((g) => ({ solved: solvedCount(g), daily: dailyDone(g) })), !!animate);
+      if (focusedGame) setFocus(focusedGame);
+    }
 
     const gl = $('#game-list');
     gl.innerHTML = '';
@@ -102,6 +111,7 @@
     const level = opts.daily ? DAILY_LEVEL[game.id] : data.level;
     const seed = opts.daily ? 'day:' + C.todayKey() + ':' + game.id : 'lvl:' + game.id + ':' + variant + ':' + level;
 
+    if (worldReady) C.world.stop();
     show('play');
     $('#play').style.setProperty('--game', ACCENT[game.id]);
     $('#play-icon').innerHTML = icon(game.id);
@@ -189,7 +199,18 @@
     $('#rules').hidden = false;
   }
 
-  function goHome() { if (session) session.stop(); session = null; renderHome(); show('home'); }
+  // Retour à l'archipel : la caméra revient sur l'île, les nouvelles pièces tombent.
+  function goHome() {
+    const game = session && session.game;
+    if (session) session.stop();
+    session = null;
+    show('home');
+    if (worldReady) {
+      C.world.start();
+      if (game) { C.world.focus(game.id); setFocus(game); }
+    }
+    renderHome(true);
+  }
 
   // --------------------------- Événements ---------------------------
   document.querySelectorAll('.switch-mode button').forEach((b) => {
@@ -209,6 +230,8 @@
   $('#win-home').addEventListener('click', goHome);
   $('#win-next').addEventListener('click', () => startGame(session.game, { daily: false, variant: session.variant }));
 
+  $('#focus-play').addEventListener('click', () => focusedGame && startGame(focusedGame, { daily: false, variant: variantFor(focusedGame, mode) }));
+  $('#focus-daily').addEventListener('click', () => focusedGame && startGame(focusedGame, { daily: true, variant: dailyVariant(focusedGame) }));
   $('#open-settings').addEventListener('click', () => { $('#settings').hidden = false; });
   $('#settings').addEventListener('click', (e) => { if (e.target.id === 'settings') $('#settings').hidden = true; });
   $('#opt-sound').addEventListener('change', (e) => { C.audio.setSound(e.target.checked); C.sfx.tap(); });
@@ -221,6 +244,8 @@
   document.addEventListener('pointerdown', () => C.audio.unlock(), { once: true });
   document.addEventListener('backbutton', () => { if (!screens.play.hidden) goHome(); });
 
-  renderHome();
+  initWorld();
+  renderHome(false);
   show('home');
+  if (worldReady) C.world.start();
 })();

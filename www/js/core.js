@@ -34,7 +34,7 @@
     return rng;
   }
 
-  const STORE_KEY = 'carnet.v1';
+  const STORE_KEY = 'odysseum.v1';
 
   function loadStore() {
     try {

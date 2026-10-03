@@ -1,8 +1,8 @@
 {
-  "name": "carnet",
+  "name": "odysseum",
   "version": "0.1.0",
   "private": true,
-  "description": "Carnet : casse-têtes logiques pour Android (Flux avec ponts, Reines, Astres, Pavés)",
+  "description": "Odysseum : un archipel de casse-têtes calmes pour Android",
   "scripts": {
     "serve": "py -m http.server 8765 --directory www",
     "artifact": "py tools/build_artifact.py",

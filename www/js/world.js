@@ -8,15 +8,16 @@
   // nombre total de grilles résolues pour débloquer chaque île (dans l'ordre)
   const UNLOCK = [0, 0, 0, 2, 4, 7, 10, 14];
   const MAX_PIECES = 14;
-  const SKY = '#eef1f0';
+  const SKY = '#e9eeee';
+  let overview = 30; // distance de la vue d'ensemble (plus grande en portrait)
 
   const World = { ok: false };
   let THREE, renderer, scene, camera, host, raf = 0, running = false, last = 0;
   let sea, seaPos, seaBase, motes, islands = [], stones = [];
   let opts = null, focused = -1;
   // caméra en coordonnées orbitales, lissées vers une cible
-  const cam = { theta: 0.6, elev: 1.15, radius: 70, tx: 0, ty: 0, tz: 0 };
-  const goal = { theta: 0.6, elev: 0.72, radius: 30, tx: 0, ty: 0, tz: 0 };
+  const cam = { theta: 0.6, elev: 1.25, radius: 90, tx: 0, ty: 0, tz: 0 };
+  const goal = { theta: 0.6, elev: 0.8, radius: 30, tx: 0, ty: 0, tz: 0 };
 
   function supported() {
     if (!window.THREE) return false;
@@ -36,7 +37,7 @@
     geo.rotateX(-Math.PI / 2);
     seaPos = geo.attributes.position;
     seaBase = Float32Array.from(seaPos.array);
-    const mat = new THREE.MeshLambertMaterial({ color: '#e6eced', flatShading: true });
+    const mat = new THREE.MeshLambertMaterial({ color: '#cfdcdf', flatShading: true });
     sea = new THREE.Mesh(geo, mat);
     sea.receiveShadow = true;
     scene.add(sea);
@@ -62,7 +63,7 @@
 
     const rock = new THREE.Mesh(
       jitterGeometry(new THREE.CylinderGeometry(r, r * 0.62, 3, 9, 2), rng, 0.35),
-      new THREE.MeshLambertMaterial({ color: '#f6f5f1', flatShading: true, transparent: true })
+      new THREE.MeshLambertMaterial({ color: '#f2efe8', flatShading: true, transparent: true })
     );
     rock.position.y = -1.0;
     rock.castShadow = rock.receiveShadow = true;
@@ -265,7 +266,12 @@
     raf = requestAnimationFrame(frame);
     const dt = Math.min(0.05, (now - last) / 1000 || 0.016);
     last = now;
-    const t = now / 1000;
+    tick(dt, now / 1000);
+  }
+
+  let simTime = 0;
+  function tick(dt, t) {
+    simTime = t;
 
     // houle
     for (let i = 0; i < seaPos.count; i++) {
@@ -370,8 +376,8 @@
     if (focused < 0) return;
     focused = -1;
     goal.tx = goal.ty = goal.tz = 0;
-    goal.radius = 30;
-    goal.elev = 0.72;
+    goal.radius = overview;
+    goal.elev = 0.8;
     if (notify && opts.onFocus) opts.onFocus(null);
   }
 
@@ -381,8 +387,10 @@
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     // en portrait on recule un peu pour voir tout l'archipel
-    camera.fov = w < h ? 52 : 40;
+    camera.fov = w < h ? 50 : 40;
     camera.updateProjectionMatrix();
+    overview = w < h ? 44 : 30;
+    if (focused < 0) goal.radius = overview;
   }
 
   // ------------------------------------------------------------------
@@ -402,11 +410,11 @@
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(SKY);
-    scene.fog = new THREE.Fog(SKY, 22, 62);
+    scene.fog = new THREE.Fog(SKY, 30, 80);
     camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
 
-    scene.add(new THREE.HemisphereLight('#ffffff', '#d9e2e4', 0.75));
-    const sun = new THREE.DirectionalLight('#fff7ec', 0.55);
+    scene.add(new THREE.HemisphereLight('#ffffff', '#b9c6ca', 0.5));
+    const sun = new THREE.DirectionalLight('#fff4e6', 0.62);
     sun.position.set(10, 18, 8);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
@@ -440,6 +448,10 @@
     raf = requestAnimationFrame(frame);
   };
   World.stop = function () { running = false; cancelAnimationFrame(raf); };
+  // outil de test : avance l'animation de `sec` secondes sans attendre l'écran
+  World.advance = function (sec) {
+    for (let i = 0; i < sec * 30; i++) tick(1 / 30, simTime + 1 / 30);
+  };
 
   document.addEventListener('visibilitychange', () => {
     if (!World.ok) return;

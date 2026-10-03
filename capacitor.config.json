@@ -1,8 +1,8 @@
 {
-  "appId": "com.ohmycad.carnet",
-  "appName": "Carnet",
+  "appId": "com.ohmycad.odysseum",
+  "appName": "Odysseum",
   "webDir": "www",
   "android": {
-    "backgroundColor": "#eef1f5"
+    "backgroundColor": "#eef1f0"
   }
 }
