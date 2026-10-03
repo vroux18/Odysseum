@@ -46,6 +46,8 @@ jobs:
         run: |
           [ -d android ] || npx cap add android
           npx cap sync android
+          # icône du lanceur (générée par tools/render_icons.py, gardée dans resources/android/res)
+          cp -r resources/android/res/. android/app/src/main/res/
 
       - name: Compilation de l'APK
         working-directory: android

@@ -1,0 +1,193 @@
+/* =====================================================================
+   Intro « aube calme » — chargée en DERNIER (après cartoon.css) : remplace les anciennes règles d'intro.
+   Ton : cartoon mais posé. Ciel crème pêche, soleil levant, mer turquoise désaturée, houles en parallaxe lente,
+   le navire d'Ulysse (dessin de l'icône) qui traverse, titre crème cerné d'encre, un bouton rond qui respire.
+   Comportement inchangé (app.js) : .intro-boat déplacé en JS, .hurry au premier toucher, .leaving au départ.
+   Toutes les couleurs sont des variables locales : le thème sombre (crépuscule, lune) ne fait que les redéfinir.
+   Préfixe #intro partout : il faut battre les règles d'intro de style.css et cartoon.css.
+   ===================================================================== */
+#intro {
+  /* ciel */
+  --i-sky0: #eef0ec; --i-sky1: #fbeee0; --i-sky2: #f8dcc6;
+  /* soleil */
+  --i-glow: rgba(255, 214, 160, .55); --i-halo: #fbe1c3; --i-sun: #ffd296;
+  /* mer */
+  --i-sea0: #a9d8cf; --i-sea1: #84c3bf; --i-sea2: #5c9faa; --i-front: #8fcac3;
+  --i-foam: #fff6e8; --i-foam-soft: rgba(255, 246, 232, .55); --i-horizon: #d3ebe3;
+  /* décor */
+  --i-cloud: rgba(255, 249, 240, .9); --i-isle: #dcc5bf; --i-isle-far: #e8d6cd; --i-temple: #f6e7dc; --i-gull: #8c7a8e;
+  /* navire (repris de l'icône) */
+  --i-ink: #4a3b57; --i-hull: #d9774f; --i-sail: #fffaf0; --i-stripe: #f4a47f; --i-shade: #f1e1cb; --i-flag: #ef8a6a;
+  /* titre et bouton */
+  --i-title: #fff8ec; --i-title-ink: #574766; --i-title-drop: rgba(150, 95, 70, .22);
+  --i-leaf: #9db58a; --i-leaf-ink: #6f8a62; --i-btn: #fffaf0; --i-btn-edge: #e6cdb6; --i-btn-ico: #e07a52; --i-ring: rgba(255, 250, 240, .9);
+
+  justify-content: flex-start !important; gap: 0 !important;
+  padding: calc(15vh + env(safe-area-inset-top, 0px)) 20px 0 !important;
+  color: var(--i-ink);
+  background: linear-gradient(180deg, var(--i-sky0) 0%, var(--i-sky1) 34%, var(--i-sky2) 65.6%, var(--i-sea0) 65.6%, var(--i-sea2) 100%) !important;
+  -webkit-tap-highlight-color: transparent; outline: none;
+}
+#intro::before { display: none; }
+
+/* ---------- Scène ---------- */
+#intro .intro-scene { position: absolute; inset: 0; width: 100%; height: 100%; -webkit-mask-image: none; mask-image: none; }
+#intro .intro-scene * { stroke: none; }
+#intro .i-sea0 { stop-color: var(--i-sea0); } #intro .i-sea1 { stop-color: var(--i-sea1); } #intro .i-sea2 { stop-color: var(--i-sea2); }
+#intro .i-glow0 { stop-color: var(--i-glow); } #intro .i-glow1 { stop-color: var(--i-glow); stop-opacity: 0; }
+#intro .i-sun-halo { fill: var(--i-halo); }
+#intro .i-sun-disc { fill: var(--i-sun); }
+#intro .i-sun { animation: i-rise 2.4s cubic-bezier(.22, .8, .3, 1) both; }
+@keyframes i-rise { from { transform: translateY(26px); opacity: 0; } }
+#intro .i-cloud { fill: var(--i-cloud); animation: i-drift 70s linear infinite; }
+#intro .i-cloud.c2 { animation-duration: 95s; animation-delay: -40s; }
+@keyframes i-drift { from { transform: translateX(-60px); } 50% { transform: translateX(60px); } to { transform: translateX(-60px); } }
+#intro .i-isle { fill: var(--i-isle); }
+#intro .i-isle.far { fill: var(--i-isle-far); }
+#intro .i-temple { fill: var(--i-temple); }
+#intro .i-sea { fill: url(#iSea); }
+#intro .i-horizon { fill: none; stroke: var(--i-horizon); stroke-width: 1.5; }
+#intro .i-glints path { fill: none; stroke: var(--i-foam); stroke-width: 3; stroke-linecap: round; animation: i-glint 3.6s ease-in-out infinite; }
+#intro .i-glints .d2 { animation-delay: -1.2s; } #intro .i-glints .d3 { animation-delay: -2.4s; }
+@keyframes i-glint { 50% { opacity: .25; } }
+
+/* goélands : ils planent et battent doucement des ailes */
+#intro .i-gulls { animation: i-glide 9s ease-in-out infinite; }
+@keyframes i-glide { 50% { transform: translate(10px, -6px); } }
+#intro .i-gull { fill: none; stroke: var(--i-gull); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;
+  transform-box: fill-box; transform-origin: 50% 100%; animation: i-flap 1.8s ease-in-out infinite; }
+#intro .i-gull.g2 { animation-delay: -.6s; stroke-width: 1.8; }
+#intro .i-gull.g3 { animation-delay: -1.1s; stroke-width: 1.5; stroke-opacity: .7; }
+@keyframes i-flap { 50% { transform: scaleY(.45); } }
+
+/* houles : chaque couche glisse d'une période, les plus proches plus vite (parallaxe) */
+#intro .i-line { fill: none; stroke: var(--i-foam); stroke-width: 3; stroke-linecap: round; }
+#intro .i-line.soft { stroke: var(--i-foam-soft); stroke-width: 2.4; stroke-dasharray: 34 46; }
+#intro .i-front { fill: var(--i-front); }
+/* stroke-opacity plutôt qu'opacity : style.css force opacity:1 dans l'intro en mode « animations réduites » */
+#intro .s-back .i-line { stroke-opacity: .45; }
+#intro .s-back { animation: i-wave48 9s linear infinite; }
+#intro .s-front { animation: i-wave40 5.5s linear infinite; }
+#intro .s-near { animation: i-wave56 4.6s linear infinite; }
+#intro .s-nearer { animation: i-wave72 4s linear infinite; }
+@keyframes i-wave40 { to { transform: translateX(-40px); } }
+@keyframes i-wave48 { to { transform: translateX(-48px); } }
+@keyframes i-wave56 { to { transform: translateX(-56px); } }
+@keyframes i-wave72 { to { transform: translateX(-72px); } }
+
+/* ---------- Le navire (unités de l'icône, ×0,2) ---------- */
+#intro .i-ship .i-ink { fill: none; stroke: var(--i-ink); stroke-width: 13; stroke-linecap: round; stroke-linejoin: round; }
+#intro .i-ship .i-flag { fill: var(--i-flag); stroke-width: 9; }
+#intro .i-ship .i-sail { fill: var(--i-sail); }
+#intro .i-ship .i-stripe { fill: var(--i-stripe); }
+#intro .i-ship .i-shade { fill: var(--i-shade); fill-opacity: .8; }
+#intro .i-ship .i-yard { stroke-width: 15; }
+#intro .i-ship .i-post { stroke-width: 34; }
+#intro .i-ship .i-post-in { fill: none; stroke: var(--i-hull); stroke-width: 16; stroke-linecap: round; }
+#intro .i-ship .i-hull { fill: var(--i-hull); }
+#intro .i-ship .i-eye { fill: var(--i-foam); stroke-width: 6; }
+#intro .i-wake { fill: none; stroke: var(--i-foam); stroke-width: 2.2; stroke-linecap: round; stroke-opacity: .8; }
+#intro .i-wind { fill: none; stroke: var(--i-foam); stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 24; stroke-dashoffset: 24; opacity: 0; transition: opacity .4s; }
+#intro.hurry .i-wind { opacity: .9; animation: i-wind .7s linear infinite; }
+@keyframes i-wind { from { stroke-dashoffset: -24; } to { stroke-dashoffset: 24; } }
+
+/* ---------- Titre ---------- */
+#intro .intro-head { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; }
+#intro .intro-title {
+  margin: 0; display: flex; gap: .015em;
+  font: 700 clamp(48px, 15.5vw, 74px)/1 var(--k-font) !important; letter-spacing: .01em; color: var(--i-title); text-shadow: none;
+}
+#intro .intro-title span {
+  --o: var(--i-title-ink);
+  display: inline-block; opacity: 0;
+  /* cerne d'encre (8 directions) + épaisseur dessous + ombre chaude très douce */
+  text-shadow: 3px 0 0 var(--o), -3px 0 0 var(--o), 0 3px 0 var(--o), 0 -3px 0 var(--o),
+    2.2px 2.2px 0 var(--o), -2.2px 2.2px 0 var(--o), 2.2px -2.2px 0 var(--o), -2.2px -2.2px 0 var(--o),
+    0 6px 0 var(--o), 2.5px 5.5px 0 var(--o), -2.5px 5.5px 0 var(--o), 0 14px 18px var(--i-title-drop);
+  animation: i-letter 1s cubic-bezier(.22, .9, .3, 1.15) forwards;
+}
+#intro .intro-title span:nth-child(1) { animation-delay: .35s; } #intro .intro-title span:nth-child(2) { animation-delay: .43s; }
+#intro .intro-title span:nth-child(3) { animation-delay: .51s; } #intro .intro-title span:nth-child(4) { animation-delay: .59s; }
+#intro .intro-title span:nth-child(5) { animation-delay: .67s; } #intro .intro-title span:nth-child(6) { animation-delay: .75s; }
+#intro .intro-title span:nth-child(7) { animation-delay: .83s; } #intro .intro-title span:nth-child(8) { animation-delay: .91s; }
+@keyframes i-letter { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+/* ornement : laurier + soleil */
+#intro .intro-crest { width: 150px; height: auto; opacity: 0; animation: i-fade 1.2s ease 1.3s forwards; overflow: visible; }
+#intro .intro-crest .c-stem { fill: none; stroke: var(--i-leaf-ink); stroke-width: 1.6; stroke-linecap: round; }
+#intro .intro-crest .c-leaf { fill: var(--i-leaf); }
+#intro .intro-crest .c-sun { fill: var(--i-sun); stroke: var(--i-title-ink); stroke-width: 1.8; }
+@keyframes i-fade { to { opacity: 1; } }
+
+/* ---------- Bouton de départ ---------- */
+/* centré sans transform (le mode « animations réduites » remet transform à none) */
+#intro .intro-start {
+  position: absolute; z-index: 1; left: 0; right: 0; margin: 0 auto; width: 88px; height: 88px;
+  bottom: calc(11vh + env(safe-area-inset-bottom, 0px));
+  opacity: 0; animation: i-fade .9s ease 1.6s forwards; pointer-events: none;
+}
+#intro .is-btn {
+  position: absolute; inset: 0; display: grid; place-items: center; border-radius: 50%;
+  background: var(--i-btn); box-shadow: 0 7px 0 var(--i-btn-edge), 0 14px 26px rgba(40, 90, 100, .25), inset 0 -4px 0 rgba(230, 205, 182, .35);
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+#intro:active .is-btn { transform: translateY(4px); box-shadow: 0 3px 0 var(--i-btn-edge), 0 8px 16px rgba(40, 90, 100, .22); }
+#intro .is-btn svg { position: absolute; width: 46px; height: 46px; transition: opacity .3s, transform .3s; }
+#intro .is-btn svg path { fill: var(--i-btn-ico); stroke: var(--i-ink); stroke-width: 2.2; stroke-linejoin: round; }
+#intro .is-go { margin-left: 2px; }
+/* visibility en plus de l'opacité : style.css force opacity:1 dans l'intro en mode « animations réduites » */
+#intro .is-fast { opacity: 0; visibility: hidden; transform: scale(.6); }
+#intro.hurry .is-go { opacity: 0; visibility: hidden; transform: scale(.6); }
+#intro.hurry .is-fast { opacity: 1; visibility: visible; transform: none; }
+/* anneaux qui respirent autour du bouton */
+#intro .is-ring { position: absolute; inset: 0; border-radius: 50%; border: 3px solid var(--i-ring); animation: i-ring 2.6s ease-out infinite; }
+#intro .is-ring.r2 { animation-delay: 1.3s; }
+#intro.hurry .is-ring { animation-duration: 1.1s; }
+#intro.hurry .is-ring.r2 { animation-delay: .55s; }
+@keyframes i-ring { 0% { transform: scale(1); opacity: .9; } 100% { transform: scale(1.7); opacity: 0; } }
+
+/* ---------- Écrans larges (tablette, ordinateur) : la scène garde ses proportions, le ciel CSS prolonge ---------- */
+/* largeur = 9/16 de la hauteur : la scène n'est pas recadrée, son horizon (65,6 %) tombe sur celui du fond CSS */
+@media (min-aspect-ratio: 3/5) {
+  #intro .intro-scene { left: 0; right: 0; width: 56.25vh; margin: 0 auto;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
+}
+
+/* ---------- Thème sombre : crépuscule mauve, la lune remplace le soleil, quelques étoiles ---------- */
+:root[data-theme="dark"] #intro {
+  --i-sky0: #262a48; --i-sky1: #353659; --i-sky2: #5b4f6e;
+  --i-glow: rgba(240, 225, 200, .16); --i-halo: rgba(243, 231, 201, .18); --i-sun: #f3e7c9;
+  --i-sea0: #3f6a76; --i-sea1: #31535f; --i-sea2: #22394a; --i-front: #375e6a;
+  --i-foam: #cfe0dc; --i-foam-soft: rgba(207, 224, 220, .35); --i-horizon: #54808a;
+  --i-cloud: rgba(170, 160, 200, .15); --i-isle: #433f5e; --i-isle-far: #4b4664; --i-temple: #5e5878; --i-gull: #b9b0cf;
+  --i-hull: #c46f4c; --i-sail: #f6eedd; --i-stripe: #e0957a; --i-shade: #ddd0bd;
+  --i-title: #fff4e2; --i-title-ink: #4a3d66; --i-title-drop: rgba(8, 6, 30, .45);
+  --i-leaf: #8ea886; --i-leaf-ink: #a9c19b; --i-btn: #fff4e2; --i-btn-edge: #9d8aa6; --i-btn-ico: #d9774f; --i-ring: rgba(255, 244, 226, .7);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) #intro {
+    --i-sky0: #262a48; --i-sky1: #353659; --i-sky2: #5b4f6e;
+    --i-glow: rgba(240, 225, 200, .16); --i-halo: rgba(243, 231, 201, .18); --i-sun: #f3e7c9;
+    --i-sea0: #3f6a76; --i-sea1: #31535f; --i-sea2: #22394a; --i-front: #375e6a;
+    --i-foam: #cfe0dc; --i-foam-soft: rgba(207, 224, 220, .35); --i-horizon: #54808a;
+    --i-cloud: rgba(170, 160, 200, .15); --i-isle: #433f5e; --i-isle-far: #4b4664; --i-temple: #5e5878; --i-gull: #b9b0cf;
+    --i-title: #fff4e2; --i-title-ink: #4a3d66; --i-btn: #fff4e2; --i-btn-edge: #9d8aa6;
+  }
+}
+/* étoiles (seulement la nuit), posées sur le ciel */
+:root[data-theme="dark"] #intro::after {
+  content: ''; position: absolute; inset: 0 0 40% 0; pointer-events: none; opacity: .8;
+  background:
+    radial-gradient(1.4px 1.4px at 12% 18%, #fff4dc 99%, transparent), radial-gradient(1.1px 1.1px at 28% 9%, #fff4dc 99%, transparent),
+    radial-gradient(1.6px 1.6px at 44% 30%, #fff4dc 99%, transparent), radial-gradient(1.1px 1.1px at 63% 12%, #fff4dc 99%, transparent),
+    radial-gradient(1.3px 1.3px at 80% 24%, #fff4dc 99%, transparent), radial-gradient(1.1px 1.1px at 8% 46%, #fff4dc 99%, transparent),
+    radial-gradient(1.2px 1.2px at 90% 52%, #fff4dc 99%, transparent), radial-gradient(1px 1px at 52% 58%, #fff4dc 99%, transparent);
+}
+
+/* ---------- Mouvement réduit ---------- */
+@media (prefers-reduced-motion: reduce) {
+  #intro .i-sun, #intro .i-cloud, #intro .i-glints path, #intro .i-gulls, #intro .i-gull, #intro .i-swell, #intro .is-ring, #intro .i-wind { animation: none !important; }
+  #intro .is-ring { display: none; }
+  #intro .intro-title span, #intro .intro-crest, #intro .intro-start { opacity: 1; animation: none; }
+}
+:root.a11y-motion #intro .is-ring { display: none; }
+:root.a11y-motion #intro .i-swell, :root.a11y-motion #intro .i-gulls, :root.a11y-motion #intro .i-gull, :root.a11y-motion #intro .i-cloud, :root.a11y-motion #intro .i-glints path { animation: none !important; }

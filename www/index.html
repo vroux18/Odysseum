@@ -21,68 +21,110 @@
 <!-- grandes grilles « méga » et zoom du plateau (après cartoon.css) -->
 <link rel="stylesheet" href="css/mega.css">
 <link rel="stylesheet" href="css/voyage.css">
+<!-- intro « aube calme » (après toutes les autres feuilles : elle remplace les règles d'intro de style.css et cartoon.css) -->
+<link rel="stylesheet" href="css/intro.css">
 </head>
 <body>
-<!-- Intro cartoon : ciel bleu, soleil, nuages joufflus, lagon, voilier dodu, titre arrondi ; un toucher pour embarquer.
-     Styles dans css/cartoon.css. app.js déplace .intro-boat (translate x 179) : son groupe parent le pose sur l'eau. -->
+<!-- Intro « aube calme » : ciel crème pêche, soleil levant, îles au loin, goélands, mer turquoise douce en houles parallaxe,
+     le navire d'Ulysse (même dessin que l'icône, assets/icon/icon.svg) traverse ; titre crème cerné d'encre ; bouton rond pulsant.
+     Styles dans css/intro.css (chargée en dernier). app.js déplace .intro-boat (translate x 179) : son svg parent le pose sur l'eau.
+     Premier toucher : .hurry (le navire file, le bouton passe en « avance rapide ») ; second toucher : embark() → .leaving.
+     Aucun attribut transform hors du navire : style.css les annule en mode « animations réduites ». -->
 <div id="intro" class="intro" role="button" tabindex="0" aria-label="Toucher pour embarquer">
   <svg class="intro-scene" viewBox="0 0 360 640" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
     <defs>
-      <linearGradient id="kSea" x1="0" y1="440" x2="0" y2="640" gradientUnits="userSpaceOnUse">
-        <stop offset="0" stop-color="#3fe0d0"/><stop offset=".45" stop-color="#22b8e0"/><stop offset="1" stop-color="#1d9be0"/>
+      <linearGradient id="iSea" x1="0" y1="420" x2="0" y2="640" gradientUnits="userSpaceOnUse">
+        <stop class="i-sea0" offset="0"/><stop class="i-sea1" offset=".35"/><stop class="i-sea2" offset="1"/>
       </linearGradient>
-      <!-- pas d'attribut transform hors du voilier : style.css les annule en mode « animations réduites » -->
-      <symbol id="kCloud" viewBox="-20 -35 92 62" overflow="visible">
-        <g fill="#cfeafa"><circle cx="0" cy="5" r="18"/><circle cx="24" cy="-5" r="23"/><circle cx="50" cy="5" r="17"/><rect x="-18" y="5" width="86" height="17" rx="8.5"/></g>
-        <g fill="#ffffff"><circle cx="0" cy="0" r="18"/><circle cx="24" cy="-10" r="23"/><circle cx="50" cy="0" r="17"/><rect x="-18" y="0" width="86" height="17" rx="8.5"/></g>
-      </symbol>
+      <radialGradient id="iGlow" cx="250" cy="420" r="150" gradientUnits="userSpaceOnUse">
+        <stop class="i-glow0" offset="0"/><stop class="i-glow1" offset="1"/>
+      </radialGradient>
+      <clipPath id="iSailClip"><path d="M372 306Q512 286 652 306C692 420 684 522 640 592Q512 618 384 592C340 522 332 420 372 306Z"/></clipPath>
     </defs>
-    <!-- soleil : disque doré, rayons arrondis qui tournent lentement -->
-    <g class="intro-sun">
-      <circle class="k-rays" cx="292" cy="84" r="54" fill="none" style="stroke:#ffe27a;stroke-width:12;stroke-linecap:round;stroke-dasharray:6 22.3"/>
-      <circle cx="292" cy="84" r="38" fill="#ffc93d"/>
-      <circle cx="292" cy="84" r="30" fill="#ffd84d"/>
-      <path d="M276 70a20 20 0 0 1 14-8" style="fill:none;stroke:#fff;stroke-width:5;stroke-linecap:round;opacity:.7"/>
+    <!-- halo et soleil levant (la mer en cache le bas) ; la nuit, c'est la lune -->
+    <rect class="i-glow" x="0" y="250" width="360" height="200" fill="url(#iGlow)"/>
+    <g class="i-sun">
+      <circle class="i-sun-halo" cx="250" cy="420" r="62"/>
+      <circle class="i-sun-disc" cx="250" cy="420" r="44"/>
     </g>
-    <!-- nuages qui dérivent -->
-    <g class="k-cloud"><use href="#kCloud" x="20" y="200" width="101" height="68"/></g>
-    <g class="k-cloud c2"><use href="#kCloud" x="200" y="300" width="74" height="50"/></g>
-    <g class="k-cloud c3"><use href="#kCloud" x="60" y="370" width="55" height="37"/></g>
-    <!-- îlot au loin -->
-    <g class="k-isle">
-      <ellipse cx="62" cy="442" rx="46" ry="14" fill="#ffe3a1"/>
-      <ellipse cx="62" cy="438" rx="36" ry="13" fill="#5cc93b"/>
-      <path d="M70 430c-1-10 1-20 6-26" style="fill:none;stroke:#b77a45;stroke-width:4;stroke-linecap:round"/>
-      <path d="M76 404c-8-4-16-2-20 4M76 404c8-5 16-3 20 2M76 404c-3-7-10-10-16-9M76 404c4-6 11-8 16-6" style="fill:none;stroke:#27a862;stroke-width:5;stroke-linecap:round"/>
+    <!-- longs nuages plats qui dérivent très lentement -->
+    <g class="i-cloud"><path d="M30 214h96a12 12 0 0 0 0-24h-14a20 20 0 0 0-38-6 14 14 0 0 0-26 8h-18a11 11 0 0 0 0 22z"/></g>
+    <g class="i-cloud c2"><path d="M196 300h70a9 9 0 0 0 0-18h-10a15 15 0 0 0-28-4 10 10 0 0 0-19 6h-13a8 8 0 0 0 0 16z"/></g>
+    <!-- goélands -->
+    <g class="i-gulls">
+      <path class="i-gull" d="M58 150q7-7 14 0q7-7 14 0"/>
+      <path class="i-gull g2" d="M92 132q5-5 10 0q5-5 10 0"/>
+      <path class="i-gull g3" d="M262 176q4-4 8 0q4-4 8 0"/>
     </g>
-    <!-- la mer : lagon turquoise, houle en festons blancs -->
-    <rect x="-60" y="440" width="520" height="220" fill="url(#kSea)"/>
-    <g class="k-swell s2"><path class="k-line" d="M-60 444q10-7 20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0" opacity=".8"/></g>
-    <!-- le voilier : coque ronde orangée, voile bombée, fanion rose (déplacé par app.js) -->
+    <!-- îles au loin : Ithaque et son petit temple, une autre plus pâle -->
+    <path class="i-isle far" d="M262 421c10-10 22-16 34-14 10-8 26-8 36 2 10 0 22 6 30 12z"/>
+    <g class="i-isle">
+      <path d="M-10 421c14-6 26-20 44-24 12-12 34-14 48-4 16-2 30 8 40 18 10 2 18 6 26 10z"/>
+      <path class="i-temple" d="M60 388h22v-1.5l-11-5-11 5zM61.5 388.5h3v8h-3zM66.5 388.5h3v8h-3zM72.5 388.5h3v8h-3zM77.5 388.5h3v8h-3zM60 396h22v2.5H60z"/>
+    </g>
+    <!-- la mer -->
+    <rect class="i-sea" x="-90" y="420" width="560" height="240" fill="url(#iSea)"/>
+    <path class="i-horizon" d="M-90 420.5H470"/>
+    <!-- houle du fond -->
+    <g class="i-swell s-back"><path class="i-line" d="M-90 434 q12 -6 24 0t24 0t24 0t24 0t24 0t24 0t24 0t24 0t24 0t24 0t24 0t24 0t24 0t24 0t24 0t24 0t24 0t24 0t24 0t24 0t24 0t24 0t24 0t24 0"/></g>
+    <!-- le navire d'Ulysse (déplacé par app.js) : dessin de l'icône, mis à l'échelle par un svg imbriqué (pas de transform) -->
     <svg x="0" y="262" width="360" height="200" overflow="visible">
       <g class="intro-boat" transform="translate(-40 179)">
-        <path class="k-out" d="M3-12V-60" style="stroke:#8a5a30;stroke-width:4;stroke-linecap:round"/>
-        <path class="k-out" d="M4-62l14 5-14 5z" fill="#ff5d8f"/>
-        <path class="k-out" d="M-2-52C-22-40-26-24-18-14H-2Z" fill="#fff1cf"/>
-        <path class="k-out" d="M6-58C38-46 44-24 32-14H6Z" fill="#ffffff"/>
-        <path d="M14-50C32-38 36-26 30-18" style="fill:none;stroke:#ff7eb0;stroke-width:5;stroke-linecap:round"/>
-        <path class="k-out" d="M-36-8H36Q33 12 18 15H-18Q-33 12-36-8Z" fill="#ee7a4d"/>
-        <path d="M-33 0H33" style="fill:none;stroke:#fffaf0;stroke-width:4;stroke-linecap:round"/>
-        <circle cx="-16" cy="5" r="2.6" fill="#fffaf0"/><circle cx="0" cy="6" r="2.6" fill="#fffaf0"/><circle cx="16" cy="5" r="2.6" fill="#fffaf0"/>
+        <!-- traînées de vent et écume (visibles quand il file) -->
+        <path class="i-wind" d="M-74-46h18M-84-30h22M-70-14h14"/>
+        <path class="i-wake" d="M-62 3h-16M-58 8h-26"/>
+        <svg x="-50" y="-82.4" width="100" height="100" viewBox="262 250 500 500" overflow="visible">
+          <g class="i-ship">
+            <path class="i-ink" d="M512 228V610"/>
+            <path class="i-ink i-flag" d="M512 222L580 242L512 262Z"/>
+            <path class="i-sail" d="M372 306Q512 286 652 306C692 420 684 522 640 592Q512 618 384 592C340 522 332 420 372 306Z"/>
+            <g clip-path="url(#iSailClip)">
+              <rect class="i-stripe" x="474" y="280" width="76" height="340"/>
+              <ellipse class="i-shade" cx="700" cy="460" rx="120" ry="220"/>
+            </g>
+            <path class="i-ink" d="M372 306Q512 286 652 306C692 420 684 522 640 592Q512 618 384 592C340 522 332 420 372 306Z" fill="none"/>
+            <path class="i-ink i-yard" d="M344 302Q512 280 680 302"/>
+            <path class="i-ink i-post" d="M292 604C262 556 268 504 306 496C336 490 346 528 318 534"/>
+            <path class="i-post-in" d="M292 604C262 556 268 504 306 496C336 490 346 528 318 534"/>
+            <path class="i-ink i-post" d="M752 604C774 584 790 562 800 532"/>
+            <path class="i-post-in" d="M752 604C774 584 790 562 800 532"/>
+            <path class="i-ink i-hull" d="M268 598H776C760 670 700 710 612 710H430C340 710 286 670 268 598Z"/>
+            <circle class="i-ink i-eye" cx="714" cy="626" r="14"/>
+          </g>
+        </svg>
       </g>
     </svg>
-    <!-- houle de devant : elle passe sur le bas de la coque -->
-    <g class="k-swell">
-      <path d="M-60 452q10-8 20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0V660H-60Z" fill="url(#kSea)"/>
-      <path class="k-line" d="M-60 452q10-8 20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0"/>
+    <!-- houle de devant : elle lèche le bas de la coque -->
+    <g class="i-swell s-front">
+      <path class="i-front" d="M-90 452 q10 -10 20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0V700H-90Z"/>
+      <path class="i-line" d="M-90 452 q10 -10 20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0"/>
     </g>
-    <g class="k-swell s3" opacity=".55">
-      <path class="k-line" d="M-60 500q10-6 20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0" style="stroke-dasharray:30 50"/>
-      <path class="k-line" d="M-60 560q10-6 20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0" style="stroke-dasharray:22 70"/>
+    <!-- reflets du soleil qui scintillent -->
+    <g class="i-glints">
+      <path d="M226 470h48"/><path class="d2" d="M236 484h28"/><path class="d3" d="M243 497h14"/>
     </g>
+    <!-- houles proches : plus rapides (parallaxe) -->
+    <g class="i-swell s-near"><path class="i-line soft" d="M-90 512 q14 -7 28 0t28 0t28 0t28 0t28 0t28 0t28 0t28 0t28 0t28 0t28 0t28 0t28 0t28 0t28 0t28 0t28 0t28 0t28 0t28 0t28 0"/></g>
+    <g class="i-swell s-nearer"><path class="i-line soft" d="M-90 586 q18 -9 36 0t36 0t36 0t36 0t36 0t36 0t36 0t36 0t36 0t36 0t36 0t36 0t36 0t36 0t36 0t36 0"/></g>
   </svg>
-  <h1 class="intro-title" aria-label="Odysseus"><span>O</span><span>D</span><span>Y</span><span>S</span><span>S</span><span>E</span><span>U</span><span>S</span></h1>
-  <p class="intro-tap">toucher pour embarquer</p>
+  <div class="intro-head">
+    <h1 class="intro-title" aria-label="Odysseus"><span>O</span><span>d</span><span>y</span><span>s</span><span>s</span><span>e</span><span>u</span><span>s</span></h1>
+    <!-- petit ornement : deux brins de laurier autour d'un soleil -->
+    <svg class="intro-crest" viewBox="0 0 160 28" aria-hidden="true">
+      <path class="c-stem" d="M66 15C50 19 34 19 14 13M94 15c16 4 32 4 52-2"/>
+      <path class="c-leaf" d="M56 17c-3-6-9-8-14-7 2 5 8 8 14 7zM42 17c-3-6-9-8-14-7 2 5 8 8 14 7zM28 15c-3-5-8-7-12-6 2 4 7 7 12 6zM50 16c3 5 9 7 14 5-3-4-8-6-14-5zM36 17c3 5 9 7 14 5-3-4-8-6-14-5z"/>
+      <path class="c-leaf" d="M104 17c3-6 9-8 14-7-2 5-8 8-14 7zM118 17c3-6 9-8 14-7-2 5-8 8-14 7zM132 15c3-5 8-7 12-6-2 4-7 7-12 6zM110 16c-3 5-9 7-14 5 3-4 8-6 14-5zM124 17c-3 5-9 7-14 5 3-4 8-6 14-5z"/>
+      <circle class="c-sun" cx="80" cy="14" r="7"/>
+    </svg>
+  </div>
+  <!-- bouton de départ : un gros galet crème, anneau qui respire ; après le premier toucher il passe en « avance rapide » -->
+  <span class="intro-start" aria-hidden="true">
+    <i class="is-ring"></i><i class="is-ring r2"></i>
+    <span class="is-btn">
+      <svg class="is-go" viewBox="0 0 48 48"><path d="M18 13.5c0-2.3 2.5-3.7 4.5-2.5l14.2 8.6c1.9 1.2 1.9 3.9 0 5.1l-14.2 8.6c-2 1.2-4.5-.2-4.5-2.5z"/></svg>
+      <svg class="is-fast" viewBox="0 0 48 48"><path d="M10 15.5c0-2 2.2-3.2 3.9-2.1l10.4 6.9c1.5 1 1.5 3.3 0 4.3l-10.4 6.9c-1.7 1.1-3.9-.1-3.9-2.1zM24 15.5c0-2 2.2-3.2 3.9-2.1l10.4 6.9c1.5 1 1.5 3.3 0 4.3l-10.4 6.9c-1.7 1.1-3.9-.1-3.9-2.1z"/></svg>
+    </span>
+  </span>
 </div>
 <div id="app">
 

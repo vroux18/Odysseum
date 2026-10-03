@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- crème d'aube (haut du ciel de www/assets/icon/icon.svg) : le premier plan couvre tout, ce fond ne se voit qu'en bordure -->
+    <color name="ic_launcher_background">#FDF3E6</color>
+</resources>
