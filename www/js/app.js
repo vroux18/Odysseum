@@ -77,7 +77,8 @@
       const others = rng.shuffle(pool.slice());
       others.forEach((id) => { if (ids.length < count && !ids.includes(id)) ids.push(id); });
     }
-    const level = boss ? 4 + c * 4 + 6 + c : 1 + c * 4 + Math.floor(k * 0.7);
+    // montée très progressive : +3 par monde, +1 tous les 2 niveaux ; le boss un cran au-dessus
+    const level = boss ? 1 + c * 3 + 6 + c : 1 + c * 3 + Math.floor(k * 0.5);
     const vChance = boss ? Math.min(0.7, 0.25 + c * 0.1) : Math.min(0.55, 0.12 + c * 0.08);
     const steps = ids.map((id, i) => ({ id, variant: pickVariant(id, vChance), level: level + (boss ? 0 : i) }));
     return { L, c, k, boss, id: steps[0].id, accent: ACCENT[steps[0].id], steps };

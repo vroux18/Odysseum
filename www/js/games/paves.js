@@ -112,8 +112,8 @@
   }
 
   function params(level, variant) {
-    const n = Math.min(variant === 'mystere' ? 8 : 10, 5 + Math.floor((level - 1) / 6));
-    return { n, maxArea: Math.min(12, 4 + Math.floor(level / 4)), mystery: variant === 'mystere' ? 2 + Math.floor(level / 4) : 0 };
+    const n = Math.min(variant === 'mystere' ? 8 : 10, 4 + Math.floor((level - 1) / 5));
+    return { n, maxArea: Math.min(12, 3 + Math.floor(level / 3)), mystery: variant === 'mystere' ? 2 + Math.floor(level / 4) : 0 };
   }
 
   function create(host, puzzle, api) {

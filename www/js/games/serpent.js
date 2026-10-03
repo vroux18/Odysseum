@@ -34,7 +34,7 @@
   }
 
   function params(level, variant) {
-    const n = Math.min(8, 5 + Math.floor((level - 1) / 7));
+    const n = Math.min(8, 4 + Math.floor((level - 1) / 6));
     if (variant === 'laby') return { n, variant, wallRate: Math.max(0.45, 0.85 - level * 0.01) };
     const k = Math.max(4, Math.round(n * n * Math.max(0.12, 0.32 - level * 0.006)));
     return { n, variant, k };

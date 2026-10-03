@@ -108,7 +108,7 @@
   }
 
   function params(level, variant) {
-    const n = Math.min(10, (variant === 'miroir' ? 6 : 5) + Math.floor((level - 1) / 5));
+    const n = Math.min(10, (variant === 'miroir' ? 6 : 4) + Math.floor((level - 1) / 4));
     return { n, variant, density: 0.55 + (level % 3) * 0.03 };
   }
 

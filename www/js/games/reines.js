@@ -98,7 +98,7 @@
   }
 
   function params(level, variant) {
-    return { n: Math.min(9, (variant === 'cavaliers' ? 6 : 5) + Math.floor((level - 1) / 6)), variant };
+    return { n: Math.min(9, (variant === 'cavaliers' ? 6 : 4) + Math.floor((level - 1) / 5)), variant };
   }
 
   function create(host, puzzle, api) {

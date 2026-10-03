@@ -29,7 +29,7 @@
   }
 
   function params(level, variant) {
-    const n = Math.min(7, 4 + Math.floor((level + 3) / 8));
+    const n = Math.min(7, 3 + Math.floor((level + 2) / 6)); // 3×3 pour commencer
     return { n, variant, presses: Math.min(Math.floor(n * n / 2), 2 + Math.floor(level / 2)) };
   }
 

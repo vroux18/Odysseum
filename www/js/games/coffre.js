@@ -34,9 +34,9 @@
     }
     return {
       variant: 'classic',
-      len: level < 10 ? 4 : 5,
-      symbols: Math.min(7, 5 + Math.floor(level / 8)),
-      repeats: level >= 5,
+      len: level < 4 ? 3 : level < 12 ? 4 : 5,          // code de 3 symboles pour commencer
+      symbols: level < 4 ? 4 : Math.min(7, 5 + Math.floor(level / 8)),
+      repeats: level >= 6,
       tries: level < 10 ? 8 : 9
     };
   }

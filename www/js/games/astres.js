@@ -108,7 +108,7 @@
 
   function params(level, variant) {
     return {
-      n: 6, variant,
+      n: level < 4 ? 4 : 6, variant, // 4×4 pour commencer
       edges: (variant === 'diagonales' ? 2 : 4) + (level % 4) + Math.min(4, Math.floor(level / 10)),
       extra: Math.max(0, 6 - Math.floor(level / 3))
     };
