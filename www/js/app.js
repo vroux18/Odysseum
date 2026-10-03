@@ -303,7 +303,7 @@
     card.classList.remove('pop'); void card.offsetWidth; card.classList.add('pop');
     let isle = ''; // nom de l'île (la liste est définie plus bas : pas encore prête au tout premier affichage)
     try { isle = voyageName(Math.floor(selected / PER)); } catch (e) { /* premier rendu */ }
-    card.innerHTML = '<span class="lc-isle">' + isle + '</span>' +
+    card.innerHTML = '<span class="lc-isle">' + isle + '</span><span class="lc-play-slot"></span>' +
       '<span class="lc-title"><i class="lc-nav" data-d="-1"' + (selected <= 0 ? ' hidden' : '') + '>‹</i>' +
       (info.boss ? 'Épreuve ' : 'Niveau ') + (selected + 1) +
       '<i class="lc-nav" data-d="1"' + (selected >= J.done ? ' hidden' : '') + '>›</i></span>' +

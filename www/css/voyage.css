@@ -313,3 +313,24 @@
   font: 700 22px/1 var(--k-font, 'Fredoka', sans-serif); color: var(--k-ink, #3a3550); background: var(--k-well, #f1ecf8); cursor: pointer; }
 .lc-nav[hidden] { visibility: hidden; display: inline-grid; }
 .lc-nav:active { transform: scale(.9); }
+
+/* ---------- Carte du niveau v5 : plus large, en trois rangées ----------
+   1) île + « ‹ Niveau 49 › » centrés  2) étoiles à gauche, mini-jeux à droite  3) grand bouton « Jouer » en pilule */
+#home { --W: min(360px, calc(100vw - 32px)); --lc-h: 164px; }
+.lvcard { display: grid !important; grid-template-columns: 1fr auto !important; grid-template-rows: auto auto auto 56px !important;
+  justify-items: stretch !important; align-items: center !important; text-align: center !important;
+  padding: 12px 16px 14px !important; row-gap: 4px !important; column-gap: 8px !important; }
+.lvcard .lc-isle { grid-column: 1 / 3 !important; grid-row: 1 !important; justify-self: center; }
+.lvcard .lc-title { grid-column: 1 / 3 !important; grid-row: 2 !important; justify-self: center; font-size: 21px !important; gap: 10px !important; }
+.lvcard .lc-stars { grid-column: 1 !important; grid-row: 3 !important; justify-self: start; }
+.lvcard .lc-games { grid-column: 2 !important; grid-row: 3 !important; justify-self: end !important; margin: 0 !important; }
+.lvcard .lc-play-slot { grid-column: 1 / 3; grid-row: 4; }
+.lvcard .lc-nav { width: 30px; height: 30px; }
+/* le bouton Play devient une grande pilule « Jouer » au bas de la carte */
+#home #go { width: calc(var(--W) - 32px) !important; height: 52px !important; border-radius: 26px !important;
+  left: calc(50% - var(--W) / 2 + 16px) !important; right: auto !important; transform: none !important;
+  bottom: calc(var(--lc-b) + 14px) !important; display: flex !important; align-items: center; justify-content: center; gap: 8px; }
+#home #go::after { content: 'Jouer'; position: static !important; inset: auto !important; border: 0 !important; animation: none !important;
+  font: 700 19px/1 var(--k-font, 'Fredoka', sans-serif); color: #fff; opacity: 1 !important; transform: none !important; width: auto; height: auto; background: none !important; }
+#home #go.boss::after { content: 'Épreuve'; }
+#home #go svg.ic, #home #go svg { width: 22px !important; height: 22px !important; }
