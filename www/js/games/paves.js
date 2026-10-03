@@ -5,7 +5,7 @@
   const C = window.Carnet;
 
   // Teintes semi-transparentes : lisibles sur fond clair comme sombre.
-  const FILLS = ['#8fcfc6', '#f2a99b', '#f5cf73', '#a9c8f0', '#c3aef0', '#a8d59a', '#f7b98a', '#f0a8c8'];
+  const FILLS = ['#6cb8ae', '#e08a62', '#e3b65a', '#7fa8cf', '#a39dcb', '#a8b46a', '#d4b48a', '#c97b85'];
 
   function partition(n, maxArea, rng) {
     const owner = new Int16Array(n * n).fill(-1);

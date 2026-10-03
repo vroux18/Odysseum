@@ -58,7 +58,7 @@
     let size = 0, cell = 0;
 
     function resize() {
-      const w = Math.min(host.clientWidth, host.clientHeight || Infinity, 520); // tient dans l'espace libre
+      const w = Math.min(host.clientWidth, host.clientHeight || Infinity, 520, (puzzle.n || 6) * 76); // cases jamais trop grosses // tient dans l'espace libre
       const dpr = window.devicePixelRatio || 1;
       size = w; cell = w / n;
       canvas.style.width = w + 'px'; canvas.style.height = w + 'px';

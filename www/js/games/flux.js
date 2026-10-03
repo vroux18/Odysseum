@@ -5,8 +5,8 @@
   const C = window.Carnet;
 
   // pastels posés, assez distincts les uns des autres
-  const COLORS = ['#e8705f', '#4f9de0', '#f2b33d', '#5cb86a', '#9a7be0', '#f08c3c',
-    '#3fb8ad', '#e06aa6', '#8bb04a', '#6c7fe0', '#d9b23a', '#a08470'];
+  const COLORS = ['#d0714a', '#4f8fd0', '#d9a441', '#7f9a46', '#8f7fc8', '#e08a3c',
+    '#3d9d90', '#c06474', '#a9b85a', '#5f7fd0', '#c9a23a', '#9c7a5c'];
 
   const GLYPHS = ['●', '▲', '■', '◆', '★', '✚', '♥', '✿', '◐', '✕', '☾', '◇'];
   const DIRS =[[-1, 0], [1, 0], [0, -1], [0, 1]]; // haut, bas, gauche, droite
@@ -203,7 +203,7 @@
     let size = 0, cell = 0;
 
     function resize() {
-      const w = Math.min(host.clientWidth, host.clientHeight || Infinity, 520); // tient dans l'espace libre
+      const w = Math.min(host.clientWidth, host.clientHeight || Infinity, 520, (puzzle.n || 6) * 76); // cases jamais trop grosses // tient dans l'espace libre
       const dpr = window.devicePixelRatio || 1;
       size = w;
       cell = w / n;

@@ -705,3 +705,72 @@ svg .f { fill: currentColor; stroke: none; }
 .board.next-step .cell-grid > .cell, .board.next-step .nono > .nono-cell, .board.next-step .lumieres > .bulb { animation-duration: .45s; animation-delay: calc(var(--i, 0) * 8ms); }
 @keyframes step-out { to { opacity: 0; transform: translateX(-28px) scale(.98); } }
 @keyframes step-in { from { opacity: 0; transform: translateX(28px) scale(.98); } }
+
+.go-num { font-size: 26px; font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }
+.go.boss .go-num { font-size: 28px; }
+
+/* ---------- Mode chill / compet ---------- */
+.play-mode { position: fixed; top: calc(18px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 5;
+  background: var(--glass); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-radius: 999px; padding: 3px; }
+.play-mode button { font-size: 13px; padding: 5px 13px; }
+.play-mode button.on { background: var(--surface); color: var(--ink); }
+.play-timer { margin-top: 2px; font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink); letter-spacing: .04em; }
+.ld-time { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.ld-time b { font-size: 40px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.ld-time small { font-size: 13px; color: var(--muted); }
+.ld-time .record { color: var(--p2); font-weight: 500; animation: ld-pop .8s var(--slow) .4s both; }
+.ld-share { padding: 11px 20px; border-radius: 999px; background: var(--tile); color: var(--ink); font-size: 15px; }
+
+/* =====================================================================
+   Direction artistique Odysseum : la Grèce antique plutôt qu'Almanac.
+   Nuit égéenne, marbre, céramique (terre cuite, or, olive), frise grecque.
+   ===================================================================== */
+:root {
+  --bg: #f3ede1; --surface: #fffaf0; --ink: #1f3347; --muted: #7b8792; --faint: #c9bca5; --line: #e3d8c4;
+  --tile: #e6dccb; --tile-hi: #efe7d8; --tile-edge: #d2c4ad; --given: #d9cbb2; --glow: #faf5ea;
+  --p2: #c4622d; --frame: #1f3347; --bad: #b8483a; --bad-ink: #9e3527;
+  --glass: rgba(255, 250, 240, .78); --scrim: rgba(243, 237, 225, .72);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1a26; --surface: #172636; --ink: #f1ead9; --muted: #8ea3b5; --faint: #3a5068; --line: #22364a;
+    --tile: #1d3044; --tile-hi: #26405a; --tile-edge: #2c4760; --given: #2a425a; --glow: #13222f;
+    --p2: #d9a441; --frame: #08121b; --bad: #d4705f; --bad-ink: #f0a090;
+    --glass: rgba(23, 38, 54, .78); --scrim: rgba(6, 12, 18, .7);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1a26; --surface: #172636; --ink: #f1ead9; --muted: #8ea3b5; --faint: #3a5068; --line: #22364a;
+  --tile: #1d3044; --tile-hi: #26405a; --tile-edge: #2c4760; --given: #2a425a; --glow: #13222f;
+  --p2: #d9a441; --frame: #08121b; --bad: #d4705f; --bad-ink: #f0a090;
+  --glass: rgba(23, 38, 54, .78); --scrim: rgba(6, 12, 18, .7);
+}
+
+/* frise grecque (méandre) en haut de l'écran de jeu */
+#play::before {
+  content: ''; position: absolute; left: 0; right: 0; top: env(safe-area-inset-top, 0px); height: 10px; opacity: .55; pointer-events: none;
+  background-color: var(--p2);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='10' viewBox='0 0 20 10'%3E%3Cpath d='M0 9h4V3h6v4H7V5' fill='none' stroke='black' stroke-width='1.6'/%3E%3Cpath d='M10 9h4V3h6' fill='none' stroke='black' stroke-width='1.6'/%3E%3C/svg%3E") repeat-x left center / 20px 10px;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='10' viewBox='0 0 20 10'%3E%3Cpath d='M0 9h4V3h6v4H7V5' fill='none' stroke='black' stroke-width='1.6'/%3E%3Cpath d='M10 9h4V3h6' fill='none' stroke='black' stroke-width='1.6'/%3E%3C/svg%3E") repeat-x left center / 20px 10px;
+}
+
+/* tuiles : émail de céramique plutôt que bonbon */
+.cell-grid .cell, .bulb, .key, .slot { border-radius: 11px; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .16), inset 0 1px 0 rgba(255, 255, 255, .06); }
+.astres .cell { border-radius: 12px; }
+.astres .cell.sun { background: radial-gradient(circle at 35% 30%, #f6dc96, #d9a441 70%); border-color: #a87a26; }
+.astres .cell.moon { background: radial-gradient(circle at 35% 30%, #b9d0ec, #5f8fc7 70%); border-color: #3f6a9c; }
+.edge-mark { background: var(--surface); color: var(--ink); border: 2px solid var(--p2); }
+.bulb.on { background: radial-gradient(circle at 45% 40%, #ffe9b0, #d9a441); border-color: #a87a26; }
+.zp-go { color: #fffaf0; }
+
+/* cases jamais trop grosses sur les petites grilles */
+.cell-grid { max-width: min(480px, 100%, calc(100dvh - 260px), calc(var(--n) * 76px)); }
+.nono { max-width: min(480px, 100%, calc(100dvh - 260px), calc(var(--n) * 48px + 70px)); }
+
+/* retournement de la pièce touchée (Astres, Lumières) */
+.cell.flip, .bulb.flip { animation: tile-flip .42s var(--slow); }
+@keyframes tile-flip {
+  0% { transform: perspective(320px) rotateY(0); }
+  50% { transform: perspective(320px) rotateY(90deg) scale(.96); }
+  100% { transform: perspective(320px) rotateY(0); }
+}

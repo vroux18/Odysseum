@@ -7,9 +7,9 @@
 
   // Teintes douces propres à chaque jeu.
   const ACCENT = {
-    flux: '#5f9fd8', reines: '#e8887a', astres: '#eeb043', paves: '#5fb8a5',
-    pixels: '#9b84e0', serpent: '#4fb5a6', lumieres: '#efbd45', coffre: '#7f95c4',
-    tuyaux: '#d18fc4'
+    flux: '#4f8fd0', reines: '#d0714a', astres: '#d9a441', paves: '#8fa457',
+    pixels: '#5fae9f', serpent: '#3d9d90', lumieres: '#e0b04a', coffre: '#958fc4',
+    tuyaux: '#c06474'
   };
   // Icônes au trait, toutes sur la même grille 24×24.
   const ICON = {
@@ -88,7 +88,7 @@
   }
 
   const J = (C.store.journey = C.store.journey || { done: 0, selected: 0 });
-  let selected = Math.min(J.selected || 0, J.done);
+  let selected = J.done; // Ulysse se tient toujours sur le niveau en cours
   let standing = true; // le voyageur est sur une pierre (sinon il se promène)
   let worldReady = false;
 
@@ -114,7 +114,7 @@
     b.style.setProperty('--game', info.accent);
     b.classList.toggle('boss', info.boss);
     b.classList.toggle('replay', selected < J.done);
-    b.innerHTML = icon(info.id);
+    b.innerHTML = '<span class="go-num">' + (selected + 1) + '</span>'; // le numéro du niveau
     b.setAttribute('aria-label', 'Jouer');
     b.classList.remove('in'); void b.offsetWidth; b.classList.add('in');
   }
@@ -125,6 +125,8 @@
   function startLevel(L) {
     const info = levelInfo(L);
     info.xpStart = Object.assign({}, C.store.xp); // pour le récapitulatif de fin de niveau
+    info.t0 = performance.now();                   // chrono du mode compet (toute la série)
+    info.penalty = 0;
     playStep(info, 0);
   }
 
@@ -206,7 +208,9 @@
       host.addEventListener('pointerdown', (e) => {
         const t = e.target.closest('.cell, .bulb, .nono-cell');
         if (!t) return;
-        t.classList.remove('pop'); void t.offsetWidth; t.classList.add('pop');
+        // les pièces qui changent de face (Astres, Lumières) se retournent ; les autres rebondissent
+        const fx = t.closest('.astres, .lumieres') ? 'flip' : 'pop';
+        t.classList.remove('pop', 'flip'); void t.offsetWidth; t.classList.add(fx);
       });
 
       const tools = $('#tools');
@@ -229,11 +233,17 @@
 
       session = {
         g, variant, inst, info,
-        hint() { if (!won && inst.hint()) hints++; },
+        hint() {
+          if (!won && inst.hint()) {
+            hints++;
+            if (info.t0) info.penalty += 10; // compet : chaque indice coûte 10 secondes
+          }
+        },
         // outil de test temporaire : résout la grille d'un coup (sans XP)
         solve() {
           if (won) return;
           auto = true;
+          info.assisted = true; // pas de record ni de partage pour une série résolue automatiquement
           if (inst.solve) { inst.solve(); return; }
           for (let i = 0; i < 400 && !won; i++) if (!inst.hint()) break;
         },
@@ -269,13 +279,57 @@
     C.save();
     $('#play').classList.add('done');
     clearTimeout(finishLevel.timer);
+    if (info.t0 && !info.stopped) { info.time = levelTime(info); info.stopped = true; } // le chrono s'arrête à la dernière grille
     // série terminée : récapitulatif de l'XP gagnée par capacité, puis retour à la carte
     finishLevel.timer = setTimeout(() => { if (!screens.play.hidden) showLevelDone(info); }, 1400);
   }
 
   // Récapitulatif animé : chaque capacité travaillée, son gain d'XP, sa barre qui se remplit.
+  // ------------------------- Mode chill / compet -------------------------
+  const isCompet = () => C.store.settings.playMode === 'compet';
+  const levelTime = (info) => (performance.now() - info.t0) / 1000 + (info.penalty || 0);
+  function renderPlayMode() {
+    document.querySelectorAll('.play-mode button').forEach((b) => b.classList.toggle('on', b.dataset.playMode === (isCompet() ? 'compet' : 'chill')));
+  }
+  // le chrono s'affiche en compet, pendant une série de la quête
+  setInterval(() => {
+    const t = $('#play-timer');
+    const info = session && session.info;
+    const on = isCompet() && info && info.t0 && !info.free && !screens.play.hidden;
+    t.hidden = !on;
+    if (on && !info.stopped) t.textContent = C.formatTime(levelTime(info));
+  }, 250);
+
+  function shareTime(info) {
+    const txt = 'Odysseum · niveau ' + (info.L + 1) + ' bouclé en ' + C.formatTime(info.time) + '. Tu fais mieux ?';
+    const url = 'https://vroux18.github.io/Odysseum/';
+    if (navigator.share) {
+      navigator.share({ title: 'Odysseum', text: txt, url }).catch(() => { /* partage annulé */ });
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(txt + ' ' + url).then(() => showXp('message copié, colle-le à tes amis', '#5f9fd8')).catch(() => {});
+    }
+  }
+
   function showLevelDone(info) {
     const box = $('#ld-skills');
+    // compet : temps de la série, record du niveau, partage
+    const ldTime = $('#ld-time');
+    const compet = isCompet() && info.t0 && !info.assisted;
+    ldTime.hidden = !compet;
+    $('#ld-share').hidden = !compet;
+    if (compet) {
+      if (!info.stopped) { info.time = levelTime(info); info.stopped = true; }
+      J.best = J.best || {};
+      const prev = J.best[info.L];
+      const record = prev == null || info.time < prev;
+      if (record) J.best[info.L] = info.time;
+      C.save();
+      ldTime.innerHTML = '<b>' + C.formatTime(info.time) + '</b>' +
+        (record ? '<small class="record">' + (prev == null ? 'premier temps' : 'nouveau record') + '</small>'
+          : '<small>record ' + C.formatTime(prev) + '</small>') +
+        (info.penalty ? '<small>dont ' + info.penalty + ' s de pénalité (indices)</small>' : '');
+      $('#ld-share').onclick = () => shareTime(info);
+    }
     const before = info.xpStart || {};
     const rows = SKILLS.filter((sk) => (C.store.xp[sk.id] || 0) > (before[sk.id] || 0));
     $('#ld-title').textContent = info.boss ? 'Épreuve réussie' : 'Niveau ' + (info.L + 1);
@@ -605,6 +659,13 @@
   applyTheme(); // avant le premier affichage, pour éviter un flash
 
   // --------------------------- Événements ---------------------------
+  document.querySelectorAll('.play-mode button').forEach((b) => b.addEventListener('click', () => {
+    C.store.settings.playMode = b.dataset.playMode;
+    C.save();
+    renderPlayMode();
+    C.sfx.tap();
+  }));
+  renderPlayMode();
   $('#cam-mode').addEventListener('click', () => {
     if (!worldReady) return;
     const mode = C.world.setCameraMode(C.world.cameraMode() === 'free' ? 'follow' : 'free');

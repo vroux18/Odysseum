@@ -70,7 +70,7 @@
     let size = 0, cell = 0, pad = 0;
 
     function resize() {
-      const w = Math.min(host.clientWidth, host.clientHeight || Infinity, 520);
+      const w = Math.min(host.clientWidth, host.clientHeight || Infinity, 520, (puzzle.n || 6) * 76); // cases jamais trop grosses
       const dpr = window.devicePixelRatio || 1;
       size = w; pad = wrap ? w * 0.05 : 0; cell = (w - pad * 2) / n;
       canvas.style.width = w + 'px'; canvas.style.height = w + 'px';
@@ -137,11 +137,23 @@
         DIRS.forEach(([bit, dr, dc]) => { if (m & bit) arms.push([dc, dr]); });
         const lit = on[i];
         // tuyau « creux » : un trait épais (contour) puis un trait plus fin (intérieur)
+        const half = cell * 0.5;
         const stroke = (width, color) => {
-          ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
-          arms.forEach(([dx, dy]) => { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(dx * cell * 0.5, dy * cell * 0.5); ctx.stroke(); });
-          if (deg === 1) { ctx.beginPath(); ctx.arc(0, 0, cell * 0.24, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill(); }
-          else { ctx.beginPath(); ctx.arc(0, 0, width / 2, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill(); }
+          ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width; ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
+          const bent = arms.length === 2 && (arms[0][0] !== -arms[1][0] || arms[0][1] !== -arms[1][1]);
+          if (bent) {
+            // coude : un seul tracé, l'angle extérieur s'arrondit
+            ctx.beginPath();
+            ctx.moveTo(arms[0][0] * half, arms[0][1] * half);
+            ctx.arcTo(0, 0, arms[1][0] * half, arms[1][1] * half, cell * 0.22);
+            ctx.lineTo(arms[1][0] * half, arms[1][1] * half);
+            ctx.stroke();
+            return;
+          }
+          arms.forEach(([dx, dy]) => { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(dx * half, dy * half); ctx.stroke(); });
+          // terminal : un rond, dont l'anneau extérieur reste visible (le tracé large dépasse le fin)
+          const r = deg === 1 ? cell * 0.21 + (width - w) / 2 : width / 2;
+          ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
         };
         stroke(w + 4, lit ? accent : outline);
         stroke(w, lit ? accent : bg);

@@ -1425,6 +1425,9 @@
     const tap = drag.moved < 8 && performance.now() - drag.t < 400;
     drag = null;
     if (!tap) return;
+    // Ulysse reste sur le niveau en cours : toucher la carte ne le déplace plus
+    // (il n'avance qu'en terminant un niveau). Les gestes de caméra restent libres.
+    if (!World.allowWander) return;
     const rc = raycaster(e);
     const nodes = [], grounds = [];
     chapters.forEach((ch) => { if (!ch) return; ch.nodes.forEach((n) => nodes.push(n.mesh)); grounds.push(ch.ground); });
@@ -1515,9 +1518,27 @@
     camera.updateProjectionMatrix();
   }
 
+  // pastille au-dessus de la pierre : le numéro du niveau
+  const numCache = {};
+  function numberTexture(n, accent, boss) {
+    const key = n + accent + boss;
+    if (numCache[key]) return numCache[key];
+    numCache[key] = canvasTexture(128, 128, (g) => {
+      g.fillStyle = 'rgba(255,255,255,.95)';
+      g.beginPath(); g.arc(64, 64, 52, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = accent; g.lineWidth = boss ? 6 : 4;
+      g.beginPath(); g.arc(64, 64, boss ? 57 : 52, 0, Math.PI * 2); g.stroke();
+      g.fillStyle = '#2b3035';
+      g.font = '500 ' + (n > 99 ? 40 : 52) + 'px Jost, sans-serif';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(String(n), 64, 68);
+    });
+    return numCache[key];
+  }
+
   function setMarker() {
     const info = opts.levelInfo(selected);
-    marker.material.map = iconTexture(info.id, info.accent, info.boss);
+    marker.material.map = numberTexture(selected + 1, info.accent, info.boss);
     marker.material.needsUpdate = true;
     marker.scale.setScalar(info.boss ? 0.95 : 0.75);
   }

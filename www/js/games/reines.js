@@ -6,8 +6,9 @@
 
   // voiles pastel très légers
   // pastels mats, bien distincts les uns des autres (esprit « Rois » d'Almanac)
-  const REGION_COLORS = ['#c2b6e0', '#e3b3b0', '#aea296', '#b4cbab', '#a6cdd1',
-    '#d5e2e9', '#d9b7de', '#dcc4ab', '#efd28a', '#9fbadb'];
+  // céramique grecque : terre cuite, bleu égéen, or, olive, vert de mer, lie-de-vin, marbre…
+  const REGION_COLORS = ['#e08a62', '#7fa8cf', '#e3b65a', '#a8b46a', '#6cb8ae',
+    '#c97b85', '#ece6d6', '#a39dcb', '#d4b48a', '#9cc4d8'];
   // couronne pleine, bien lisible sur toutes les couleurs
   const CROWN = '<svg class="crown" viewBox="0 0 24 24"><path d="M3 8.5 7.2 12 12 5l4.8 7L21 8.5 19.2 18H4.8z" fill="#15191e" stroke="#15191e" stroke-width="1.2" stroke-linejoin="round"/></svg>';
 
