@@ -101,6 +101,8 @@
       if (filled < n * n * 0.3) continue;
       const rows = [...Array(n)].map((_, r) => cluesOf(Array.from(g.slice(r * n, r * n + n))));
       const cols = [...Array(n)].map((_, c) => cluesOf([...Array(n)].map((_, r) => g[r * n + c])));
+      // méga : pas plus de p.maxGroups indices sur une ligne (la colonne d'indices reste étroite, cases ≥ 24 px)
+      if (p.maxGroups && t < 250 && rows.some((r) => r.length > p.maxGroups)) continue;
       last = { n, variant: p.variant, rows, cols, solution: Array.from(g) };
       if (lineSolvable(n, rows, cols)) return last;
     }

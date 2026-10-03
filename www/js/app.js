@@ -146,26 +146,61 @@
   }
 
   // ------------------------------------------------------------------
-  // Événements spéciaux : une grille « méga » par île, facultative, bien plus grande et plus
-  // dure qu'à l'ordinaire. Le jeu tourne parmi ceux déjà découverts sur l'île, la taille
-  // grandit d'île en île (bornée pour rester jouable sur un téléphone de 375 px).
-  // Hors quête : pas de progression du sentier ; XP doublée ; une coupe dorée sur la carte.
+  // MÉGA : pour chaque jeu à grande grille, une catégorie à part entière de 150 niveaux, au-dessus
+  // de l'Expert. Le niveau 1 dépasse à peine l'Expert maxi ; les tailles se succèdent à parts égales
+  // sur les 150 niveaux (jamais plus d'une rangée d'un coup) ; t (0 → 1 du niveau 1 au 150) fait
+  // monter en continu les autres réglages, sans jamais redescendre au changement de taille.
+  // Tailles bornées pour des cases ≥ 24 px sur un téléphone de 375 px (plateau ≈ 335 px) sans zoom,
+  // et une génération < 1,5 s sur téléphone (≈ 0,4 s au pire sur PC).
+  //   jeu       Expert maxi        niveau 1          niveau 150        réglages qui montent avec t
+  //   tuyaux    9×9                10×10             13×13             — (la taille seule ; canvas sans écart : 25,8 px)
+  //   flux      8×8 · 3 ponts      9×9 · 3 ponts     13×13 · 4 ponts   ponts 3→4 (dès t = ½) ; couleurs 0,8·n → 0,65·n : cases par couleur 11,6 → 21 (tuyaux plus longs)
+  //   reines    9×9                10×10             11×11             — (12×12 : génération trop lente ; 11 teintes)
+  //   paves     10×10 · aire ≤ 12  11×11 · aire ≤ 12 13×13 · aire ≤ 20 aire maxi 12→20 ; chiffres cachés « ? » 0→3 (dès t = 0,6)
+  //   pixels    10×10              11×11             12×12             densité 0,58→0,48 (indices plus morcelés) ; au-delà : cases < 24 px
+  //   demineur  9×9 · 20 %         10×10 · 20 %      12×12 · 23 %      écueils 20→23 % ; déductions fines exigées 2→5
   // ------------------------------------------------------------------
-  const MEGA = [
-    { id: 'tuyaux', n: [10, 12] },
-    { id: 'flux', n: [9, 11], tune: (p, n) => { p.colors = Math.min(12, n); } },
-    { id: 'reines', n: [9, 10] },  // (10 teintes de zones au plus)
-    { id: 'paves', n: [10, 12] },
-    { id: 'pixels', n: [11, 12] }, // (colonne d'indices en plus : au-delà, cases < 24 px)
-    { id: 'demineur', n: [10, 12], tune: (p, n) => { p.mines = Math.round(n * n * 0.19); p.subtle = 2; } }
-  ].filter((m) => C.games.some((g) => g.id === m.id));
+  const MEGA_SIZE = 150;
+  const MEGA_TRACK = {
+    tuyaux: { sizes: [10, 11, 12, 13] },
+    flux: { sizes: [9, 10, 11, 12, 13], tune: (p, t, n) => {
+      p.bridges = t < 0.5 ? 3 : 4;
+      p.colors = Math.max(5, Math.min(12, Math.round(n * (0.8 - 0.15 * t))));
+    } },
+    reines: { sizes: [10, 11] },
+    paves: { sizes: [11, 12, 13], tune: (p, t) => {
+      p.maxArea = Math.round(12 + 8 * t);
+      p.mystery = t < 0.6 ? 0 : Math.min(3, 1 + Math.floor((t - 0.6) * 6));
+    } },
+    pixels: { sizes: [11, 12], tune: (p, t) => { p.density = +(0.58 - 0.1 * t).toFixed(3); p.maxGroups = 4; } },
+    demineur: { sizes: [10, 11, 12], tune: (p, t, n) => {
+      p.mines = Math.floor(n * n * (0.2 + 0.03 * t)); // (arrondi bas : la densité ne recule pas d'une taille à l'autre)
+      p.subtle = 2 + Math.floor(3.99 * t);
+    } }
+  };
+  Object.keys(MEGA_TRACK).forEach((id) => { if (!C.games.some((g) => g.id === id)) delete MEGA_TRACK[id]; });
+  const MEGA_IDS = Object.keys(MEGA_TRACK);
+  const megaT = (k) => (Math.max(1, Math.min(MEGA_SIZE, k)) - 1) / (MEGA_SIZE - 1);
+  const megaN = (id, k) => { const s = MEGA_TRACK[id].sizes; return s[Math.min(s.length - 1, Math.floor((Math.max(1, k) - 1) * s.length / MEGA_SIZE))]; };
+  function megaParams(id, k) {
+    const tr = MEGA_TRACK[id], n = megaN(id, k);
+    const p = Object.assign(game(id).params(40, 'classic'), { n, mega: true });
+    if (tr.tune) tr.tune(p, megaT(k), n);
+    return p;
+  }
+
+  // ------------------------------------------------------------------
+  // Événements spéciaux : une grille « méga » par île, facultative. Le jeu tourne parmi ceux déjà
+  // découverts sur l'île ; la grille reprend un niveau de la catégorie Méga, de plus en plus loin
+  // d'île en île. Hors quête : pas de progression du sentier ; XP doublée ; une coupe dorée sur la carte.
+  // ------------------------------------------------------------------
+  const MEGA = MEGA_IDS.map((id) => ({ id }));
   const EV = (C.store.events = C.store.events || {});
   function eventInfo(c) {
     const cands = MEGA.filter((m) => poolOf(c).includes(m.id));
     const m = (cands.length ? cands : MEGA)[c % (cands.length || MEGA.length)];
-    const n = Math.round(m.n[0] + (m.n[1] - m.n[0]) * Math.min(1, c / 8));
-    const params = Object.assign(game(m.id).params(40, 'classic'), { n });
-    if (m.tune) m.tune(params, n);
+    const params = megaParams(m.id, Math.min(MEGA_SIZE, 1 + c * 15));
+    const n = params.n;
     const seed = 'event:' + c;
     return { L: -1, c, free: true, event: c, id: m.id, n, accent: ACCENT[m.id], seed,
       steps: [{ id: m.id, variant: 'classic', level: 20 + c * 3, params, seed }] };
@@ -300,6 +335,7 @@
   C.hintBoxes = function (ref, boxes) {
     const host = ref.parentNode;
     if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+    const rezoom = zoomPause(); // mesures sans le zoom du plateau ; le calque le reprend ensuite
     const hr = host.getBoundingClientRect(), rr = ref.getBoundingClientRect();
     const k = ref.offsetWidth ? rr.width / ref.offsetWidth : 1; // plateau éventuellement mis à l'échelle
     const layer = document.createElement('div');
@@ -319,8 +355,204 @@
       (b.kind === 'where' ? out.where : out.why).push(d);
     });
     host.appendChild(layer);
+    if (rezoom) rezoom();
     return out;
   };
+
+  // ------------------------------ Zoom du plateau ------------------------------
+  // Grandes grilles (Méga, événements, n ≥ 10) : pincer à deux doigts zoome de 1× à 2,5× et déplace
+  // (le milieu des deux doigts suit) ; molette ou ctrl+molette sur ordinateur, autour du curseur.
+  // Un seul doigt va toujours au jeu : son appui est retenu ~90 ms, le temps de voir si un second
+  // doigt suit (alors c'est un geste de zoom : le jeu ne reçoit rien), puis rejoué tel quel.
+  // Le zoom passe par les propriétés CSS `scale` et `translate` des enfants du plateau, qui se
+  // composent avec les animations (elles pilotent `transform`) ; getBoundingClientRect et
+  // elementFromPoint en tiennent compte, les jeux visent donc toujours la bonne case.
+  // Retour à 1× : petit bouton loupe (visible une fois zoomé) ou tape brève à deux doigts.
+  // Le contenu reste toujours dans le cadre du plateau (pas de bord vide quand il est plus grand que lui).
+  const ZMAX = 2.5, HOLD_MS = 90;
+  // un appui rejoué après un toucher très bref arrive quand le doigt est déjà levé : la capture du
+  // pointeur demandée par le jeu échouerait (exception) et le toucher serait perdu ; on l'ignore sans bruit
+  const capture0 = Element.prototype.setPointerCapture;
+  if (capture0) Element.prototype.setPointerCapture = function (id) { try { capture0.call(this, id); } catch (e) { /* pointeur déjà relevé */ } };
+  const Z = { host: null, on: false, s: 1, tx: 0, ty: 0, pts: new Map(), hold: null, pinch: null, given: null, own: new WeakSet(), timer: 0 };
+  const ZOOM_OUT = '<svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5M7.8 10.5h5.4"/></svg>';
+  const zKids = () => [...Z.host.children].filter((el) => !el.classList.contains('zoom-reset'));
+  function zoomBox() { // boîte du contenu, en pixels du plateau, sans zoom
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    zKids().forEach((el) => {
+      if (getComputedStyle(el).position === 'absolute') return;
+      x0 = Math.min(x0, el.offsetLeft); y0 = Math.min(y0, el.offsetTop);
+      x1 = Math.max(x1, el.offsetLeft + el.offsetWidth); y1 = Math.max(y1, el.offsetTop + el.offsetHeight);
+    });
+    return x0 < x1 ? { x0, y0, x1, y1 } : { x0: 0, y0: 0, x1: Z.host.clientWidth, y1: Z.host.clientHeight };
+  }
+  function zoomClamp() {
+    const b = zoomBox(), s = Z.s;
+    // contenu plus petit que le cadre : il reste dedans ; plus grand : il le couvre sans laisser de vide
+    const lim = (t, a, c, V) => Math.max(Math.min(-s * a, V - s * c), Math.min(Math.max(-s * a, V - s * c), t));
+    Z.tx = lim(Z.tx, b.x0, b.x1, Z.host.clientWidth);
+    Z.ty = lim(Z.ty, b.y0, b.y1, Z.host.clientHeight);
+  }
+  function zoomApply() {
+    if (!Z.host) return;
+    const z = Z.s > 1.001;
+    zKids().forEach((el) => {
+      if (!z) { el.style.removeProperty('scale'); el.style.removeProperty('translate'); el.style.removeProperty('transform-origin'); return; }
+      el.style.transformOrigin = (-el.offsetLeft) + 'px ' + (-el.offsetTop) + 'px'; // origine commune : le coin du plateau
+      el.style.scale = String(Z.s);
+      el.style.translate = Z.tx + 'px ' + Z.ty + 'px';
+    });
+    Z.host.classList.toggle('zoomed', z);
+    C.boardZoom = z ? Z.s : 1;
+    let btn = Z.host.querySelector(':scope > .zoom-reset');
+    if (z && !btn) {
+      btn = document.createElement('button');
+      btn.className = 'zoom-reset';
+      btn.setAttribute('aria-label', 'Zoom 1×');
+      btn.innerHTML = ZOOM_OUT;
+      btn.addEventListener('click', (e) => { e.stopPropagation(); zoomTo(1, 0, 0, true); C.sfx.tap(); });
+      Z.host.appendChild(btn);
+    }
+    if (btn) btn.hidden = !z;
+  }
+  // zoom vers s en gardant fixe le point (px, py) du cadre
+  function zoomTo(s, px, py, ease) {
+    s = Math.max(1, Math.min(ZMAX, s));
+    Z.tx = px - s * (px - Z.tx) / Z.s; Z.ty = py - s * (py - Z.ty) / Z.s; Z.s = s;
+    if (s <= 1.001) { Z.s = 1; Z.tx = 0; Z.ty = 0; }
+    zoomClamp();
+    if (ease) { Z.host.classList.add('zoom-ease'); clearTimeout(zoomTo.ease); zoomTo.ease = setTimeout(() => Z.host && Z.host.classList.remove('zoom-ease'), 220); }
+    zoomApply();
+    zoomSettle();
+  }
+  // geste fini : les plateaux dessinés (canvas) se redessinent nets à la nouvelle échelle
+  function zoomSettle() {
+    clearTimeout(Z.timer);
+    Z.timer = setTimeout(() => { if (session && session.inst && session.inst.resize) { session.inst.resize(); zoomApply(); } }, 180);
+  }
+  // mesures d'un calque d'astuce : zoom retiré le temps de mesurer, rendu par la fonction renvoyée
+  function zoomPause() {
+    if (!Z.host || Z.s <= 1.001) return null;
+    zKids().forEach((el) => { el.style.removeProperty('scale'); el.style.removeProperty('translate'); });
+    return zoomApply;
+  }
+  function zoomAttach(host, on) {
+    Z.host = host; Z.on = !!on; Z.s = 1; Z.tx = 0; Z.ty = 0;
+    Z.pts.clear(); Z.pinch = null; Z.given = null;
+    if (Z.hold) { clearTimeout(Z.hold.timer); Z.hold = null; }
+    host.classList.toggle('zoomable', Z.on);
+    zoomApply();
+    if (host.zoomBound) return;
+    host.zoomBound = true;
+    const rel = (e) => { const r = host.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+    // rejoue un évènement du doigt retenu, à l'identique, sur sa cible d'origine
+    const replay = (e, type) => {
+      const ev = new PointerEvent(type || e.type, { bubbles: true, cancelable: true, composed: true,
+        pointerId: e.pointerId, pointerType: e.pointerType, isPrimary: e.isPrimary, clientX: e.clientX, clientY: e.clientY,
+        screenX: e.screenX, screenY: e.screenY, button: e.button, buttons: e.buttons, pressure: e.pressure, width: e.width, height: e.height });
+      Z.own.add(ev);
+      const t = e.target && e.target.isConnected && host.contains(e.target) ? e.target : host;
+      t.dispatchEvent(ev);
+    };
+    const flush = () => {
+      const h = Z.hold;
+      if (!h) return;
+      Z.hold = null;
+      clearTimeout(h.timer);
+      Z.given = h.down; // ce doigt appartient désormais au jeu
+      replay(h.down);
+      h.queue.forEach((e) => replay(e));
+    };
+    const pinchStart = () => {
+      const [a, b] = [...Z.pts.values()];
+      Z.pinch = { s0: Z.s, tx0: Z.tx, ty0: Z.ty, d0: Math.max(10, Math.hypot(b[0] - a[0], b[1] - a[1])),
+        m0: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], t0: performance.now(), moved: 0 };
+    };
+    const pinchMove = () => {
+      const p = Z.pinch, v = [...Z.pts.values()];
+      if (!p || v.length < 2) return;
+      const [a, b] = v, m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      p.moved = Math.max(p.moved, Math.abs(d - p.d0), Math.hypot(m[0] - p.m0[0], m[1] - p.m0[1]));
+      const s = Math.max(1, Math.min(ZMAX, p.s0 * d / p.d0));
+      // le point du contenu qui était sous le milieu des doigts y reste
+      Z.s = s;
+      Z.tx = m[0] - s * (p.m0[0] - p.tx0) / p.s0;
+      Z.ty = m[1] - s * (p.m0[1] - p.ty0) / p.s0;
+      if (s <= 1.001) { Z.s = 1; Z.tx = 0; Z.ty = 0; }
+      zoomClamp();
+      zoomApply();
+    };
+    host.addEventListener('pointerdown', (e) => {
+      if (Z.own.has(e) || !Z.on || e.pointerType === 'mouse' || e.target.closest('.zoom-reset')) return;
+      Z.pts.set(e.pointerId, rel(e));
+      if (Z.pts.size === 1) {
+        // premier doigt : retenu un instant (un second doigt en fera un geste de zoom)
+        e.stopImmediatePropagation();
+        Z.given = null;
+        Z.hold = { down: e, queue: [], x: e.clientX, y: e.clientY, timer: setTimeout(flush, HOLD_MS) };
+        return;
+      }
+      e.stopImmediatePropagation();
+      if (Z.pts.size === 2 && !Z.pinch) {
+        if (Z.hold) { clearTimeout(Z.hold.timer); Z.hold = null; } // le jeu ne saura rien du premier doigt
+        else if (Z.given && Z.pts.has(Z.given.pointerId)) replay(Z.given, 'pointercancel'); // déjà parti au jeu : annulé
+        Z.given = null;
+        pinchStart();
+      }
+    }, true);
+    host.addEventListener('pointermove', (e) => {
+      if (Z.own.has(e) || !Z.pts.has(e.pointerId)) return;
+      Z.pts.set(e.pointerId, rel(e));
+      if (Z.hold && Z.hold.down.pointerId === e.pointerId) {
+        e.stopImmediatePropagation();
+        Z.hold.queue.push(e);
+        // un glissé franc n'attend pas : le jeu reçoit tout de suite le doigt
+        if (Math.hypot(e.clientX - Z.hold.x, e.clientY - Z.hold.y) > 10) flush();
+        return;
+      }
+      if (Z.pinch) { e.stopImmediatePropagation(); pinchMove(); }
+    }, true);
+    const up = (e) => {
+      if (Z.own.has(e) || !Z.pts.has(e.pointerId)) return;
+      if (Z.hold && Z.hold.down.pointerId === e.pointerId) { // toucher bref : appui et relâché rejoués ensemble
+        e.stopImmediatePropagation();
+        Z.hold.queue.push(e);
+        flush();
+        Z.pts.delete(e.pointerId);
+        return;
+      }
+      Z.pts.delete(e.pointerId);
+      if (!Z.pinch) return;
+      e.stopImmediatePropagation();
+      if (Z.pts.size === 0) {
+        const p = Z.pinch;
+        Z.pinch = null;
+        // tape brève à deux doigts, sans bouger : retour à 1×
+        if (performance.now() - p.t0 < 280 && p.moved < 12 && Z.s > 1) zoomTo(1, 0, 0, true);
+        else zoomSettle();
+      }
+    };
+    host.addEventListener('pointerup', up, true);
+    host.addEventListener('pointercancel', up, true);
+    // doigt levé hors du plateau : on l'oublie aussi (sinon le prochain toucher passerait pour un second doigt)
+    const lost = (e) => {
+      if (Z.own.has(e) || !Z.pts.has(e.pointerId)) return;
+      if (Z.hold && Z.hold.down.pointerId === e.pointerId) flush();
+      Z.pts.delete(e.pointerId);
+      if (!Z.pts.size && Z.pinch) { Z.pinch = null; zoomSettle(); }
+    };
+    window.addEventListener('pointerup', lost);
+    window.addEventListener('pointercancel', lost);
+    host.addEventListener('wheel', (e) => {
+      if (!Z.on) return;
+      e.preventDefault();
+      const [x, y] = rel(e);
+      const dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY; // (molette en lignes)
+      zoomTo(Z.s * Math.exp(-dy * (e.ctrlKey ? 0.01 : 0.0015)), x, y, !e.ctrlKey);
+    }, { passive: false });
+    window.addEventListener('resize', () => { if (Z.host && Z.s > 1) zoomTo(1, 0, 0); });
+  }
 
   function playStep(info, stepIndex) {
     if (session) session.stop();
@@ -332,9 +564,10 @@
     show('play');
     $('#play').style.setProperty('--game', ACCENT[g.id]);
     $('#play').classList.remove('done');
-    $('#play').classList.toggle('mega', info.event != null); // grande grille : cases plus serrées
+    $('#play').classList.toggle('mega', info.event != null || !!info.mega); // grande grille : cases plus serrées
+    zoomAttach($('#board'), false); // (le zoom revient à 1× ; réactivé une fois la grille posée)
     $('#play-icon').innerHTML = icon(g.id);
-    $('#play-level').textContent = info.event != null ? 'méga' : info.daily ? 'défi du jour' : info.tier ? info.tier.name.toLowerCase() + ' · ' + info.tier.k : info.free ? (info.focus ? 'concentration' : 'jeu libre') : (info.boss ? 'épreuve · niveau ' : 'niveau ') + (info.L + 1);
+    $('#play-level').textContent = info.mega ? 'méga · ' + info.mega.k : info.event != null ? 'méga' : info.daily ? 'défi du jour' : info.tier ? info.tier.name.toLowerCase() + ' · ' + info.tier.k : info.free ? (info.focus ? 'concentration' : 'jeu libre') : (info.boss ? 'épreuve · niveau ' : 'niveau ') + (info.L + 1);
     // passage d'un mini-jeu au suivant dans une série : la grille arrive par la droite
     $('#board').classList.toggle('next-step', stepIndex > 0 || !!info.chain || !!info.focus);
     $('#board').classList.remove('leaving');
@@ -391,7 +624,7 @@
           const d = C.gameData(dataKey(g, variant));
           d.solved++;
           d.totalTime += elapsed;
-          gainXp(g, step.level, info.event != null ? 2 : info.daily || info.boss ? 1.5 : 1, elapsed, hints, auto);
+          gainXp(g, step.level, info.event != null ? 2 : info.daily || info.boss || info.mega ? 1.5 : 1, elapsed, hints, auto);
           info.run.time += elapsed; info.run.target += target; info.run.hints += hints;
           if (mark) {
             tierMark(g.id, mark.tier.id, mark.k);
@@ -411,6 +644,8 @@
         }
       };
       const inst = g.create(host, puzzle, api);
+      // grandes grilles : pincer pour zoomer (voir « Zoom du plateau »)
+      zoomAttach(host, info.event != null || !!info.mega || (prm.n || 0) >= 10);
       renderHints(MAX_HINTS);
       // animations : apparition en cascade (en diagonale) et petit rebond au toucher
       const grid = host.querySelector('.cell-grid, .nono');
@@ -497,6 +732,25 @@
       $('#play').classList.add('done');
       clearTimeout(finishLevel.timer);
       finishLevel.timer = setTimeout(() => { if (!screens.play.hidden) showLevelDone(info); }, 1400);
+      return;
+    }
+    if (info.mega) { // niveau Méga : coché, étoiles et meilleur temps gardés, puis le suivant s'enchaîne
+      const s = info.steps[0], k = info.mega.k, rec = megaRec(s.id);
+      if (k > rec.done) rec.done = k;
+      if (!info.assisted) {
+        keepBest(rec.stars, k, info.stars);
+        if (!rec.best[k] || run.time < rec.best[k]) rec.best[k] = run.time;
+      }
+      C.save();
+      $('#play').classList.add('done');
+      clearTimeout(finishLevel.timer);
+      popStars(info.stars);
+      if (k >= MEGA_SIZE) { // le 150e : récapitulatif, puis retour
+        finishLevel.timer = setTimeout(() => { if (!screens.play.hidden) showLevelDone(info); }, 1400);
+        return;
+      }
+      setTimeout(() => { if (!screens.play.hidden) $('#board').classList.add('leaving'); }, 1400);
+      finishLevel.timer = setTimeout(() => { if (!screens.play.hidden) startMega(s.id, k + 1, true); }, 1700);
       return;
     }
     if (info.tier) { // niveau d'un palier : on le coche et on enchaîne sur le suivant
@@ -594,7 +848,7 @@
     }
     const before = info.xpStart || {};
     const rows = SKILLS.filter((sk) => (C.store.xp[sk.id] || 0) > (before[sk.id] || 0));
-    $('#ld-title').textContent = info.daily ? game(info.steps[0].id).name : info.event != null ? 'Méga ' + game(info.id).name : info.boss ? 'Épreuve réussie' : 'Niveau ' + (info.L + 1);
+    $('#ld-title').textContent = info.daily ? game(info.steps[0].id).name : info.event != null || info.mega ? 'Méga ' + game(info.steps[0].id).name : info.boss ? 'Épreuve réussie' : 'Niveau ' + (info.L + 1);
     // trois grosses étoiles sous le titre : elles éclosent une à une (les manquantes restent grises)
     const ldStars = $('#ld-stars');
     const hasStars = info.stars != null;
@@ -606,7 +860,7 @@
         if (i < info.stars) setTimeout(() => { if (!$('#level-done').hidden) C.sfx.star && C.sfx.star(i); }, 250 + i * 320 + 180);
       });
     }
-    // chrono : le temps mis, sur une piste oÃ¹ sont posÃ©s les seuils des Ã©toiles (â˜…â˜…â˜… puis â˜…â˜…)
+    // chrono : le temps mis, sur une piste où sont posés les seuils des étoiles (★★★ puis ★★)
     let clock = $('#ld-clock');
     if (!clock) { clock = document.createElement('div'); clock.id = 'ld-clock'; clock.className = 'ld-clock'; ldStars.after(clock); }
     const run = info.run || {};
@@ -739,6 +993,7 @@
     const pop = $('#pop-stars'); if (pop) pop.hidden = true;
     renderDaily();
     $('#play').classList.remove('mega');
+    zoomAttach($('#board'), false);
     refreshEvents(); // une île atteinte ouvre son totem ; un événement réussi devient une coupe
     renderPlay();
     renderBadge();
@@ -865,7 +1120,37 @@
       b.addEventListener('click', () => openLevels(g.id));
       group.appendChild(b);
     });
+    renderMegaLib(gl);
     renderEventsLib(gl);
+  }
+
+  // Catégorie « Méga » : un jeu par carte (150 niveaux chacun), pastille dorée MÉGA, jauge de progression ;
+  // verrouillée (cadenas) tant que le palier Expert du jeu n'est pas ouvert. Toucher : bandeau des niveaux, onglet Méga.
+  function renderMegaLib(gl) {
+    if (!MEGA_IDS.length) return;
+    const h = document.createElement('h3');
+    h.className = 'lib-cat lib-cat-mega lib-cat-megas';
+    h.style.setProperty('--game', '#e2a21f');
+    h.textContent = 'Méga';
+    gl.appendChild(h);
+    const group = document.createElement('div');
+    group.className = 'lib-group lib-mega lib-megas';
+    gl.appendChild(group);
+    MEGA_IDS.forEach((id) => {
+      const open = megaOpen(id), done = megaRec(id).done, full = done >= MEGA_SIZE;
+      const b = document.createElement('button');
+      b.className = 'tile mega-tile mega-cat' + (open ? '' : ' locked') + (full ? ' won' : '');
+      b.style.setProperty('--game', open ? ACCENT[id] : '#aab2bb');
+      b.style.setProperty('--p', (done / MEGA_SIZE).toFixed(3));
+      b.setAttribute('aria-label', 'Méga ' + game(id).name);
+      b.innerHTML = '<span class="tile-icon">' + icon(id) + '<i class="mega-badge">méga</i>' +
+        (full ? '<i class="mega-cup">' + CUP + '</i>' : '') + '</span>' +
+        '<span class="tile-name">' + game(id).name + '</span>' +
+        '<span class="tile-lvl">' + (!open ? LOCK : full ? '150' : 'niv. ' + (done + 1)) + '</span>' +
+        '<i class="mega-bar"><b></b></i>';
+      b.addEventListener('click', () => openLevels(id, 'mega'));
+      group.appendChild(b);
+    });
   }
 
   // Catégorie « Événements » en fin de liste : une carte par île (la suivante grisée, verrouillée),
@@ -947,6 +1232,7 @@
     return nx;
   }
   function startTier(id, tierId, k, chain) {
+    if (tierId === 'mega') { startMega(id, k, chain); return; }
     const t = TIERS.find((x) => x.id === tierId);
     $('#levels').hidden = true;
     $('#brain').hidden = true;
@@ -955,40 +1241,66 @@
       steps: [{ id, variant: 'classic', level: tierLevel(t, k) }] }, 0);
   }
 
-  // Bandeau des niveaux d'un mini-jeu : onglets de palier, grille de 150 niveaux
+  // Méga : 150 niveaux par jeu, à la suite (un niveau ouvre le suivant). La catégorie d'un jeu s'ouvre
+  // avec son palier Expert. C.store.mega[jeu] = { done: plus haut niveau réussi, stars: { k: 1-3 }, best: { k: secondes } }
+  const megaOpen = (id) => !!MEGA_TRACK[id] && tierOpen(id, TIERS.length - 1);
+  function megaRec(id) {
+    const M = (C.store.mega = C.store.mega || {});
+    const r = (M[id] = M[id] || {});
+    r.done = r.done || 0; r.stars = r.stars || {}; r.best = r.best || {};
+    return r;
+  }
+  function startMega(id, k, chain) {
+    if (!MEGA_TRACK[id]) return;
+    k = Math.max(1, Math.min(MEGA_SIZE, k));
+    ['#levels', '#brain', '#library'].forEach((s) => { const el = $(s); if (el) el.hidden = true; });
+    playStep({ L: -1, free: true, chain: !!chain, mega: { k }, seed: 'mega:' + id + ':' + k,
+      steps: [{ id, variant: 'classic', level: 40 + Math.floor(k / 10), params: megaParams(id, k) }] }, 0);
+  }
+
+  // Bandeau des niveaux d'un mini-jeu : onglets de palier (+ Méga pour les jeux à grande grille), grille de 150 niveaux
   let lv = null;
-  function openLevels(id) {
+  function openLevels(id, tier) {
     let k = 0;
     TIERS.forEach((t, i) => { if (tierOpen(id, i)) k = i; });
-    lv = { id, tier: TIERS[k].id };
+    lv = { id, tier: tier === 'mega' && MEGA_TRACK[id] ? 'mega' : TIERS[k].id };
     renderLevels(true);
     $('#levels').hidden = false;
     C.sfx.tap();
   }
   function renderLevels(scroll) {
     const g = game(lv.id);
+    const mega = lv.tier === 'mega';
     $('#levels').style.setProperty('--game', ACCENT[lv.id]);
-    $('#lv-head').innerHTML = '<span class="lv-icon">' + icon(lv.id) + '</span><b>' + g.name + '</b><small>niveau ' + gameLvl(lv.id) + '</small>';
-    $('#lv-tabs').innerHTML = TIERS.map((t, k) => {
-      const open = tierOpen(lv.id, k);
-      return '<button role="tab" data-tier="' + t.id + '" class="' + (t.id === lv.tier ? 'on' : '') + (open ? '' : ' locked') + '">' +
-        '<span>' + t.name + '</span><small>' + (!open ? LOCK : tierDone(lv.id, t.id) >= TIER_SIZE ? '✓' : 'niv. ' + (tierDone(lv.id, t.id) + 1)) + '</small></button>';
-    }).join('');
+    $('#levels').classList.toggle('lv-mega', mega);
+    // en Méga, la petite étiquette donne la taille de la prochaine grille
+    const nk = mega ? Math.min(MEGA_SIZE, megaRec(lv.id).done + 1) : 0;
+    $('#lv-head').innerHTML = '<span class="lv-icon">' + icon(lv.id) + (mega ? '<i class="mega-badge">méga</i>' : '') + '</span><b>' + g.name + '</b>' +
+      '<small>' + (mega ? megaN(lv.id, nk) + '×' + megaN(lv.id, nk) : 'niveau ' + gameLvl(lv.id)) + '</small>';
+    const tabs = TIERS.map((t, k) => ({ id: t.id, name: t.name, open: tierOpen(lv.id, k), done: tierDone(lv.id, t.id) }));
+    if (MEGA_TRACK[lv.id]) tabs.push({ id: 'mega', name: 'Méga', open: megaOpen(lv.id), done: megaRec(lv.id).done, mega: true });
+    $('#lv-tabs').classList.toggle('four', tabs.length > 3);
+    $('#lv-tabs').innerHTML = tabs.map((t) =>
+      '<button role="tab" data-tier="' + t.id + '" class="' + (t.id === lv.tier ? 'on' : '') + (t.open ? '' : ' locked') + (t.mega ? ' mega-tab' : '') + '">' +
+        '<span>' + t.name + '</span><small>' + (!t.open ? LOCK : t.done >= TIER_SIZE ? '✓' : 'niv. ' + (t.done + 1)) + '</small></button>').join('');
     const k = TIERS.findIndex((t) => t.id === lv.tier);
-    const done = tierDone(lv.id, lv.tier), open = tierOpen(lv.id, k);
-    let h = open ? '' : '<p class="lv-note">' + LOCK + 'Réussis ' + TIER_UNLOCK + ' niveaux ' + TIERS[k - 1].name.toLowerCase() + ' pour ouvrir ce palier.</p>';
-    const tstars = tierStarsOf(lv.id, lv.tier);
+    const done = mega ? megaRec(lv.id).done : tierDone(lv.id, lv.tier), open = mega ? megaOpen(lv.id) : tierOpen(lv.id, k);
+    let h = open ? '' : mega ? '<p class="lv-note">' + LOCK + 'Ouvre le palier expert.</p>'
+      : '<p class="lv-note">' + LOCK + 'Réussis ' + TIER_UNLOCK + ' niveaux ' + TIERS[k - 1].name.toLowerCase() + ' pour ouvrir ce palier.</p>';
+    const tstars = mega ? megaRec(lv.id).stars : tierStarsOf(lv.id, lv.tier);
     for (let i = 1; i <= TIER_SIZE; i++) {
       const st = !open ? 'locked' : i <= done ? 'done' : i === done + 1 ? 'next' : 'locked';
       // niveau réussi : ses meilleures étoiles sous le numéro
       const stars = st === 'done' && tstars[i] ? starRow(tstars[i]) : '';
-      h += '<button class="lv ' + st + '" data-k="' + i + '"' + (st === 'locked' ? ' disabled' : '') + ' style="--i:' + Math.min(i, 40) + '">' + i + stars + '</button>';
+      // Méga : le premier niveau de chaque taille porte une petite pastille « 11² »
+      const n = mega ? megaN(lv.id, i) : 0, up = mega && (i === 1 || megaN(lv.id, i - 1) !== n);
+      h += '<button class="lv ' + st + (up ? ' size-up' : '') + '" data-k="' + i + '"' + (up ? ' data-size="' + n + '²"' : '') +
+        (st === 'locked' ? ' disabled' : '') + ' style="--i:' + Math.min(i, 40) + '">' + i + stars + '</button>';
     }
     const grid = $('#lv-grid');
     grid.innerHTML = h;
-    const sk = SKILLS.find((s) => s.games.includes(lv.id));
-    // reprendre là où on s'est arrêté : le plus haut palier ouvert qui n'est pas terminé
-    const resume = nextTier(lv.id);
+    // reprendre là où on s'est arrêté : le plus haut palier ouvert qui n'est pas terminé (en Méga : le niveau Méga suivant)
+    const resume = mega ? (open && done < MEGA_SIZE ? { tier: { id: 'mega', name: 'Méga' }, k: done + 1 } : null) : nextTier(lv.id);
     const fb = $('#lv-focus');
     fb.hidden = !resume;
     if (resume) {
@@ -1304,17 +1616,17 @@
   $('#prev-level').addEventListener('click', () => stepLevel(-1));
   $('#next-level').addEventListener('click', () => stepLevel(1));
 
-  // Le voyage : toutes les pierres dÃ©jÃ  atteintes, Ã®le par Ã®le (Ã©toiles, Ã©preuves) ;
-  // toucher une pierre y tÃ©lÃ©porte Ulysse pour la rejouer.
-  const VOYAGE_ISLANDS = ['Troie', 'Le MarchÃ©', 'Les Lotus', 'Le Cyclope', 'Les Vents', 'Les Falaises',
-    'CircÃ©', 'Les Brumes', 'Les SirÃ¨nes', 'Le Tourbillon', 'Le Soleil', 'Calypso', 'Le Palais', 'Ithaque'];
+  // Le voyage : toutes les pierres déjà atteintes, île par île (étoiles, épreuves) ;
+  // toucher une pierre y téléporte Ulysse pour la rejouer.
+  const VOYAGE_ISLANDS = ['Troie', 'Le Marché', 'Les Lotus', 'Le Cyclope', 'Les Vents', 'Les Falaises',
+    'Circé', 'Les Brumes', 'Les Sirènes', 'Le Tourbillon', 'Le Soleil', 'Calypso', 'Le Palais', 'Ithaque'];
   const voyageName = (c) => VOYAGE_ISLANDS[c % VOYAGE_ISLANDS.length] + (c >= VOYAGE_ISLANDS.length ? ' ' + (Math.floor(c / VOYAGE_ISLANDS.length) + 1) : '');
   function renderVoyage() {
     const box = $('#vy-list');
     const stars = (J.stars) || {};
     const last = Math.floor(J.done / PER);
     let html = '';
-    for (let c = last; c >= 0; c--) { // l'Ã®le en cours en haut
+    for (let c = last; c >= 0; c--) { // l'île en cours en haut
       let row = '';
       for (let k = 0; k < PER; k++) {
         const L = c * PER + k, info = levelInfo(L), n = stars[L] || 0;
@@ -1338,7 +1650,7 @@
     const L = +b.dataset.l;
     $('#voyage').hidden = true;
     C.sfx.tap();
-    if (worldReady && C.world.select) C.world.select(L); // loin : Ulysse est tÃ©lÃ©portÃ© sur la pierre
+    if (worldReady && C.world.select) C.world.select(L); // loin : Ulysse est téléporté sur la pierre
     else { selected = L; J.selected = L; C.save(); renderPlay(); }
   });
   $('#voyage').addEventListener('click', (e) => { if (e.target.id === 'voyage') $('#voyage').hidden = true; });
@@ -1613,7 +1925,8 @@
 
   // exposé pour les tests
   window.Odysseum = { levelInfo, journey: J, eventInfo, eventList, startEvent,
-    session: () => session, targetTime, starsFor, dailyInfo, startDaily, renderDaily, dailyStreak, refreshStars, startLevel, startTier, openLevels };
+    session: () => session, targetTime, starsFor, dailyInfo, startDaily, renderDaily, dailyStreak, refreshStars, startLevel, startTier, openLevels,
+    startMega, megaParams, megaN, megaTrack: MEGA_TRACK, megaRec, zoom: Z, zoomTo };
   $('#open-daily').addEventListener('click', startDaily);
 
   // appli installée depuis Chrome : toujours à jour (voir sw.js) ; inutile dans l'APK

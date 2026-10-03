@@ -9,9 +9,11 @@
   // céramique grecque : terre cuite, bleu égéen, or, olive, vert de mer, lie-de-vin, marbre…
   const REGION_COLORS = ['#e08a62', '#7fa8cf', '#e3b65a', '#a8b46a', '#6cb8ae',
     '#c97b85', '#ece6d6', '#a39dcb', '#d4b48a', '#9cc4d8'];
+  const EXTRA_COLORS = ['#c58fd0', '#8fc79a']; // pourpre clair, vert d'eau (grandes grilles)
   // noms des teintes, pour que l'astuce parle de « la région bleue »
   const COLOR_NAME = { '#e08a62': 'orange', '#7fa8cf': 'bleue', '#e3b65a': 'jaune', '#a8b46a': 'verte', '#6cb8ae': 'turquoise',
-    '#c97b85': 'rose', '#ece6d6': 'blanche', '#a39dcb': 'mauve', '#d4b48a': 'beige', '#9cc4d8': 'bleu ciel' };
+    '#c97b85': 'rose', '#ece6d6': 'blanche', '#a39dcb': 'mauve', '#d4b48a': 'beige', '#9cc4d8': 'bleu ciel',
+    '#c58fd0': 'pourpre', '#8fc79a': "vert d'eau" };
   const ord = (k) => k + (k === 1 ? 're' : 'e');
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
   // couronne pleine, bien lisible sur toutes les couleurs
@@ -114,7 +116,8 @@
     // case vidée à la main (couronne retirée) : elle reste vraiment vide, sans point automatique
     let cleared = new Uint8Array(n * n);
     const history = [];
-    const palette = C.makeRng('palette' + n).shuffle(REGION_COLORS.slice());
+    // (méga 11×11 : une 11e teinte, ajoutée seulement au-delà de 10 pour ne rien changer aux grilles connues)
+    const palette = C.makeRng('palette' + n).shuffle((n > 10 ? REGION_COLORS.concat(EXTRA_COLORS) : REGION_COLORS).slice());
 
     const grid = document.createElement('div');
     grid.className = 'cell-grid reines';

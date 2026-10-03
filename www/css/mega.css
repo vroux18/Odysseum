@@ -1,0 +1,72 @@
+/* =====================================================================
+   MÉGA : grandes grilles (catégorie « Méga » de 150 niveaux par jeu, événements des îles),
+   zoom à deux doigts sur le plateau. Feuille chargée juste après cartoon.css, mêmes jetons
+   (bulles blanches à bord épais, Fredoka, une teinte par capacité, or pour le Méga).
+   ===================================================================== */
+
+/* --- Géométrie des grilles : pistes strictement égales ---------------------------------------
+   « 1fr » vaut minmax(auto, 1fr) : une piste grandit pour contenir son contenu (un chiffre de Pavés
+   plus haut qu'une case de 27 px), et toute la grille dérive vers le bas à droite. minmax(0, 1fr)
+   force des pistes égales ; les calques posés par-dessus reprennent l'écart exact de la grille. */
+.cell-grid { grid-template-columns: repeat(var(--n), minmax(0, 1fr)); grid-template-rows: repeat(var(--n), minmax(0, 1fr)); }
+.paves .rect-layer { gap: inherit; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); grid-template-rows: repeat(var(--n), minmax(0, 1fr)); }
+.cell-grid > .cell, .paves .rect-layer > * { min-width: 0; min-height: 0; }
+/* chiffres de Pavés à l'échelle de la case (taille d'origine sur les petites grilles) */
+.cell-grid.paves { container-type: inline-size; }
+.paves .clue { font-size: min(clamp(20px, 6.4vw, 30px), calc(100cqw / var(--n) * .6)); line-height: 1; overflow: hidden; }
+
+/* --- Plateau méga : la grille tient entre le titre et les boutons du bas ---------------------- */
+#play.mega .cell-grid, #play.mega .nono { max-width: min(520px, 100%, calc(100dvh - 250px)) !important; }
+#play.mega .nono { grid-template-columns: auto repeat(var(--n), minmax(0, 1fr)); }
+/* indices lisibles mais serrés (4 nombres au plus par ligne en Méga : cases ≥ 24 px à 12×12) */
+#play.mega .nono-col span, #play.mega .nono-row span { font-size: 10px; font-variant-numeric: tabular-nums; }
+#play.mega .nono-row { gap: 3px; padding-right: 4px; }
+#play.mega .nono-col { padding-bottom: 3px; line-height: 1.05; }
+#play.mega .nono-corner { min-width: 8px; }
+
+/* --- Zoom du plateau ------------------------------------------------------------------------ */
+.board.zoomable { position: relative; }
+.board.zoomed { overflow: hidden; border-radius: 14px; }
+.board.zoom-ease > *:not(.zoom-reset) { transition: scale .2s cubic-bezier(.2, .8, .3, 1), translate .2s cubic-bezier(.2, .8, .3, 1); }
+/* petit bouton loupe « − » : bulle blanche, coin haut droit du plateau, seulement une fois zoomé */
+.zoom-reset {
+  position: absolute; top: 6px; right: 6px; z-index: 6; width: 38px; height: 38px; padding: 0; border-radius: 50%;
+  display: grid; place-items: center; color: var(--k-ink, #3a3550); cursor: pointer;
+  background: var(--k-bubble, #fff); border: 3px solid var(--k-rim, #fff);
+  box-shadow: 0 4px 0 var(--k-edge, #d9cfe8), var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14));
+  animation: zoom-btn-in .3s var(--k-ease, ease) both !important; scale: none !important; translate: none !important;
+}
+.zoom-reset[hidden] { display: none; }
+.zoom-reset svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; }
+.zoom-reset:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--k-edge, #d9cfe8); }
+@keyframes zoom-btn-in { from { opacity: 0; transform: scale(.5); } }
+
+/* --- Liste des mini-jeux : catégorie « Méga » ------------------------------------------------ */
+.mega-cat .tile-icon { margin-top: 4px; }
+.mega-cat .mega-bar {
+  display: block; width: 70%; height: 6px; margin: 2px auto 0; border-radius: var(--k-r-pill, 999px);
+  background: var(--k-well, #f1ecf8); overflow: hidden;
+}
+.mega-cat .mega-bar b { display: block; height: 100%; width: calc(var(--p, 0) * 100%); min-width: 0; border-radius: inherit;
+  background: linear-gradient(90deg, var(--k-sun-lt, #ffd84d), var(--k-sun, #ffc93d)); }
+.mega-cat.locked { opacity: .55; filter: grayscale(.85); }
+.mega-cat.locked .tile-lvl svg { width: 12px; height: 12px; vertical-align: -2px; }
+
+/* --- Bandeau des niveaux : 4e onglet doré « Méga » ----------------------------------------- */
+.lv-tabs.four { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.lv-tabs.four button span { font-size: 14px; }
+.lv-tabs button.mega-tab span { color: #b36b00; }
+.lv-tabs button.mega-tab.on { background: linear-gradient(var(--k-sun-lt, #ffd84d), var(--k-sun, #ffc93d)); color: #7a4a00; text-shadow: none;
+  box-shadow: 0 4px 0 var(--k-sun-dk, #e08f00); }
+.lv-tabs button.mega-tab.on span, .lv-tabs button.mega-tab.on small { color: #7a4a00; }
+.lv-head .lv-icon { position: relative; overflow: visible; }
+.lv-head .lv-icon .mega-badge { top: -9px; }
+#levels.lv-mega .lv-head small { color: #7a4a00; background: #ffe9a8; }
+/* premier niveau de chaque taille : pastille dorée « 11² » au-dessus du rond */
+#levels.lv-mega .lv.size-up { overflow: visible; }
+#levels.lv-mega .lv.size-up::before {
+  content: attr(data-size); position: absolute; top: -8px; right: -6px; z-index: 1; padding: 1px 5px; border-radius: var(--k-r-pill, 999px);
+  font: 700 10px/1.3 var(--k-font, sans-serif); color: #7a4a00; background: linear-gradient(var(--k-sun-lt, #ffd84d), var(--k-sun, #ffc93d));
+  border: 2px solid #fff; box-shadow: 0 2px 0 var(--k-sun-dk, #e08f00); text-shadow: none; pointer-events: none;
+}
+#levels.lv-mega .lv-grid { padding-top: 10px; }

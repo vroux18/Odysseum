@@ -243,7 +243,8 @@
       check();
     };
     grid.addEventListener('pointerup', up);
-    grid.addEventListener('pointercancel', up);
+    // geste interrompu (second doigt pour zoomer, appel système) : le rectangle en cours est abandonné
+    grid.addEventListener('pointercancel', () => { if (!start) return; start = null; preview = null; render(); });
 
     function check() {
       const covered = rects.reduce((s, rc) => s + rc.w * rc.h, 0);

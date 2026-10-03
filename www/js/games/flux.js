@@ -56,9 +56,9 @@
   }
 
   // Chemin hamiltonien par DFS (heuristique de Warnsdorff + budget).
-  function hamiltonian(g, rng) {
+  function hamiltonian(g, rng, attempts) {
     // Beaucoup d'essais courts valent mieux que de longues recherches.
-    for (let attempt = 0; attempt < 300; attempt++) {
+    for (let attempt = 0; attempt < (attempts || 300); attempt++) {
       const visited = new Uint8Array(g.nodeCount);
       const path = [];
       let budget = g.nodeCount * 6;
@@ -118,11 +118,21 @@
     return out;
   }
 
+  function parityOk(n, bridges) {
+    let d = (n * n) % 2; // cases « paires » (r + c pair) moins cases impaires
+    bridges.forEach((c) => { d += (Math.floor(c / n) + (c % n)) % 2 ? -1 : 1; });
+    return Math.abs(d) <= 1;
+  }
+
   function generate(rng, p) {
     for (let tries = 0; tries < 40; tries++) {
-      const bridges = chooseBridges(p.n, p.bridges, rng);
+      let bridges = chooseBridges(p.n, p.bridges, rng);
+      // méga : le graphe est biparti (damier) et la seconde moitié d'un pont a la couleur de sa case ;
+      // un chemin qui passe partout n'existe que si les deux couleurs s'équilibrent à une case près
+      if (p.mega) for (let q = 0; q < 60 && !parityOk(p.n, bridges); q++) bridges = chooseBridges(p.n, p.bridges, rng);
       const g = buildGraph(p.n, bridges, p.variant === 'tore');
-      let path = hamiltonian(g, rng);
+      // méga : peu d'essais par jeu de ponts (un mauvais placement de ponts ne se rattrape pas, autant en tirer d'autres)
+      let path = hamiltonian(g, rng, p.mega ? 20 : 300);
       if (!path) continue;
       path = backbite(g, path, rng, g.nodeCount * 30);
       let fix = 0;
@@ -131,15 +141,20 @@
       }
       if (g.isBridgeNode(path[0]) || g.isBridgeNode(path[path.length - 1])) continue;
 
-      const segs = cut(g, path, p.colors, rng);
-      if (!segs) continue;
       // Un pont doit être traversé par deux couleurs différentes.
-      const bridgeOk = bridges.every((b) => {
+      const bridgeOk = (segs) => bridges.every((b) => {
         const s1 = segs.findIndex((s) => s.includes(b));
         const s2 = segs.findIndex((s) => s.includes(g.vnode(b)));
         return s1 !== s2;
       });
-      if (!bridgeOk) continue;
+      // méga : plusieurs découpes du même chemin avant d'en chercher un autre (le chemin coûte cher,
+      // la découpe presque rien) ; les grilles ordinaires gardent exactement leur tirage d'origine
+      let segs = null;
+      for (let c = 0; c < (p.mega ? 30 : 1) && !segs; c++) {
+        const s = cut(g, path, p.colors, rng);
+        if (s && bridgeOk(s)) segs = s;
+      }
+      if (!segs) continue;
       rng.shuffle(segs);
       return {
         n: p.n,
@@ -208,7 +223,8 @@
 
     function resize() {
       const w = Math.min(host.clientWidth, host.clientHeight || Infinity, 520, (puzzle.n || 6) * 76); // cases jamais trop grosses // tient dans l'espace libre
-      const dpr = window.devicePixelRatio || 1;
+      // plateau zoomé (C.boardZoom) : plus de pixels pour rester net
+      const dpr = Math.min(6, (window.devicePixelRatio || 1) * (C.boardZoom || 1));
       size = w;
       cell = w / n;
       canvas.style.width = w + 'px';
@@ -589,6 +605,7 @@
           C.hintBoxes(canvas, solOf(k).filter((v) => !ends.includes(v)).map((v) => cellBox(v, 'why')).concat(ends.map((v) => cellBox(v, 'where', true)))));
       },
       redraw: draw,
+      resize, // (zoom du plateau : redessin net à la nouvelle échelle)
       destroy() { window.removeEventListener('resize', resize); }
     };
   }

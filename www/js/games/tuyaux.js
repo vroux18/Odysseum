@@ -83,7 +83,8 @@
 
     function resize() {
       const w = Math.min(host.clientWidth, host.clientHeight || Infinity, 520, (puzzle.n || 6) * 76); // cases jamais trop grosses
-      const dpr = window.devicePixelRatio || 1;
+      // plateau zoomé (C.boardZoom) : plus de pixels pour rester net
+      const dpr = Math.min(6, (window.devicePixelRatio || 1) * (C.boardZoom || 1));
       size = w; pad = wrap ? w * 0.05 : 0; cell = (w - pad * 2) / n;
       canvas.style.width = w + 'px'; canvas.style.height = w + 'px';
       canvas.width = Math.round(w * dpr); canvas.height = Math.round(w * dpr);
@@ -328,6 +329,7 @@
       },
       solve() { history.push(cur.slice()); cur = puzzle.solution.slice(); if (!raf) raf = requestAnimationFrame(animate); check(); },
       redraw: draw,
+      resize, // (zoom du plateau : redessin net à la nouvelle échelle)
       destroy() { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); }
     };
   }
