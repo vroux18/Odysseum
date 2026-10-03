@@ -43,3 +43,21 @@
 .ck-tick .ck-stars svg { width: 10px; height: 10px; fill: #ffc93d; }
 .ck-tick .ck-stars svg:not(.on) { display: none; }
 .ck-tick em { position: absolute; top: 34px; left: 50%; transform: translateX(-50%); font: 600 10px/1 var(--k-font, 'Fredoka', sans-serif); font-style: normal; color: var(--k-ink-soft, #8a83a3); }
+
+/* réglages : bouton Crédits ; feuille des crédits avec le mot du développeur */
+.credits-btn { display: inline-flex; align-items: center; gap: 8px; align-self: center; margin: 6px auto 0; padding: 10px 20px; border: 0; border-radius: 999px;
+  background: var(--surface, #fff); color: var(--ink, #3a3550); font: 700 15px/1 var(--k-font, 'Fredoka', sans-serif); cursor: pointer;
+  box-shadow: 0 4px 0 var(--k-edge, #d9cfe8), var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14)); }
+.credits-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--k-edge, #d9cfe8); }
+.credits-btn svg { width: 18px; height: 18px; color: var(--k-sun-dk, #e08f00); }
+.credits-sheet { padding-top: 30px !important; gap: 14px; }
+.cr-title { margin: 0; text-align: center; font: 700 24px/1 var(--k-font, 'Fredoka', sans-serif); color: var(--k-ink, #3a3550); }
+.cr-note { background: var(--surface, #fff); border-radius: 20px; padding: 16px 18px; box-shadow: 0 4px 0 var(--k-edge, #d9cfe8); font: 500 15px/1.45 var(--k-font, 'Fredoka', sans-serif); color: var(--ink, #3a3550); }
+.cr-note p { margin: 0 0 8px; }
+.cr-note .cr-sign { margin: 4px 0 0; text-align: right; font-weight: 700; }
+.cr-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font: 500 13px/1.4 var(--k-font, 'Fredoka', sans-serif); color: var(--k-ink-soft, #8a83a3); }
+.cr-list b { color: var(--k-ink, #3a3550); margin-right: 4px; }
+
+.credits-ov { z-index: 60 !important; }
+.cr-title, .cr-list b { color: var(--ink, #3a3550) !important; }
+.cr-list { color: var(--muted, #8a83a3) !important; }

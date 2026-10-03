@@ -241,6 +241,24 @@
     </div>
   </div>
 
+  <!-- crédits : un mot du développeur, puis les licences (attribution exigée par CC BY 3.0 de game-icons.net ; détail dans assets/CREDITS.md) -->
+  <div id="credits" class="overlay credits-ov" hidden>
+    <div class="sheet credits-sheet">
+      <h2 class="cr-title">Crédits</h2>
+      <div class="cr-note">
+        <p>Odysseus est un petit jeu fait à la main, pour le plaisir de réfléchir sans se presser.</p>
+        <p>Merci de jouer, et bon voyage jusqu'à Ithaque&nbsp;!</p>
+        <p class="cr-sign">— Victor</p>
+      </div>
+      <ul class="cr-list">
+        <li><b>Icônes</b> Phosphor (MIT) · game-icons.net par Lorc &amp; Delapouite (CC BY 3.0)</li>
+        <li><b>Polices</b> Fredoka, Marcellus, Cinzel, Jost (SIL OFL)</li>
+        <li><b>3D et textures</b> Quaternius, Kenney, Kay Lousberg, Poly Haven (CC0)</li>
+        <li><b>Animations</b> lottie-web (MIT)</li>
+      </ul>
+    </div>
+  </div>
+
   <!-- le voyage : toutes les pierres atteintes, île par île ; toucher une pierre y mène Ulysse -->
   <div id="voyage" class="overlay voyage" hidden>
     <div class="sheet voyage-sheet">
@@ -294,7 +312,7 @@
       <label class="toggle"><span><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-sparkle"/></svg>Animations réduites</span><input type="checkbox" class="opt-a11y" data-a11y="motion"><i></i></label>
       <label class="toggle"><span><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-eye"/></svg>Symboles sur les couleurs</span><input type="checkbox" class="opt-a11y" data-a11y="cb"><i></i></label>
       <!-- attribution exigée par la licence CC BY 3.0 de game-icons.net ; détail dans assets/CREDITS.md -->
-      <p class="credits">Crédits · icônes <b>Phosphor</b> (MIT) et <b>game-icons.net</b> par Lorc &amp; Delapouite (CC BY 3.0) · polices Fredoka, Marcellus, Cinzel, Jost (SIL OFL) · 3D et textures Quaternius, Kenney, Kay Lousberg, Poly Haven (CC0) · lottie-web (MIT)</p>
+      <button id="open-credits" class="credits-btn"><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-star"/></svg>Crédits</button>
     </div>
   </div>
 

@@ -1339,6 +1339,9 @@
     else { selected = L; J.selected = L; C.save(); renderPlay(); }
   });
   $('#voyage').addEventListener('click', (e) => { if (e.target.id === 'voyage') $('#voyage').hidden = true; });
+  // crédits : depuis les réglages
+  $('#open-credits').addEventListener('click', () => { $('#credits').hidden = false; C.sfx.tap(); });
+  $('#credits').addEventListener('click', (e) => { if (e.target.id === 'credits') $('#credits').hidden = true; });
   $('#cam-mode').addEventListener('click', () => {
     if (!worldReady) return;
     const mode = C.world.setCameraMode(C.world.cameraMode() === 'free' ? 'follow' : 'free');
@@ -1586,7 +1589,7 @@
   // Les navigateurs n'autorisent le son qu'après un premier geste.
   document.addEventListener('pointerdown', () => C.audio.unlock(), { once: true });
   // chaque feuille a sa croix de fermeture (en plus du toucher sur le fond) ; le bouton retour Android ferme d'abord la feuille ouverte
-  const SHEETS = ['library', 'levels', 'brain', 'settings', 'wardrobe', 'rules', 'voyage'];
+  const SHEETS = ['library', 'levels', 'brain', 'settings', 'wardrobe', 'rules', 'voyage', 'credits'];
   SHEETS.forEach((id) => {
     const ov = document.getElementById(id), sheet = ov && ov.querySelector('.sheet');
     if (!sheet || sheet.querySelector('.sheet-close')) return;
