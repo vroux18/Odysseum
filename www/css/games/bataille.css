@@ -1,0 +1,114 @@
+/* Bataille navale : mer égéenne en tuiles, ronds dans l'eau, flammes, trières coulées */
+.bataille-wrap {
+  --n: 5;
+  --sea: #a9cfdc; --sea-hi: #c4e0e8; --sea-edge: #8dbccc; --sea-open: #e3eef0; --sea-sunk: #86b5c6;
+  --bn-gap: 6px; --bn-clue: 20px;
+  width: 100%;
+  max-width: min(440px, 100%, calc(100dvh - 300px), calc(var(--n) * 64px + 28px));
+  margin: 0 auto;
+  display: grid; grid-template-columns: var(--bn-clue) minmax(0, 1fr); grid-template-rows: auto auto auto auto;
+  column-gap: 8px; row-gap: 6px; align-items: stretch;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .bataille-wrap { --sea: #24566b; --sea-hi: #2c6880; --sea-edge: #2f6b82; --sea-open: #142a36; --sea-sunk: #1b4253; }
+}
+:root[data-theme="dark"] .bataille-wrap { --sea: #24566b; --sea-hi: #2c6880; --sea-edge: #2f6b82; --sea-open: #142a36; --sea-sunk: #1b4253; }
+
+/* nombres du bord */
+.bn-corner { grid-row: 1; grid-column: 1; }
+.bn-cols { grid-row: 1; grid-column: 2; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: var(--bn-gap); }
+.bn-rows { grid-row: 2; grid-column: 1; display: grid; grid-template-rows: repeat(var(--n), minmax(0, 1fr)); gap: var(--bn-gap); }
+.bn-cols span, .bn-rows span {
+  display: grid; place-items: center; font-size: clamp(13px, 3.8vw, 16px); font-weight: 500; color: var(--ink);
+  font-variant-numeric: tabular-nums; transition: color .5s var(--slow), opacity .5s var(--slow);
+}
+.bn-cols span { padding-bottom: 2px; }
+.bn-cols span.done, .bn-rows span.done { color: var(--muted); opacity: .45; }
+
+/* la grille : tuiles de mer */
+.cell-grid.bataille { grid-row: 2; grid-column: 2; max-width: none; width: 100%; gap: var(--bn-gap); }
+.cell-grid.bataille .cell {
+  border-radius: 9px; border: 2px solid var(--sea-edge); cursor: pointer; overflow: hidden;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 13.5c1.5-1.4 3-1.4 4 0s2.5 1.4 4 0 3-1.4 4 0' fill='none' stroke='white' stroke-opacity='.45' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") center / 62% no-repeat,
+    linear-gradient(160deg, var(--sea-hi), var(--sea));
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .1);
+  transition: background .5s var(--slow), border-color .5s var(--slow), box-shadow .5s var(--slow), transform .3s var(--slow);
+}
+.cell-grid.bataille .cell svg { width: 70%; height: 70%; }
+.cell-grid.bataille .cell.open { background: var(--sea-open); border-color: color-mix(in srgb, var(--sea-edge) 55%, transparent); box-shadow: none; }
+.cell-grid.bataille .cell.hit {
+  background: linear-gradient(160deg, var(--sea-hi), var(--sea)); border-color: #f0a35e;
+  box-shadow: inset 0 0 0 1px #f6c27a, 0 0 14px -2px rgba(240, 140, 70, .55);
+}
+.cell-grid.bataille .cell.sunk { background: var(--sea-sunk); border-color: var(--sea-edge); box-shadow: none; }
+.cell-grid.bataille .cell.ghostc { background: var(--sea-sunk); }
+.cell-grid.bataille .cell.auto, .cell-grid.bataille .cell.marked { background: linear-gradient(160deg, var(--sea-hi), var(--sea)); }
+
+/* repères d'eau : petit point ; ceux déduits autour d'un navire coulé sont plus pâles */
+.bn-dot { width: 18%; aspect-ratio: 1; border-radius: 50%; background: #fffaf0; opacity: .85; box-shadow: 0 1px 2px rgba(20, 50, 70, .25); animation: bn-dot-in .35s var(--spring) both; }
+.cell.auto .bn-dot { width: 12%; opacity: .45; box-shadow: none; animation-duration: .6s; }
+@keyframes bn-dot-in { from { transform: scale(0); } }
+
+/* raté : ronds dans l'eau qui s'élargissent, puis un petit rond calme */
+.bn-splash { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.bn-splash i { grid-area: 1 / 1; width: 70%; aspect-ratio: 1; border-radius: 50%; border: 2px solid #5f8fa8; opacity: 0; animation: bn-ripple 1.1s var(--slow) both; }
+.bn-splash i:nth-child(2) { animation-delay: .2s; border-width: 1.5px; }
+@keyframes bn-ripple { 0% { transform: scale(.15); opacity: .9; } 100% { transform: scale(1.35); opacity: 0; } }
+.bn-drop { width: 26%; aspect-ratio: 1; border-radius: 50%; border: 2px solid #5f8fa8; opacity: .7; animation: bn-drop-in .6s var(--spring) .45s both; }
+@keyframes bn-drop-in { from { transform: scale(0); opacity: 0; } }
+
+/* touché : petit éclat lumineux, la flamme tremble puis vacille doucement */
+.bn-burst { position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(circle, rgba(255, 214, 140, .95), rgba(240, 140, 70, .35) 45%, transparent 70%); opacity: 0; animation: bn-burst .7s var(--slow); }
+@keyframes bn-burst { 0% { opacity: 1; transform: scale(.3); } 100% { opacity: 0; transform: scale(1.4); } }
+.bn-hit { display: grid; place-items: center; width: 100%; height: 100%; animation: bn-shake .5s ease-out; }
+.bn-hit .bn-flame { width: 64%; height: 64%; transform-origin: 50% 90%; animation: bn-flicker 2.6s ease-in-out .5s infinite; }
+@keyframes bn-shake {
+  0% { transform: scale(.3); } 25% { transform: translateX(-3px) rotate(-6deg) scale(1.1); } 45% { transform: translateX(3px) rotate(5deg); }
+  65% { transform: translateX(-2px) rotate(-3deg); } 85% { transform: translateX(1px); } 100% { transform: none; }
+}
+@keyframes bn-flicker { 50% { transform: scale(1.06, .95) rotate(1.5deg); } }
+
+/* coulé : la silhouette de la trière remonte et apparaît sur ses cases */
+.bn-ship { position: relative; z-index: 2; pointer-events: none; display: grid; place-items: center; padding: 4%;
+  animation: bn-ship-in .9s var(--spring) .15s both; }
+.bn-ship svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 2px 2px rgba(20, 40, 55, .3)); }
+.bn-ship.ghost { opacity: .5; animation: bn-ghost-in 1.2s var(--slow) both; }
+.bn-ship.ghost svg { filter: grayscale(.35); }
+@keyframes bn-ship-in { from { opacity: 0; transform: translateY(18%) scale(.9); } }
+.bn-ship.v { animation-name: bn-ship-in-v; }
+@keyframes bn-ship-in-v { from { opacity: 0; transform: translateX(-18%) scale(.9); } }
+@keyframes bn-ghost-in { from { opacity: 0; } }
+
+/* sous la grille : la flotte à couler et les tirs restants */
+.bn-foot { grid-row: 3; grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 8px; }
+.bn-fleet { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 12px; }
+.bn-pip { display: flex; gap: 2px; transition: opacity .5s var(--slow); }
+.bn-pip i { width: 11px; height: 7px; border-radius: 2px; background: color-mix(in srgb, #3f7fa6 75%, transparent); }
+.bn-pip i:first-child { border-radius: 4px 2px 2px 4px; }
+.bn-pip i:last-child { border-radius: 2px 5px 5px 2px; }
+.bn-pip i:only-child { border-radius: 4px; }
+.bn-pip.sunk i { background: #a0532d; animation: bn-pip-sink .6s var(--spring); }
+.bn-pip.sunk { opacity: .55; }
+@keyframes bn-pip-sink { 40% { transform: translateY(-3px); } }
+.bn-shots { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; max-width: 300px; }
+.bn-shots i { width: 6px; height: 6px; border-radius: 50%; background: #3f7fa6; transition: background .4s var(--slow), transform .4s var(--spring); }
+.bn-shots i.used { background: var(--faint); transform: scale(.75); }
+
+/* plus de tirs : la flotte se dévoile, on propose une nouvelle mer */
+.bn-end { grid-row: 4; grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 4px;
+  font-size: 14px; color: var(--muted); animation: bn-end-in .6s var(--slow) .4s both; }
+.bn-end[hidden] { display: none; }
+.bn-end button { padding: 10px 22px; border-radius: 999px; background: #3f7fa6; color: #fffaf0; font-size: 15px; letter-spacing: .02em;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .16); transition: transform .3s var(--spring); }
+.bn-end button:active { transform: scale(.94); }
+@keyframes bn-end-in { from { opacity: 0; transform: translateY(6px); } }
+.bataille-wrap.over .bn-shots { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bn-splash, .bn-burst { display: none; }
+  .bn-hit, .bn-hit .bn-flame, .bn-ship, .bn-drop, .bn-dot { animation: none !important; }
+}
+:root.a11y-motion .bn-splash, :root.a11y-motion .bn-burst { display: none; }
+:root.a11y-motion .bn-hit, :root.a11y-motion .bn-hit .bn-flame, :root.a11y-motion .bn-ship { animation: none !important; }
