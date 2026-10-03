@@ -458,10 +458,6 @@
     const before = info.xpStart || {};
     const rows = SKILLS.filter((sk) => (C.store.xp[sk.id] || 0) > (before[sk.id] || 0));
     $('#ld-title').textContent = info.boss ? 'Épreuve réussie' : 'Niveau ' + (info.L + 1);
-    // petite phrase complice ; si le niveau global monte, on annonce le nouveau titre
-    const pBefore = levelFrom(SKILLS.reduce((s, sk) => s + (before[sk.id] || 0), 0), 100).level, pNow = playerStats().level;
-    $('#ld-quip').textContent = pNow > pBefore && rankOf(pNow) !== rankOf(pBefore) ? 'Nouveau titre : ' + rankOf(pNow)
-      : QUIPS[Math.floor(Math.random() * QUIPS.length)];
     box.innerHTML = rows.map((sk, i) => {
       const was = levelFrom(before[sk.id] || 0, 40), now = skillStats(sk);
       const gain = (C.store.xp[sk.id] || 0) - (before[sk.id] || 0);
@@ -774,12 +770,6 @@
     return Object.assign({ total }, levelFrom(total, 100));
   }
 
-  // titres du joueur : un clin d'œil, pas une mesure ; ils suivent le niveau global
-  const RANKS = [[1, 'Esprit en éveil'], [3, 'Tête bien faite'], [5, 'Esprit vif'], [8, 'Rusé comme Ulysse'],
-    [12, 'Conseiller d\'Ithaque'], [16, 'Disciple d\'Athéna'], [22, 'Stratège de Troie'], [30, 'Esprit olympien']];
-  const rankOf = (level) => RANKS.filter((r) => level >= r[0]).pop()[1];
-  const QUIPS = ['Ça carbure là-haut', 'Neurones en éveil', 'Ruse +1', 'Athéna approuve', 'Bien joué, tête chercheuse', 'Ulysse n\'aurait pas fait mieux'];
-
   function renderBadge() {
     const p = playerStats();
     $('#level-num').textContent = p.level;
@@ -790,7 +780,6 @@
   function renderBrain() {
     const p = playerStats();
     $('#brain-level').textContent = p.level;
-    $('#brain-rank').textContent = rankOf(p.level);
     $('#brain-xp').textContent = p.cur + ' / ' + p.need;
     $('#brain-xp-bar').style.width = Math.round(p.frac * 100) + '%';
     $('#games-detail').hidden = true;
