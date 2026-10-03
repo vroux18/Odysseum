@@ -49,14 +49,17 @@
   function params(level, variant) {
     level = Math.max(1, level || 1);
     let cats, n, mix;
-    if (level <= 5) { cats = ['god', 'obj', 'place']; n = 3; mix = { eq: 3, neq: 2, next: 0, left: 0 }; }
-    else if (level <= 11) { cats = ['god', 'obj', 'order']; n = 4; mix = { eq: 2, neq: 2, next: 1, left: 1 }; }
+    // début très doux : deux familles seulement (une seule petite grille), surtout des « = »
+    if (level <= 3) { cats = ['god', 'obj']; n = 3; mix = { eq: 3, neq: 1, next: 0, left: 0 }; }
+    else if (level <= 6) { cats = ['god', 'obj']; n = 4; mix = { eq: 2.5, neq: 1.5, next: 0, left: 0 }; }
+    else if (level <= 9) { cats = ['god', 'obj', 'place']; n = 3; mix = { eq: 3, neq: 2, next: 0, left: 0 }; }
+    else if (level <= 13) { cats = ['god', 'obj', 'order']; n = 4; mix = { eq: 2, neq: 2, next: 1, left: 1 }; }
     else if (level <= 20) { cats = ['god', 'obj', 'place', 'order']; n = 4; mix = { eq: 1.5, neq: 2, next: 1.2, left: 1.2 }; }
     else if (level <= 31) { cats = ['god', 'obj', 'place', 'order']; n = 4; mix = { eq: 0.8, neq: 2, next: 1.5, left: 1.5 }; }
     else { cats = ['god', 'obj', 'order']; n = 5; mix = { eq: 0.6, neq: 2, next: 1.6, left: 1.6 }; }
     return {
       variant: variant || 'classic', cats, k: cats.length, n, mix,
-      trim: level < 3 ? 0 : level < 8 ? 0.5 : 1 // part des cartes superflues retirées (plus = plus dur)
+      trim: level < 7 ? 0 : level < 12 ? 0.5 : 1 // part des cartes superflues retirées (plus = plus dur)
     };
   }
 
