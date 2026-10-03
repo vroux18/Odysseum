@@ -1331,7 +1331,9 @@
     } else {
       goal.tx = freeTarget.x; goal.ty = 0.9; goal.tz = freeTarget.z;
     }
-    const k = 1 - Math.exp(-dt * 3);
+    // après l'intro, la caméra descend du ciel plus lentement
+    if (swoopT > 0) swoopT -= dt;
+    const k = 1 - Math.exp(-dt * (swoopT > 0 ? 1.15 : 3));
     let dth = goal.theta - cam.theta;
     dth = Math.atan2(Math.sin(dth), Math.cos(dth));
     cam.theta += dth * k;
@@ -1631,6 +1633,9 @@
     return camMode;
   };
   World.cameraMode = () => camMode;
+  // plongée d'intro : la caméra part très haut dans le ciel et descend vers Ulysse
+  let swoopT = 0;
+  World.swoop = () => { cam.radius = 64; cam.elev = 1.38; cam.theta = userTheta + 1.7; swoopT = 3.2; };
   // Mode concentration : Ulysse pose les mains sur sa tête, la caméra plonge vers lui,
   // une lueur s'allume dans sa tête ; `done` est appelé à la fin de la séquence.
   World.concentrate = (accent, done) => {

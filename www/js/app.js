@@ -771,6 +771,22 @@
   $('#opt-vibrate').checked = !!C.store.settings.vibrate;
   $('#opt-mix').value = C.store.settings.mix;
 
+  // Intro : un toucher pour embarquer (lance la musique), l'écran s'ouvre, la caméra plonge vers Ulysse.
+  const intro = $('#intro');
+  function embark() {
+    if (!intro || intro.classList.contains('leaving')) return;
+    C.audio.unlock();
+    C.sfx.win(); // un petit accord de départ
+    intro.classList.add('leaving');
+    if (worldReady && C.world.swoop) C.world.swoop();
+    setTimeout(() => intro.remove(), 1500);
+  }
+  if (intro) {
+    intro.addEventListener('click', embark);
+    intro.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') embark(); });
+    intro.focus();
+  }
+
   // Les navigateurs n'autorisent le son qu'après un premier geste.
   document.addEventListener('pointerdown', () => C.audio.unlock(), { once: true });
   document.addEventListener('backbutton', () => { if (!screens.play.hidden) goHome(); });

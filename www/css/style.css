@@ -826,3 +826,39 @@ svg .f { fill: currentColor; stroke: none; }
 .library .tile-icon svg { width: 54%; height: 54%; }
 .library .tile-name { font-size: 14px; color: var(--ink); text-transform: capitalize; }
 .library .tile-lvl { margin: 0; font-size: 11px; color: var(--muted); padding: 2px 8px; border-radius: 999px; background: var(--bg); }
+
+/* =====================================================================
+   Intro : lever de soleil, voilier, frise, titre lettre par lettre
+   ===================================================================== */
+.intro {
+  position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  background: radial-gradient(ellipse at 50% 35%, #1c3550 0%, #0e1a26 70%); color: #f1ead9; cursor: pointer;
+  padding: 24px; transition: opacity 1.1s var(--slow), transform 1.4s var(--slow), filter 1.2s var(--slow);
+}
+.intro.leaving { opacity: 0; transform: scale(1.12); filter: blur(6px); pointer-events: none; }
+.intro-scene { width: min(92vw, 420px); height: auto; }
+.intro-sun { transform-origin: 180px 160px; animation: sun-rise 3.2s var(--slow) both; }
+@keyframes sun-rise { from { transform: translateY(70px); opacity: .2; } }
+.intro-waves path { animation: wave-drift 6s linear infinite; }
+.intro-waves .w2 { animation-duration: 8s; animation-direction: reverse; }
+.intro-waves .w3 { animation-duration: 10s; }
+@keyframes wave-drift { to { transform: translateX(40px); } }
+/* le voilier glisse (animation SVG native, fiable sur mobile) */
+@keyframes boat-sail { from { transform: translate(-40px, 180px) rotate(-3deg); } 50% { transform: translate(150px, 177px) rotate(2deg); } to { transform: translate(200px, 179px) rotate(-1deg); } }
+.intro-meander { stroke-dasharray: 900; stroke-dashoffset: 900; animation: meander-draw 2.6s var(--slow) .8s forwards; }
+@keyframes meander-draw { to { stroke-dashoffset: 0; } }
+.intro-title { margin: 0; display: flex; gap: .32em; font-weight: 300; font-size: clamp(30px, 9vw, 46px); letter-spacing: .02em; color: #e9c46e; }
+.intro-title span { opacity: 0; transform: translateY(12px); animation: letter-in .9s var(--slow) forwards; }
+.intro-title span:nth-child(1) { animation-delay: 1.2s; } .intro-title span:nth-child(2) { animation-delay: 1.32s; }
+.intro-title span:nth-child(3) { animation-delay: 1.44s; } .intro-title span:nth-child(4) { animation-delay: 1.56s; }
+.intro-title span:nth-child(5) { animation-delay: 1.68s; } .intro-title span:nth-child(6) { animation-delay: 1.8s; }
+.intro-title span:nth-child(7) { animation-delay: 1.92s; } .intro-title span:nth-child(8) { animation-delay: 2.04s; }
+@keyframes letter-in { to { opacity: 1; transform: none; } }
+.intro-tap { margin: 0; font-size: 14px; letter-spacing: .18em; text-transform: uppercase; color: #8ea3b5; opacity: 0; animation: tap-in 1s var(--slow) 3s forwards, tap-breathe 2.6s ease-in-out 4s infinite; }
+@keyframes tap-in { to { opacity: 1; } }
+@keyframes tap-breathe { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) {
+  .intro *, .intro-title span, .intro-tap { animation: none !important; opacity: 1 !important; transform: none !important; }
+  .intro-meander { stroke-dashoffset: 0; }
+}
+:root.a11y-motion .intro-title span, :root.a11y-motion .intro-tap { opacity: 1; transform: none; }
