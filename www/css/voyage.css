@@ -161,3 +161,20 @@
 .cell-grid:not(.ready) > .cell, .nono:not(.ready) > .nono-cell, .lumieres:not(.ready) > .bulb {
   animation: tile-in-soft .35s ease-out both !important; animation-delay: calc(var(--i, 0) * 6ms) !important; }
 @keyframes tile-in-soft { from { opacity: 0; transform: scale(.92); } }
+
+/* ---------- Accueil v3 : bas de l'écran dégagé ----------
+   En bas : la seule carte du niveau (Play + numéro + étoiles + jeux) ; la toucher ouvre le voyage pour revenir en arrière.
+   En haut : navigation d'île (pilule centrée sous la barre), jeux et caméra rangés sous les boutons de droite. */
+#home { --lc-w: min(340px, calc(100vw - 32px)); --lc-h: 88px; --lc-b: calc(18px + env(safe-area-inset-bottom, 0px)); }
+#home #prev-level, #home #next-level { display: none !important; }
+.lvcard { padding-left: 100px !important; padding-right: 54px !important; }
+/* petit chevron « voyage » à droite de la carte */
+.lvcard::after { content: ''; position: absolute; right: 22px; top: 50%; width: 10px; height: 10px; margin-top: -7px;
+  border-right: 3px solid var(--k-ink-soft, #8a83a3); border-bottom: 3px solid var(--k-ink-soft, #8a83a3); transform: rotate(-45deg); border-radius: 2px; opacity: .8; }
+#home #go { width: 70px !important; height: 70px !important; left: calc(50% - var(--lc-w) / 2 + 12px + 35px) !important; bottom: calc(var(--lc-b) + (var(--lc-h) - 70px) / 2 + 3px) !important; }
+/* navigation d'île : en haut, centrée */
+#home #island-nav { top: calc(84px + env(safe-area-inset-top, 0px)) !important; bottom: auto !important; left: 50% !important; right: auto !important;
+  transform: translateX(-50%) !important; width: auto !important; min-width: 170px; max-width: calc(100vw - 150px); height: 44px !important; }
+/* tous les jeux et caméra : sous les boutons de droite */
+#home #open-library { top: calc(80px + env(safe-area-inset-top, 0px)) !important; bottom: auto !important; right: 14px !important; width: 52px !important; height: 52px !important; }
+#home #cam-mode { top: calc(144px + env(safe-area-inset-top, 0px)) !important; bottom: auto !important; left: auto !important; right: 14px !important; width: 52px !important; height: 52px !important; }
