@@ -52,18 +52,18 @@
   // ------------------------------------------------------------------
   // Difficulté (niveaux 1 → 40) : grille de 3×4 à 6×6, motifs cousins, aperçu au début.
   // ------------------------------------------------------------------
-  const SIZES = [[3, 4], [4, 4], [4, 5], [4, 6], [5, 6], [6, 6]]; // colonnes × rangées (toujours pair)
+  const SIZES = [[2, 3], [3, 4], [4, 4], [4, 5], [4, 6], [5, 6], [6, 6]]; // colonnes × rangées (toujours pair) ; on débute avec 3 paires
   function params(level, variant) {
     level = Math.max(1, level || 1);
-    const k = level < 4 ? 0 : level < 9 ? 1 : level < 15 ? 2 : level < 22 ? 3 : level < 30 ? 4 : 5;
+    const k = level < 3 ? 0 : level < 7 ? 1 : level < 13 ? 2 : level < 20 ? 3 : level < 27 ? 4 : level < 34 ? 5 : 6;
     const [cols, rows] = SIZES[k];
     const pairs = cols * rows / 2;
     // motifs cousins : obligatoires au-delà de 12 paires (12 dessins), puis de plus en plus nombreux
-    const wanted = level < 10 ? 0 : Math.floor((level - 6) / 4);
+    const wanted = level < 14 ? 0 : Math.floor((level - 10) / 4);
     const similar = Math.min(Math.floor(pairs / 2), Math.max(pairs - MOTIFS.length, wanted));
     return {
       variant: variant || 'classic', cols, rows, pairs, similar,
-      peek: level <= 6 ? 1700 : level <= 12 ? 900 : 0 // aperçu de toutes les tuiles au départ (ms)
+      peek: level <= 8 ? 3000 : level <= 16 ? 2000 : level <= 24 ? 1200 : 0 // aperçu de toutes les tuiles au départ (ms), généreux au début
     };
   }
 
@@ -169,7 +169,7 @@
           return;
         }
         // ratée : les deux restent visibles un instant, puis se referment
-        flipBack = later(() => { open = []; flipBack = null; render(); }, 900);
+        flipBack = later(() => { open = []; flipBack = null; render(); }, 1500); // le temps de bien mémoriser
       }
       render(); api.onChange();
     }

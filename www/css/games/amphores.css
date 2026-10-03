@@ -64,3 +64,9 @@
 @media (prefers-reduced-motion: reduce) {
   .amph-tile, .amph-in { animation: none !important; transition-duration: .01s !important; }
 }
+
+/* dos des tuiles plus doux : teinte du jeu adoucie dans le crème (ou l'indigo en sombre), amphore discrète */
+.amph-back { background: radial-gradient(circle at 35% 28%, color-mix(in srgb, var(--game) 18%, var(--k-bubble, #fff)), color-mix(in srgb, var(--game) 34%, var(--k-bubble, #fff)) 75%) !important;
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--game) 30%, var(--k-edge, #d9cfe8)), var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14)) !important; }
+.amph-back .am-body { fill: color-mix(in srgb, var(--game) 22%, var(--k-cream, #fffaf0)) !important; }
+.amph-back .am-line { stroke: color-mix(in srgb, var(--game) 55%, var(--k-cream, #fffaf0)) !important; }
