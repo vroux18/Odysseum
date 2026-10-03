@@ -126,3 +126,21 @@
 #open-daily .daily-ic { background: currentColor !important; border-radius: 50%; display: grid !important; place-items: center; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .15); }
 #open-daily .daily-ic svg { stroke: #fff !important; color: #fff !important; }
 #open-daily .daily-ic svg .f { fill: #fff !important; }
+
+/* ---------- Bandeau du niveau, v2 : carte compacte horizontale ----------
+   [‹]  [ ▶  Niveau 45 · ★★★ · jeux ]  [›]   — Play rond à gauche dans la carte, infos à droite */
+#home { --lc-w: min(270px, calc(100vw - 132px)); --lc-h: 84px; --lc-b: calc(92px + env(safe-area-inset-bottom, 0px)); }
+.lvcard { padding: 10px 14px 10px 92px !important; border-radius: 42px !important; align-items: flex-start !important; justify-content: center !important; gap: 5px !important; }
+.lc-title { font-size: 18px !important; }
+.lc-st svg { width: 17px !important; height: 17px !important; }
+.lc-games i { width: 22px !important; height: 22px !important; }
+.lc-games svg { width: 13px !important; height: 13px !important; }
+.lc-row { display: flex; align-items: center; gap: 8px; }
+/* Play dans la carte, à gauche (le transform existant de #go le recentre sur left) */
+#home #go { width: 66px !important; height: 66px !important; left: calc(50% - var(--lc-w) / 2 + 9px + 33px) !important;
+  bottom: calc(var(--lc-b) + (var(--lc-h) - 66px) / 2 + 3px) !important; }
+#home #go svg.ic { width: 30px !important; height: 30px !important; }
+/* flèches de part et d'autre de la carte */
+#home #prev-level, #home #next-level { width: 46px !important; height: 46px !important; bottom: calc(var(--lc-b) + (var(--lc-h) - 46px) / 2 + 3px) !important; }
+#home #prev-level { left: calc(50% - var(--lc-w) / 2 - 56px) !important; }
+#home #next-level { right: calc(50% - var(--lc-w) / 2 - 56px) !important; }
