@@ -283,6 +283,22 @@
     $('#next-level').hidden = b.hidden || selected >= J.done;
     b.setAttribute('aria-label', 'Jouer');
     b.classList.remove('in'); void b.offsetWidth; b.classList.add('in');
+    // bandeau flottant du niveau : numéro, étoiles gagnées (ou à gagner), mini-jeux ; le bouton Play posé dessus
+    let card = $('#lvcard');
+    if (!card) {
+      card = document.createElement('button');
+      card.id = 'lvcard'; card.className = 'lvcard';
+      card.setAttribute('aria-label', 'Voyage : tous les niveaux');
+      card.addEventListener('click', openVoyage);
+      $('#home').appendChild(card);
+    }
+    const won = (J.stars && J.stars[selected]) || 0, past = selected < J.done;
+    card.hidden = b.hidden;
+    card.classList.toggle('boss', info.boss);
+    card.classList.remove('pop'); void card.offsetWidth; card.classList.add('pop');
+    card.innerHTML = '<span class="lc-title">' + (info.boss ? 'Épreuve ' : 'Niveau ') + (selected + 1) + '</span>' +
+      '<span class="lc-stars' + (past ? '' : ' todo') + '">' + starRow(past ? won : 0, 'lc-st') + '</span>' +
+      '<span class="lc-games">' + ids.map((id) => '<i style="--c:' + ACCENT[id] + '"><svg viewBox="0 0 24 24">' + (ICON[id] || '') + '</svg></i>').join('') + '</span>';
   }
 
   // ----------------------------- Partie -----------------------------

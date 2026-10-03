@@ -73,3 +73,36 @@
 
 /* nom d'île sur une seule ligne (« Ithaque en vue », « Le Lit d'olivier ») : la police se resserre au besoin */
 #island-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: clamp(13px, 4.2vw, 17px) !important; line-height: 1.1 !important; min-width: 0; }
+
+/* ---------- Bandeau flottant du niveau (accueil) ----------
+   Une carte blanche bombée au-dessus de la navigation d'île : numéro, étoiles, mini-jeux.
+   Le gros bouton Play est posé à cheval sur son bord haut ; les flèches encadrent la carte. */
+#home { --lc-w: min(320px, calc(100vw - 40px)); --lc-h: 118px; --lc-b: calc(90px + env(safe-area-inset-bottom, 0px)); }
+#home .go-label { display: none !important; }
+.lvcard { position: fixed; z-index: 5; left: 50%; bottom: var(--lc-b); width: var(--lc-w); height: var(--lc-h); margin-left: calc(var(--lc-w) / -2);
+  border: 0; border-radius: 28px; padding: 46px 64px 12px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 4px;
+  background: var(--k-bubble, #fff); color: var(--k-ink, #3a3550);
+  box-shadow: 0 6px 0 var(--k-edge, #d9cfe8), var(--k-drop, 0 8px 18px rgba(80, 60, 140, .18)); font-family: var(--k-font, 'Fredoka', sans-serif); }
+.lvcard[hidden] { display: none; }
+.lvcard.pop { animation: lc-pop .45s var(--k-ease, ease) both; }
+@keyframes lc-pop { from { opacity: 0; transform: translateY(14px) scale(.96); } }
+.lvcard:active { transform: translateY(3px); box-shadow: 0 3px 0 var(--k-edge, #d9cfe8); }
+.lc-title { font: 700 19px/1 var(--k-font, 'Fredoka', sans-serif); white-space: nowrap; }
+.lvcard.boss .lc-title { color: var(--k-sun-dk, #e08f00); }
+.lc-st { display: flex; gap: 3px; }
+.lc-st svg { width: 22px; height: 22px; fill: var(--k-well, #f1ecf8); stroke: var(--k-edge, #d9cfe8); stroke-width: 1.4; stroke-linejoin: round; }
+.lc-st svg.on { fill: #ffc93d; stroke: #e08f00; filter: drop-shadow(0 1.5px 0 #c97c00); }
+.lc-stars.todo .lc-st svg { fill: none; stroke: var(--k-ink-soft, #8a83a3); stroke-dasharray: 3 2.4; opacity: .7; }
+.lc-games { display: flex; gap: 6px; margin-top: 2px; }
+.lc-games i { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--c); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .15); }
+.lc-games svg { width: 15px; height: 15px; fill: none; stroke: #fff; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
+.lc-games svg .f { fill: #fff; }
+/* Play à cheval sur le haut de la carte */
+#home #go { position: fixed !important; z-index: 6 !important; top: auto !important; left: calc(50% - 41px) !important; right: auto !important;
+  bottom: calc(var(--lc-b) + var(--lc-h) - 40px) !important; width: 82px !important; height: 82px !important; margin: 0 !important; }
+/* flèches : dans la carte, de part et d'autre */
+#home #prev-level, #home #next-level { position: fixed !important; z-index: 6 !important; top: auto !important; width: 44px !important; height: 44px !important;
+  bottom: calc(var(--lc-b) + (var(--lc-h) - 44px) / 2 - 6px) !important; margin: 0 !important; }
+#home #prev-level { left: calc(50% - var(--lc-w) / 2 + 12px) !important; right: auto !important; }
+#home #next-level { left: auto !important; right: calc(50% - var(--lc-w) / 2 + 12px) !important; }
