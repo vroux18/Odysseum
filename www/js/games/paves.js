@@ -192,7 +192,8 @@
         }
         const ok = valid(rc);
         d.className = 'rect' + (ok ? '' : ' invalid');
-        d.style.background = ok ? FILLS[color++ % FILLS.length] : '';
+        // couleur stable pour un rectangle donné (les autres ne changent plus de teinte quand on en pose un)
+        d.style.background = ok ? FILLS[(rc.r * 31 + rc.c * 17 + rc.w * 7 + rc.h * 3) % FILLS.length] : '';
       });
       rectEls.forEach((d, key) => { if (!keep.has(key)) { d.remove(); rectEls.delete(key); } });
       if (preview) {

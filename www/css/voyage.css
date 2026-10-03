@@ -246,3 +246,27 @@
 #home.calm #open-daily, #home.calm #open-library, #home.calm #open-wardrobe, #home.calm #cam-mode, #home.calm::after { opacity: 0 !important; pointer-events: none !important; }
 #home.calm { --lc-b: calc(22px + env(safe-area-inset-bottom, 0px)); }
 #home .lvcard, #home #go { transition: bottom .35s cubic-bezier(.34, 1.4, .64, 1); }
+
+/* ordre des onglets : Défi · Tenue · Vue · Jeux (Jeux tout à droite) */
+#home #open-daily { left: 24px !important; }
+#home #open-wardrobe { left: calc(24px + (100vw - 48px) / 4) !important; }
+#home #cam-mode { left: calc(24px + (100vw - 48px) / 2) !important; }
+#home #open-library { left: calc(24px + 3 * (100vw - 48px) / 4) !important; }
+
+/* Pavés : un rectangle validé se remplit en douceur (fondu + léger gonflement), sans rebond ni éclair */
+.paves .rect:not(.preview):not(.invalid) { animation: rect-soft .32s ease-out !important; }
+@keyframes rect-soft { from { opacity: 0; transform: scale(.94); } }
+.paves .rect { transition: background-color .25s ease, box-shadow .25s ease !important; }
+.paves .rect.preview { background: color-mix(in srgb, var(--game) 16%, transparent) !important; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--game) 70%, transparent) !important; }
+
+/* carte du niveau v3 : à gauche île + niveau + étoiles, au centre les mini-jeux, à droite le bouton Play */
+.lvcard { display: grid !important; grid-template-columns: auto 1fr; grid-template-rows: auto auto auto; column-gap: 10px; row-gap: 3px;
+  align-items: center !important; padding: 12px 104px 12px 22px !important; }
+.lvcard::after { display: none !important; }
+.lvcard .lc-isle { grid-column: 1; grid-row: 1; }
+.lvcard .lc-title { grid-column: 1; grid-row: 2; }
+.lvcard .lc-stars { grid-column: 1; grid-row: 3; }
+.lvcard .lc-games { grid-column: 2; grid-row: 1 / 4; justify-self: center; align-self: center; margin: 0 !important; gap: 6px !important; }
+.lvcard .lc-games i { width: 30px !important; height: 30px !important; }
+.lvcard .lc-games svg { width: 17px !important; height: 17px !important; }
+#home #go { left: auto !important; right: calc(50% - var(--lc-w) / 2 + 12px) !important; transform: none !important; }
