@@ -603,6 +603,17 @@
         if (i < info.stars) setTimeout(() => { if (!$('#level-done').hidden) C.sfx.star && C.sfx.star(i); }, 250 + i * 320 + 180);
       });
     }
+    // chrono : le temps mis, sur une piste oÃ¹ sont posÃ©s les seuils des Ã©toiles (â˜…â˜…â˜… puis â˜…â˜…)
+    let clock = $('#ld-clock');
+    if (!clock) { clock = document.createElement('div'); clock.id = 'ld-clock'; clock.className = 'ld-clock'; ldStars.after(clock); }
+    const run = info.run || {};
+    clock.hidden = !(run.time > 0 && run.target > 0);
+    if (!clock.hidden) {
+      const span = run.target * 2.6, pos = (v) => Math.min(100, (v / span) * 100).toFixed(1) + '%';
+      const tick = (v, n) => '<i class="ck-tick" style="left:' + pos(v) + '">' + starRow(n, 'ck-stars') + '<em>' + C.formatTime(Math.round(v)) + '</em></i>';
+      clock.innerHTML = '<div class="ck-time"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9.5 2.5h5M12 2.5V5"/></svg><b>' + C.formatTime(Math.round(run.time)) + '</b></div>' +
+        '<div class="ck-track"><span class="ck-fill" style="--w:' + pos(run.time) + '"></span>' + tick(run.target, 3) + tick(run.target * 2, 2) + '</div>';
+    }
     const delay0 = hasStars ? 1.25 : 0.35; // les lignes d'XP arrivent après les étoiles
     box.innerHTML = rows.map((sk, i) => {
       const was = levelFrom(before[sk.id] || 0, 40), now = skillStats(sk);
