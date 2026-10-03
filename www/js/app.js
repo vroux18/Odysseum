@@ -23,6 +23,11 @@
     tuyaux: '<path d="M4 8h6v8h10M14 4v4h6"/><circle cx="10" cy="8" r="2.2" class="f"/>',
     coffre: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.4"/><path d="M12 4v3M4 12h1.5M18.5 12H20"/>'
   };
+  // les mini-jeux ajoutés plus tard apportent leur teinte et leur icône (24×24) en s'enregistrant
+  C.games.forEach((g) => {
+    if (!ACCENT[g.id] && g.accent) ACCENT[g.id] = g.accent;
+    if (!ICON[g.id] && g.icon24) ICON[g.id] = g.icon24;
+  });
   const icon = (id) => '<svg viewBox="0 0 24 24">' + ICON[id] + '</svg>';
   const TOOL_ICON = {
     fill: '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" class="f"/></svg>',
@@ -45,8 +50,10 @@
   // ------------------------------------------------------------------
   const PER = 10;
   const VARIANTS_ON = false; // variantes mises de côté pour l'instant (le code reste prêt)
-  const ORDER = ['flux', 'reines', 'tuyaux', 'astres', 'paves', 'pixels', 'serpent', 'lumieres', 'coffre'];
-  const POOL_SIZE = [3, 5, 7, 9]; // jeux disponibles dans les mondes 1, 2, 3, 4 et suivants
+  // ordre d'apparition des mini-jeux dans la quête (un jeu absent est ignoré)
+  const ORDER = ['flux', 'reines', 'tuyaux', 'astres', 'paves', 'pixels', 'serpent', 'lumieres', 'coffre',
+    'demineur', 'simon', 'rushhour', 'bataille'].filter((id) => C.games.some((g) => g.id === id));
+  const POOL_SIZE = [3, 5, 7, 9, 11, 13]; // jeux disponibles dans les mondes 1, 2, 3, 4, 5, 6 et suivants
   const poolOf = (c) => ORDER.slice(0, POOL_SIZE[Math.min(c, POOL_SIZE.length - 1)]);
 
   function levelInfo(L) {
@@ -120,6 +127,9 @@
     const lab = $('#go-label');
     lab.textContent = (info.boss ? 'épreuve · ' : 'niveau ') + (selected + 1);
     lab.hidden = b.hidden;
+    // flèches : revenir au niveau d'avant, ou avancer jusqu'au niveau en cours
+    $('#prev-level').hidden = b.hidden || selected <= 0;
+    $('#next-level').hidden = b.hidden || selected >= J.done;
     b.setAttribute('aria-label', 'Jouer');
     b.classList.remove('in'); void b.offsetWidth; b.classList.add('in');
   }
@@ -563,6 +573,9 @@
     }
     const grid = $('#lv-grid');
     grid.innerHTML = h;
+    const sk = SKILLS.find((s) => s.games.includes(lv.id));
+    $('#lv-focus').hidden = !sk;
+    if (sk) { $('#lv-focus').dataset.skill = sk.id; $('#lv-focus').innerHTML = 'mode concentration · <b>' + sk.name.toLowerCase() + '</b>'; }
     if (scroll) {
       const cur = grid.querySelector('.lv.next') || grid.querySelector('.lv.done:last-of-type');
       grid.scrollTop = cur ? Math.max(0, cur.offsetTop - grid.clientHeight / 2) : 0;
@@ -581,15 +594,18 @@
   // déduction sur contraintes (Gf), traitement visuo-spatial (Gv), planification, test d'hypothèses.
   // Les jauges reflètent la pratique dans le jeu, pas une mesure des capacités.
   const SKILLS = [
-    { id: 'logique', name: 'Déduction', games: ['reines', 'astres'], at: [74, 172], r: [50, 58],
+    { id: 'logique', name: 'Déduction', games: ['reines', 'astres', 'demineur'], at: [72, 160], r: [50, 56],
       desc: 'Tirer des certitudes des règles, une case après l\'autre, sans jamais deviner.' },
-    { id: 'espace', name: 'Espace', games: ['paves', 'pixels', 'tuyaux'], at: [166, 168], r: [52, 62],
+    { id: 'espace', name: 'Espace', games: ['paves', 'pixels', 'tuyaux'], at: [168, 160], r: [50, 56],
       desc: 'Se représenter les formes et la place qu\'elles occupent avant de les tracer.' },
-    { id: 'anticipation', name: 'Anticipation', games: ['flux', 'serpent'], at: [120, 84], r: [78, 50],
+    { id: 'anticipation', name: 'Anticipation', games: ['flux', 'serpent', 'rushhour'], at: [120, 84], r: [80, 48],
       desc: 'Prévoir plusieurs coups à l\'avance pour ne pas se fermer de chemin.' },
-    { id: 'raisonnement', name: 'Hypothèses', games: ['lumieres', 'coffre'], at: [120, 250], r: [70, 44],
-      desc: 'Proposer une idée, l\'éprouver, et retenir ce que chaque essai révèle.' }
+    { id: 'raisonnement', name: 'Hypothèses', games: ['lumieres', 'coffre', 'bataille'], at: [80, 252], r: [52, 48],
+      desc: 'Proposer une idée, l\'éprouver, et retenir ce que chaque essai révèle.' },
+    { id: 'memoire', name: 'Mémoire', games: ['simon'], at: [164, 254], r: [46, 46],
+      desc: 'Retenir une suite qui s\'allonge et la restituer dans l\'ordre.' }
   ];
+  SKILLS.forEach((sk) => { sk.games = sk.games.filter((id) => C.games.some((g) => g.id === id)); });
   const NODES = 10;
   const solvedOf = (id) => { const g = game(id); return variantsOf(g).reduce((s, v) => s + C.gameData(dataKey(g, v.id)).solved, 0); };
   // première ouverture avec le système d'XP : on convertit les grilles déjà réussies
@@ -618,6 +634,7 @@
     const p = playerStats();
     $('#level-num').textContent = p.level;
     $('#level-ring').setAttribute('stroke-dashoffset', String(144.5 * (1 - p.frac)));
+    $('#brain-xp-mini').style.width = Math.round(p.frac * 100) + '%';
   }
 
   function renderBrain() {
@@ -632,8 +649,8 @@
     root.innerHTML = '<g id="brain-overview"></g>';
     const svg = root.querySelector('#brain-overview');
     // cerveau vu de dessus : deux hémisphères, quelques circonvolutions discrètes
-    const LEFT = 'M119 34C80 26 40 50 32 100C24 150 30 210 52 250C70 282 100 296 119 292Z';
-    const RIGHT = 'M121 34C160 26 200 50 208 100C216 150 210 210 188 250C170 282 140 296 121 292Z';
+    const LEFT = 'M119 30C80 22 38 46 30 100C22 160 28 236 52 278C72 310 100 320 119 316Z';
+    const RIGHT = 'M121 30C160 22 202 46 210 100C218 160 212 236 188 278C168 310 140 320 121 316Z';
     let html = '<defs><clipPath id="brain-clip"><path d="' + LEFT + '"/><path d="' + RIGHT + '"/></clipPath>';
     SKILLS.forEach((sk) => {
       html += '<radialGradient id="zg-' + sk.id + '"><stop offset="0" stop-color="' + ACCENT[sk.games[0]] + '" stop-opacity=".55"/>' +
@@ -659,9 +676,9 @@
         stars += '<circle class="star' + (on ? ' on' : '') + '" cx="' + (sk.at[0] + Math.cos(a) * sk.r[0] * d).toFixed(1) + '" cy="' + (sk.at[1] + Math.sin(a) * sk.r[1] * d).toFixed(1) + '" r="' + (on ? 1.6 : 1) + '" style="--k:' + i + '"/>';
       }
       const tri = sk.games.length === 3;
-      const pos = tri ? [[-19, -18], [19, -18], [0, 24]] : sk.games.map((_, k) => [(k - (sk.games.length - 1) / 2) * 34, 0]);
+      const pos = tri && sk.r[0] < 70 ? [[-19, -18], [19, -18], [0, 24]] : sk.games.map((_, k) => [(k - (sk.games.length - 1) / 2) * 32, 0]);
       let inner = '<ellipse class="zone-hit" cx="' + sk.at[0] + '" cy="' + sk.at[1] + '" rx="' + sk.r[0] + '" ry="' + sk.r[1] + '"/>' + stars +
-        '<text class="zone-name" x="' + sk.at[0] + '" y="' + (sk.at[1] + (tri ? -38 : -22)) + '" text-anchor="middle">' + sk.name + '</text><g class="zone-games">';
+        '<text class="zone-name" x="' + sk.at[0] + '" y="' + (sk.at[1] + (tri && sk.r[0] < 70 ? -38 : -22)) + '" text-anchor="middle">' + sk.name + '</text><g class="zone-games">';
       // ses mini-jeux : médaillons avec un anneau de progression (sur 450 niveaux)
       sk.games.forEach((id, k) => {
         const x = sk.at[0] + pos[k][0], y = sk.at[1] + pos[k][1];
@@ -681,7 +698,8 @@
     $('#skills').innerHTML = SKILLS.map((sk) => {
       const st = skillStats(sk);
       return '<button class="skill" data-skill="' + sk.id + '" style="--game:' + ACCENT[sk.games[0]] + '"><div class="skill-head"><span>' + sk.name +
-        '</span><small>niv. ' + st.level + '</small></div><div class="skill-bar"><i style="width:' + Math.round(st.frac * 100) + '%"></i></div></button>';
+        '</span><small>niv. ' + st.level + '</small></div><div class="skill-bar"><i style="width:' + Math.round(st.frac * 100) + '%"></i></div>' +
+        '<span class="skill-go" data-skill="' + sk.id + '" role="button" aria-label="Concentration : ' + sk.name + '"><svg viewBox="0 0 24 24"><path d="M9 6.5v11l9-5.5z"/></svg></span></button>';
     }).join('');
   }
 
@@ -690,7 +708,7 @@
 
   // Le cerveau est une carte : on la glisse au doigt, on zoome (pincer, molette, toucher une zone).
   // Zoomé, chaque zone dévoile ses mini-jeux ; la zone au centre de la vue s'affiche dessous.
-  const BRAIN_W = 240, BRAIN_H = 320, MIN_W = 84;
+  const BRAIN_W = 240, BRAIN_H = 340, MIN_W = 84;
   let brainView = [0, 0, BRAIN_W, BRAIN_H], brainAnim = 0, zoomed = null;
   // la vue épouse la forme du cadre (plus haut que large sur téléphone) : le cerveau garde ses proportions
   const brainAspect = () => { const r = $('#brain-svg').getBoundingClientRect(); return r.width && r.height ? r.width / r.height : BRAIN_W / BRAIN_H; };
@@ -838,6 +856,15 @@
     C.sfx.tap();
   }));
   renderPlayMode();
+  function stepLevel(d) {
+    const L = Math.max(0, Math.min(J.done, selected + d));
+    if (L === selected) return;
+    C.sfx.tap();
+    if (worldReady && C.world.select) C.world.select(L); // Ulysse marche jusqu'à la pierre
+    else { selected = L; J.selected = L; C.save(); renderPlay(); }
+  }
+  $('#prev-level').addEventListener('click', () => stepLevel(-1));
+  $('#next-level').addEventListener('click', () => stepLevel(1));
   $('#cam-mode').addEventListener('click', () => {
     if (!worldReady) return;
     const mode = C.world.setCameraMode(C.world.cameraMode() === 'free' ? 'follow' : 'free');
@@ -863,6 +890,8 @@
     if (e.target.id === 'levels') { $('#levels').hidden = true; return; }
     const tab = e.target.closest('#lv-tabs button');
     if (tab) { lv.tier = tab.dataset.tier; renderLevels(true); C.sfx.tap(); return; }
+    const fb = e.target.closest('#lv-focus');
+    if (fb) { $('#levels').hidden = true; $('#library').hidden = true; concentrate(SKILLS.find((sk) => sk.id === fb.dataset.skill)); return; }
     const b = e.target.closest('.lv');
     if (b && !b.disabled) startTier(lv.id, lv.tier, +b.dataset.k);
   });
@@ -883,6 +912,8 @@
   // carte du cerveau : toucher une capacité lance le mode focus
   // carte du cerveau : une capacité (bouton ou zone) → zoom sur sa zone ; le bandeau → détail par jeu
   $('#skills').addEventListener('click', (e) => {
+    const go = e.target.closest('.skill-go');
+    if (go) { concentrate(SKILLS.find((sk) => sk.id === go.dataset.skill)); return; }
     const b = e.target.closest('.skill');
     if (b) { zoomBrain(b.dataset.skill); C.sfx.tap(); }
   });

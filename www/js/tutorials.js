@@ -200,7 +200,8 @@
 
   // pages à montrer : tout le tutoriel, ou seulement la page de variante si le jeu est déjà connu
   C.tutorial = function (id, variant, knowsBase) {
-    const t = T[id];
+    const g = C.games.find((x) => x.id === id);
+    const t = T[id] || (g && g.tutorial ? { steps: g.tutorial } : null); // un jeu peut apporter ses propres pages
     if (!t) return [];
     const v = variant !== 'classic' && t.variants && t.variants[variant];
     if (v && knowsBase) return [v];
