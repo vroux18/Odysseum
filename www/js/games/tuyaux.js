@@ -209,9 +209,10 @@
           ctx.beginPath(); ctx.arc(0, 0, cell * 0.3 + lw, 0, Math.PI * 2); ctx.globalAlpha = 0.92; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
           ctx.beginPath(); ctx.arc(0, 0, cell * 0.3, 0, Math.PI * 2); ctx.fillStyle = accent; ctx.fill();
           ctx.beginPath(); ctx.arc(0, 0, cell * 0.11 + lw, 0, Math.PI * 2); ctx.globalAlpha = 0.92; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
-          ctx.beginPath(); ctx.arc(0, 0, cell * 0.11, 0, Math.PI * 2); ctx.fillStyle = bg; ctx.fill();
-        } else if (deg === 1 && lit) { // terminal alimenté
-          ctx.beginPath(); ctx.arc(0, 0, cell * 0.1, 0, Math.PI * 2); ctx.globalAlpha = 0.92; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
+          ctx.beginPath(); ctx.arc(0, 0, cell * 0.11, 0, Math.PI * 2); ctx.fillStyle = '#fffaf0'; ctx.fill(); // l'œil de la source brille
+        } else if (deg === 1 && glow[i] > 0) { // terminal alimenté : la tête s'allume en blanc à mesure que l'eau arrive
+          ctx.beginPath(); ctx.arc(0, 0, cell * 0.3, 0, Math.PI * 2); ctx.fillStyle = mix(accent, '#fffaf0', Math.min(1, glow[i])); ctx.fill();
+          ctx.beginPath(); ctx.arc(0, 0, cell * 0.1, 0, Math.PI * 2); ctx.fillStyle = accent; ctx.globalAlpha = Math.min(1, glow[i]); ctx.fill(); ctx.globalAlpha = 1;
         }
         ctx.restore();
       }
