@@ -7,7 +7,7 @@
   'use strict';
   const C = window.Carnet;
 
-  const PER = 10;          // niveaux par île (le dernier est le boss)
+  const PER = 6;           // niveaux par île (le dernier est le boss)
   const FOG = '#e9eeee';
   const TOP = 0.63;        // hauteur du sol au bord des îles
   const SPACING = 15;      // distance entre deux îles
@@ -583,7 +583,7 @@
   // portique de sortie, puis traverse la mer sur un ponton de bois jusqu'à l'île suivante.
   // Les niveaux sont posés à intervalles réguliers le long de cette ligne (ordre = ordre des niveaux).
   // ------------------------------------------------------------------
-  const LV0 = 0.1, LV1 = 0.8, GATE_F = 0.9, PATH_W = 0.27;
+  const LV0 = 0.08, LV1 = 0.84, GATE_F = 0.9, PATH_W = 0.27;
   const levelF = (k) => LV0 + (LV1 - LV0) * k / (PER - 1);
   function layoutPath(ch, entry, exit) {
     const R = ch.r, rng = ch.rng;

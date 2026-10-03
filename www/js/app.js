@@ -50,7 +50,7 @@
   // - Le dernier niveau de chaque île est un boss : 4, puis 5 grilles d'affilée, plus
   //   difficiles, mêlant les capacités, de plus en plus souvent en variante.
   // ------------------------------------------------------------------
-  const PER = 10;
+  const PER = 6;
   const VARIANTS_ON = false; // variantes mises de côté pour l'instant (le code reste prêt)
   // ordre d'apparition des mini-jeux dans la quête (un jeu absent est ignoré)
   const ORDER = ['flux', 'reines', 'tuyaux', 'astres', 'paves', 'pixels', 'serpent', 'lumieres', 'coffre',
