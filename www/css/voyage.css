@@ -178,3 +178,33 @@
 /* tous les jeux et caméra : sous les boutons de droite */
 #home #open-library { top: calc(80px + env(safe-area-inset-top, 0px)) !important; bottom: auto !important; right: 14px !important; width: 52px !important; height: 52px !important; }
 #home #cam-mode { top: calc(144px + env(safe-area-inset-top, 0px)) !important; bottom: auto !important; left: auto !important; right: 14px !important; width: 52px !important; height: 52px !important; }
+
+/* ---------- Accueil v4 : barre d'onglets en bas, comme une appli ----------
+   Haut : carte du joueur à gauche, réglages à droite. Bas : la carte du niveau (île + numéro + étoiles + jeux),
+   posée sur une barre de 4 onglets : Jeux · Défi · Tenue · Vue. Le nom d'île passe dans la carte du niveau. */
+#home { --dock-h: 66px; --lc-b: calc(var(--dock-h) + 14px + env(safe-area-inset-bottom, 0px)); --lc-h: 96px; }
+#home #island-nav { display: none !important; }
+#home::after { content: ''; position: fixed; z-index: 4; left: 0; right: 0; bottom: 0; height: calc(var(--dock-h) + env(safe-area-inset-bottom, 0px));
+  background: var(--k-bubble, #fff); border-radius: 26px 26px 0 0; box-shadow: 0 -6px 20px rgba(20, 16, 50, .18); pointer-events: none; }
+#home #open-library, #home #open-daily, #home #open-wardrobe, #home #cam-mode {
+  position: fixed !important; z-index: 5 !important; top: auto !important; right: auto !important; transform: none !important;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 18px) !important; width: 25vw !important; height: 46px !important; max-width: 120px;
+  border: 0 !important; border-radius: 16px !important; background: transparent !important; box-shadow: none !important;
+  display: flex !important; flex-direction: column; align-items: center; justify-content: flex-start; gap: 2px; padding: 0 !important; }
+#home #open-library { left: calc(12.5vw - min(12.5vw, 60px)) !important; }
+#home #open-daily { left: calc(37.5vw - min(12.5vw, 60px)) !important; }
+#home #open-wardrobe { left: calc(62.5vw - min(12.5vw, 60px)) !important; }
+#home #cam-mode { left: calc(87.5vw - min(12.5vw, 60px)) !important; }
+#home #open-library svg, #home #open-wardrobe svg, #home #cam-mode svg { width: 26px !important; height: 26px !important; }
+#home #open-daily .daily-ic { width: 28px !important; height: 28px !important; }
+#home #open-daily .daily-ic svg { width: 17px !important; height: 17px !important; }
+#home #open-daily .daily-flame, #home #open-daily .daily-check, #home #open-daily .daily-stars { display: none !important; }
+#home #open-library::after, #home #open-daily::after, #home #open-wardrobe::after, #home #cam-mode::after {
+  font: 700 11px/1 var(--k-font, 'Fredoka', sans-serif); color: var(--k-ink-soft, #8a83a3); letter-spacing: .02em; }
+#home #open-library::after { content: 'Jeux'; }
+#home #open-daily::after { content: 'Défi'; }
+#home #open-wardrobe::after { content: 'Tenue'; }
+#home #cam-mode::after { content: 'Vue'; }
+#home #cam-mode.on { color: var(--k-sea, #1d9be0) !important; }
+/* carte du niveau : nom de l'île en petit au-dessus du numéro */
+.lc-isle { font: 700 11px/1 var(--k-font, 'Fredoka', sans-serif); letter-spacing: .06em; text-transform: uppercase; color: var(--k-ink-soft, #8a83a3); margin-bottom: 1px; }

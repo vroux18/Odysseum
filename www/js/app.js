@@ -296,7 +296,10 @@
     card.hidden = b.hidden;
     card.classList.toggle('boss', info.boss);
     card.classList.remove('pop'); void card.offsetWidth; card.classList.add('pop');
-    card.innerHTML = '<span class="lc-title">' + (info.boss ? 'Épreuve ' : 'Niveau ') + (selected + 1) + '</span>' +
+    let isle = ''; // nom de l'île (la liste est définie plus bas : pas encore prête au tout premier affichage)
+    try { isle = voyageName(Math.floor(selected / PER)); } catch (e) { /* premier rendu */ }
+    card.innerHTML = '<span class="lc-isle">' + isle + '</span>' +
+      '<span class="lc-title">' + (info.boss ? 'Épreuve ' : 'Niveau ') + (selected + 1) + '</span>' +
       '<span class="lc-stars' + (past ? '' : ' todo') + '">' + starRow(past ? won : 0, 'lc-st') + '</span>' +
       '<span class="lc-games">' + ids.map((id) => '<i style="--c:' + ACCENT[id] + '"><svg viewBox="0 0 24 24">' + (ICON[id] || '') + '</svg></i>').join('') + '</span>';
   }
