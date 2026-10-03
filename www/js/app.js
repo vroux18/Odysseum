@@ -568,13 +568,13 @@
   // déduction sur contraintes (Gf), traitement visuo-spatial (Gv), planification, test d'hypothèses.
   // Les jauges reflètent la pratique dans le jeu, pas une mesure des capacités.
   const SKILLS = [
-    { id: 'logique', name: 'Déduction', games: ['reines', 'astres'], at: [108, 92],
+    { id: 'logique', name: 'Déduction', games: ['reines', 'astres'], at: [74, 172], r: [50, 58],
       desc: 'Tirer des certitudes des règles, une case après l\'autre, sans jamais deviner.' },
-    { id: 'espace', name: 'Espace', games: ['paves', 'pixels', 'tuyaux'], at: [196, 74],
+    { id: 'espace', name: 'Espace', games: ['paves', 'pixels', 'tuyaux'], at: [166, 168], r: [52, 62],
       desc: 'Se représenter les formes et la place qu\'elles occupent avant de les tracer.' },
-    { id: 'anticipation', name: 'Anticipation', games: ['flux', 'serpent'], at: [132, 160],
+    { id: 'anticipation', name: 'Anticipation', games: ['flux', 'serpent'], at: [120, 84], r: [78, 50],
       desc: 'Prévoir plusieurs coups à l\'avance pour ne pas se fermer de chemin.' },
-    { id: 'raisonnement', name: 'Hypothèses', games: ['lumieres', 'coffre'], at: [240, 128],
+    { id: 'raisonnement', name: 'Hypothèses', games: ['lumieres', 'coffre'], at: [120, 250], r: [70, 44],
       desc: 'Proposer une idée, l\'éprouver, et retenir ce que chaque essai révèle.' }
   ];
   const NODES = 10;
@@ -618,72 +618,52 @@
     const root = $('#brain-svg');
     root.innerHTML = '<g id="brain-overview"></g>';
     const svg = root.querySelector('#brain-overview');
-    svg.innerHTML =
-      // silhouette du cerveau (profil) et quelques circonvolutions
-      '<path class="outline" d="M62 150C40 112 60 62 110 52C132 26 190 26 212 46C252 40 286 72 280 112C300 142 280 182 246 186C236 206 200 212 186 196L170 206C150 216 130 206 124 190C94 200 62 186 62 150Z"/>' +
-      '<path class="outline" d="M186 196C190 214 194 228 200 240" />' +
-      '<path class="outline" opacity=".5" d="M150 40C140 70 160 90 150 120M210 60C190 80 215 100 200 130M95 120C120 128 130 110 160 125M180 150C200 140 220 160 245 150"/>';
+    // cerveau vu de dessus : deux hémisphères, quelques circonvolutions discrètes
+    const LEFT = 'M119 34C80 26 40 50 32 100C24 150 30 210 52 250C70 282 100 296 119 292Z';
+    const RIGHT = 'M121 34C160 26 200 50 208 100C216 150 210 210 188 250C170 282 140 296 121 292Z';
+    let html = '<defs><clipPath id="brain-clip"><path d="' + LEFT + '"/><path d="' + RIGHT + '"/></clipPath>';
+    SKILLS.forEach((sk) => {
+      html += '<radialGradient id="zg-' + sk.id + '"><stop offset="0" stop-color="' + ACCENT[sk.games[0]] + '" stop-opacity=".55"/>' +
+        '<stop offset=".7" stop-color="' + ACCENT[sk.games[0]] + '" stop-opacity=".18"/><stop offset="1" stop-color="' + ACCENT[sk.games[0]] + '" stop-opacity="0"/></radialGradient>';
+    });
+    html += '</defs><path class="hemi" d="' + LEFT + '"/><path class="hemi" d="' + RIGHT + '"/><g clip-path="url(#brain-clip)">';
+    // chaque capacité colore sa région, d'autant plus fort que son niveau monte
+    SKILLS.forEach((sk) => {
+      const st = skillStats(sk);
+      html += '<ellipse class="region" cx="' + sk.at[0] + '" cy="' + sk.at[1] + '" rx="' + sk.r[0] + '" ry="' + sk.r[1] + '" fill="url(#zg-' + sk.id + ')" style="opacity:' + Math.min(1, 0.45 + 0.1 * st.level).toFixed(2) + '"/>';
+    });
+    html += '<path class="gyri" d="M100 50C80 70 98 90 76 108M50 120C70 130 60 150 84 156M40 200C62 196 70 214 92 220M96 262C84 246 104 236 100 214' +
+      'M140 50C160 70 142 90 164 108M190 120C170 130 180 150 156 156M200 200C178 196 170 214 148 220M144 262C156 246 136 236 140 214"/></g>';
     SKILLS.forEach((sk) => {
       const st = skillStats(sk);
       const accent = ACCENT[sk.games[0]];
+      // lueurs : une petite étoile par palier atteint, en couronne autour de la zone
       const rng = C.makeRng('cerveau:' + sk.id);
-      const pts = [];
-      while (pts.length < NODES) {
-        const a = rng() * Math.PI * 2, d = 8 + rng() * 30;
-        const x = sk.at[0] + Math.cos(a) * d * 1.2, y = sk.at[1] + Math.sin(a) * d * 0.85;
-        if (pts.every((q) => Math.hypot(q[0] - x, q[1] - y) > 11)) pts.push([x, y]);
+      let stars = '';
+      for (let i = 0; i < NODES; i++) {
+        const a = rng() * Math.PI * 2, d = 0.72 + rng() * 0.22;
+        const on = i < st.lit;
+        stars += '<circle class="star' + (on ? ' on' : '') + '" cx="' + (sk.at[0] + Math.cos(a) * sk.r[0] * d).toFixed(1) + '" cy="' + (sk.at[1] + Math.sin(a) * sk.r[1] * d).toFixed(1) + '" r="' + (on ? 1.6 : 1) + '" style="--k:' + i + '"/>';
       }
-      // du centre vers l'extérieur : les premiers neurones s'allument d'abord
-      pts.sort((a, b) => Math.hypot(a[0] - sk.at[0], a[1] - sk.at[1]) - Math.hypot(b[0] - sk.at[0], b[1] - sk.at[1]));
-      const glow = document.createElementNS(ns, 'circle');
-      glow.setAttribute('cx', sk.at[0]); glow.setAttribute('cy', sk.at[1]); glow.setAttribute('r', 40);
-      glow.setAttribute('fill', accent);
-      glow.setAttribute('class', 'glow' + (st.lit ? ' on' : ''));
-      glow.style.opacity = st.lit ? String(0.08 + 0.3 * st.lit / NODES) : '0';
-      svg.appendChild(glow);
-      pts.forEach((p1, i) => {
-        // chaque neurone se relie à ses deux plus proches voisins
-        pts.map((p2, j) => [j, Math.hypot(p1[0] - p2[0], p1[1] - p2[1])]).filter(([j]) => j !== i)
-          .sort((a, b) => a[1] - b[1]).slice(0, 2).forEach(([j]) => {
-            if (j < i) return;
-            const l = document.createElementNS(ns, 'line');
-            l.setAttribute('x1', p1[0]); l.setAttribute('y1', p1[1]); l.setAttribute('x2', pts[j][0]); l.setAttribute('y2', pts[j][1]);
-            l.setAttribute('stroke', accent);
-            l.setAttribute('class', 'link' + (i < st.lit && j < st.lit ? ' on' : ''));
-            svg.appendChild(l);
-          });
-      });
-      pts.forEach((pt, i) => {
-        const c = document.createElementNS(ns, 'circle');
-        c.setAttribute('cx', pt[0]); c.setAttribute('cy', pt[1]); c.setAttribute('r', i < st.lit ? 3.4 : 2.4);
-        c.setAttribute('fill', i < st.lit ? accent : 'var(--faint)');
-        c.setAttribute('class', 'node' + (i < st.lit ? ' on' : ''));
-        svg.appendChild(c);
-      });
-      // la zone de la capacité : touchable, avec ses mini-jeux à l'intérieur (lisibles une fois zoomé)
-      const zone = document.createElementNS(ns, 'g');
-      zone.setAttribute('class', 'zone');
-      zone.dataset.skill = sk.id;
-      zone.style.color = accent;
-      let inner = '<ellipse class="zone-hit" cx="' + sk.at[0] + '" cy="' + sk.at[1] + '" rx="46" ry="36" fill="' + accent + '"/>' +
-        '<text class="zone-name" x="' + sk.at[0] + '" y="' + (sk.at[1] - 24) + '" text-anchor="middle">' + sk.name + '</text>';
-      // ses mini-jeux : des médaillons avec un anneau de progression, révélés quand on zoome
-      inner += '<g class="zone-games">';
+      const tri = sk.games.length === 3;
+      const pos = tri ? [[-19, -18], [19, -18], [0, 24]] : sk.games.map((_, k) => [(k - (sk.games.length - 1) / 2) * 34, 0]);
+      let inner = '<ellipse class="zone-hit" cx="' + sk.at[0] + '" cy="' + sk.at[1] + '" rx="' + sk.r[0] + '" ry="' + sk.r[1] + '"/>' + stars +
+        '<text class="zone-name" x="' + sk.at[0] + '" y="' + (sk.at[1] + (tri ? -38 : -22)) + '" text-anchor="middle">' + sk.name + '</text><g class="zone-games">';
+      // ses mini-jeux : médaillons avec un anneau de progression (sur 450 niveaux)
       sk.games.forEach((id, k) => {
-        const x = sk.at[0] + (k - (sk.games.length - 1) / 2) * 30, y = sk.at[1] + 2;
+        const x = sk.at[0] + pos[k][0], y = sk.at[1] + pos[k][1];
         const pct = Math.round(100 * gameProgress(id) / (TIER_SIZE * TIERS.length));
         inner += '<g class="zone-game" data-game="' + id + '" style="color:' + ACCENT[id] + ';--k:' + k + '">' +
-          '<circle cx="' + x + '" cy="' + y + '" r="11.5" fill="var(--surface)"/>' +
-          '<circle class="zg-track" cx="' + x + '" cy="' + y + '" r="11.5"/>' +
-          '<circle class="zg-ring" cx="' + x + '" cy="' + y + '" r="11.5" pathLength="100" stroke-dasharray="' + Math.max(pct, 0.01) + ' 100" transform="rotate(-90 ' + x + ' ' + y + ')"/>' +
-          '<g transform="translate(' + (x - 6.6) + ' ' + (y - 6.6) + ') scale(.55)">' + ICON[id] + '</g>' +
-          '<text class="zg-name" x="' + x + '" y="' + (y + 19) + '" text-anchor="middle">' + game(id).name + '</text>' +
-          '<text class="zg-lvl" x="' + x + '" y="' + (y + 24.5) + '" text-anchor="middle">' + gameProgress(id) + ' / ' + TIER_SIZE * TIERS.length + '</text></g>';
+          '<circle class="zg-disc" cx="' + x + '" cy="' + y + '" r="13"/>' +
+          '<circle class="zg-track" cx="' + x + '" cy="' + y + '" r="13"/>' +
+          '<circle class="zg-ring" cx="' + x + '" cy="' + y + '" r="13" pathLength="100" stroke-dasharray="' + Math.max(pct, 0.01) + ' 100" transform="rotate(-90 ' + x + ' ' + y + ')"/>' +
+          '<g transform="translate(' + (x - 7.2) + ' ' + (y - 7.2) + ') scale(.6)">' + ICON[id] + '</g>' +
+          '<text class="zg-name" x="' + x + '" y="' + (y + 20) + '" text-anchor="middle">' + game(id).name + '</text>' +
+          '<text class="zg-lvl" x="' + x + '" y="' + (y + 25) + '" text-anchor="middle">' + gameProgress(id) + ' / ' + TIER_SIZE * TIERS.length + '</text></g>';
       });
-      zone.innerHTML = inner + '</g>';
-      svg.appendChild(zone);
+      html += '<g class="zone" data-skill="' + sk.id + '" style="color:' + accent + '">' + inner + '</g></g>';
     });
-    zoomBrain(null, true);
+    svg.innerHTML = html;    zoomBrain(null, true);
     // capacités : nom, niveau et barre, sans description
     $('#skills').innerHTML = SKILLS.map((sk) => {
       const st = skillStats(sk);
@@ -697,14 +677,16 @@
 
   // Le cerveau est une carte : on la glisse au doigt, on zoome (pincer, molette, toucher une zone).
   // Zoomé, chaque zone dévoile ses mini-jeux ; la zone au centre de la vue s'affiche dessous.
-  const BRAIN_W = 320, BRAIN_H = 250, MIN_W = 105;
+  const BRAIN_W = 240, BRAIN_H = 320, MIN_W = 84;
   let brainView = [0, 0, BRAIN_W, BRAIN_H], brainAnim = 0, zoomed = null;
   // la vue épouse la forme du cadre (plus haut que large sur téléphone) : le cerveau garde ses proportions
   const brainAspect = () => { const r = $('#brain-svg').getBoundingClientRect(); return r.width && r.height ? r.width / r.height : BRAIN_W / BRAIN_H; };
+  // vue d'ensemble : tout le cerveau tient dans le cadre, quelle que soit sa forme
+  const maxW = () => Math.max(BRAIN_W, BRAIN_H * brainAspect());
   function clampView(v) {
-    const w = Math.max(MIN_W, Math.min(BRAIN_W, v[2])), h = w / brainAspect();
+    const w = Math.max(MIN_W, Math.min(maxW(), v[2])), h = w / brainAspect();
     const cx = v[0] + v[2] / 2, cy = v[1] + v[3] / 2;
-    const x = Math.max(0, Math.min(BRAIN_W - w, cx - w / 2));
+    const x = w >= BRAIN_W ? (BRAIN_W - w) / 2 : Math.max(0, Math.min(BRAIN_W - w, cx - w / 2));
     const y = h >= BRAIN_H ? (BRAIN_H - h) / 2 : Math.max(0, Math.min(BRAIN_H - h, cy - h / 2));
     return [x, y, w, h];
   }
@@ -712,7 +694,7 @@
     brainView = clampView(v);
     const svg = $('#brain-svg');
     svg.setAttribute('viewBox', brainView.join(' '));
-    const z = BRAIN_W / brainView[2];
+    const z = maxW() / brainView[2];
     svg.style.setProperty('--z', z.toFixed(3));
     // la zone la plus proche du centre de la vue devient la zone affichée (dès qu'on a un peu zoomé)
     const cx = brainView[0] + brainView[2] / 2, cy = brainView[1] + brainView[3] / 2;
@@ -747,8 +729,8 @@
   // vol animé vers une zone (null = vue d'ensemble)
   function zoomBrain(skillId, instant) {
     const sk = SKILLS.find((s) => s.id === skillId);
-    const w = sk ? 128 : BRAIN_W, h = w / brainAspect();
-    const target = clampView(sk ? [sk.at[0] - w / 2, sk.at[1] - h / 2 + 4, w, h] : [0, 0, BRAIN_W, BRAIN_H]);
+    const w = sk ? 132 : maxW(), h = w / brainAspect();
+    const target = clampView(sk ? [sk.at[0] - w / 2, sk.at[1] - h / 2 + 6, w, h] : [0, 0, w, h]);
     cancelAnimationFrame(brainAnim);
     if (instant) { setBrainView(target); return; }
     const from = brainView.slice(), t0 = performance.now(), D = 650;
@@ -768,7 +750,7 @@
     const toView = (px, py) => { const r = svg.getBoundingClientRect(); return [brainView[0] + (px - r.left) * unit(), brainView[1] + (py - r.top) * unit()]; };
     function zoomAt(px, py, f) {
       const [vx, vy] = toView(px, py);
-      const w = Math.max(MIN_W, Math.min(BRAIN_W, brainView[2] / f)), k = w / brainView[2];
+      const w = Math.max(MIN_W, Math.min(maxW(), brainView[2] / f)), k = w / brainView[2];
       setBrainView([vx - (vx - brainView[0]) * k, vy - (vy - brainView[1]) * k, w, w / brainAspect()]);
     }
     svg.addEventListener('pointerdown', (e) => {

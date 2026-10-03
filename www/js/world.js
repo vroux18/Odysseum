@@ -1650,6 +1650,7 @@
     const d0 = pathDir(selected);
     userTheta = goal.theta = cam.theta = Math.atan2(-d0.z, -d0.x) + 0.55;
     window.addEventListener('resize', resize);
+    if (window.ResizeObserver) new ResizeObserver(resize).observe(host); // barre d'adresse, plein écran : la scène suit la vraie hauteur
     resize();
     World.ok = true;
     return true;

@@ -982,3 +982,42 @@ svg .f { fill: currentColor; stroke: none; }
   background: var(--muted); color: var(--surface); font-variant-numeric: tabular-nums; }
 #btn-hint.empty { opacity: .2 !important; }
 #btn-hint.empty .hint-left { background: var(--faint); }
+
+/* la carte 3D couvre tout l'écran, sous les barres système comprises */
+.world { top: 0; left: 0; right: 0; bottom: auto; height: 100lvh; min-height: 100%; }
+/* bandeau du cerveau : hauteur intermédiaire */
+.brain-sheet { height: min(80dvh, 760px); }
+.brain .hemi { fill: var(--tile); stroke: var(--faint); stroke-width: 1.2; }
+.brain .gyri { fill: none; stroke: var(--faint); stroke-width: 1; stroke-linecap: round; opacity: .45; }
+.brain .region { transition: opacity .6s var(--slow); }
+.brain .zone-hit { fill: transparent; opacity: 1; }
+.brain .zone:hover .zone-hit, .brain .zone.zfocus .zone-hit { opacity: 1; }
+.brain .zone-name { font-size: 10px; font-weight: 500; fill: currentColor; opacity: 1; paint-order: stroke; stroke: var(--tile); stroke-width: 3px; stroke-linejoin: round; }
+.brain.zoomed .zone-name { font-size: 10px; opacity: 1; }
+.brain .zone-games { opacity: 1; pointer-events: auto; }
+.brain .zg-disc { fill: var(--surface); }
+.brain .zg-track { stroke-width: 1.6; }
+.brain .zg-ring { stroke-width: 2.2; }
+.brain .zg-name, .brain .zg-lvl { opacity: clamp(0, calc((var(--z) - 1.25) * 2), 1); }
+.brain .zg-name { font-size: 6px; }
+.brain .zg-lvl { font-size: 4.4px; }
+.brain .star { fill: var(--faint); opacity: .5; }
+.brain .star.on { fill: currentColor; opacity: 1; filter: drop-shadow(0 0 1.5px currentColor); }
+.brain.zoomed .zone:not(.zfocus) { opacity: .4; }
+
+/* Reines : croix et couronnes teintées par la couleur de la case, plus de noir */
+.reines .crown { mix-blend-mode: multiply; }
+.reines .crown path { fill: rgba(30, 30, 40, .62); stroke: none; }
+.reines .mark { background: rgba(30, 30, 40, .35); mix-blend-mode: multiply; opacity: 1; }
+:root[data-theme="dark"] .reines .crown path { fill: rgba(10, 12, 20, .7); }
+
+/* niveaux : boutons plus grands, toute la largeur */
+.lv-grid { width: 100%; grid-template-columns: repeat(5, 1fr); gap: 10px; max-height: min(56vh, 480px); }
+.lv { font-size: 17px; }
+.lv-tabs { width: 100%; }
+.lv-tabs button span { font-size: 15px; }
+.lv.locked { opacity: .45; }
+.brain .zone-hit { stroke: none !important; }
+.brain .zone-games text, .brain .star { stroke: none; }
+.brain .gyri, .brain .hemi { vector-effect: non-scaling-stroke; }
+.brain .region, .brain ellipse { stroke: none !important; }
