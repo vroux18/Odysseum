@@ -173,7 +173,7 @@
           }
           arms.forEach(([dx, dy]) => { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(dx * half, dy * half); ctx.stroke(); });
           // terminal : un rond, dont l'anneau extérieur reste visible (le tracé large dépasse le fin)
-          const r = deg === 1 ? cell * 0.22 + (width - w) / 2 : width / 2;
+          const r = deg === 1 ? cell * 0.3 + (width - w) / 2 : width / 2;
           ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
         };
         ctx.globalAlpha = 0.5;
@@ -184,12 +184,12 @@
           stroke(w, mix(bg, accent, glow[i] * 0.85));
         }
         if (i === puzzle.src) { // la source : pleine, avec un œil
-          ctx.beginPath(); ctx.arc(0, 0, cell * 0.22 + lw, 0, Math.PI * 2); ctx.globalAlpha = 0.5; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
-          ctx.beginPath(); ctx.arc(0, 0, cell * 0.22, 0, Math.PI * 2); ctx.fillStyle = accent; ctx.fill();
-          ctx.beginPath(); ctx.arc(0, 0, cell * 0.09 + lw, 0, Math.PI * 2); ctx.globalAlpha = 0.5; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
-          ctx.beginPath(); ctx.arc(0, 0, cell * 0.09, 0, Math.PI * 2); ctx.fillStyle = bg; ctx.fill();
+          ctx.beginPath(); ctx.arc(0, 0, cell * 0.3 + lw, 0, Math.PI * 2); ctx.globalAlpha = 0.5; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
+          ctx.beginPath(); ctx.arc(0, 0, cell * 0.3, 0, Math.PI * 2); ctx.fillStyle = accent; ctx.fill();
+          ctx.beginPath(); ctx.arc(0, 0, cell * 0.11 + lw, 0, Math.PI * 2); ctx.globalAlpha = 0.5; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
+          ctx.beginPath(); ctx.arc(0, 0, cell * 0.11, 0, Math.PI * 2); ctx.fillStyle = bg; ctx.fill();
         } else if (deg === 1 && lit) { // terminal alimenté
-          ctx.beginPath(); ctx.arc(0, 0, cell * 0.08, 0, Math.PI * 2); ctx.globalAlpha = 0.5; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
+          ctx.beginPath(); ctx.arc(0, 0, cell * 0.1, 0, Math.PI * 2); ctx.globalAlpha = 0.5; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
         }
         ctx.restore();
       }
