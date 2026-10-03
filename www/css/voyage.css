@@ -382,3 +382,26 @@
 #home #go { height: 44px !important; border-radius: 22px !important; bottom: calc(var(--lc-b) + 11px) !important; }
 #home #go::after { font-size: 17px !important; }
 #home #go svg.ic, #home #go svg { width: 19px !important; height: 19px !important; }
+
+/* ---------- Bulle du niveau flottante au-dessus d'Ulysse ----------
+   « ‹ Niveau 9 › », mini-jeux et étoiles dans une petite bulle avec sa pointe ; le bouton Play rond vert posé à droite. */
+#home.bubble .lvcard { left: var(--bx) !important; top: calc(var(--by) - 14px) !important; bottom: auto !important; margin-left: 0 !important;
+  transform: translate(-50%, -100%); width: 216px !important; height: 70px !important; padding: 8px 64px 8px 14px !important; border-radius: 24px !important;
+  grid-template-rows: auto auto !important; row-gap: 4px !important; animation: none !important; transition: none !important; }
+#home.bubble .lvcard::before { content: ''; position: absolute; left: 50%; bottom: -9px; width: 18px; height: 18px; margin-left: -9px; transform: rotate(45deg);
+  background: var(--k-bubble, #fff); border-radius: 0 0 5px 0; box-shadow: 4px 4px 0 var(--k-edge, #d9cfe8); z-index: -1; }
+#home.bubble .lvcard .lc-isle { display: none !important; }
+#home.bubble .lvcard .lc-title { grid-row: 1 !important; font-size: 16px !important; justify-self: start; gap: 4px !important; }
+#home.bubble .lvcard .lc-nav { width: 22px !important; height: 22px !important; font-size: 16px !important; }
+#home.bubble .lvcard .lc-games { grid-row: 2 !important; justify-self: start !important; }
+#home.bubble .lvcard .lc-chip i { width: 20px !important; height: 20px !important; }
+#home.bubble .lvcard .lc-chip svg { width: 12px !important; height: 12px !important; }
+#home.bubble .lvcard .lc-stars { grid-row: 2 !important; justify-self: end !important; align-self: center; margin-right: -6px; }
+#home.bubble .lvcard .lc-st svg { width: 10px !important; height: 10px !important; }
+#home.bubble #go { width: 56px !important; height: 56px !important; border-radius: 50% !important; transition: none !important;
+  left: calc(var(--bx) + 108px - 62px) !important; top: calc(var(--by) - 14px - 63px) !important; bottom: auto !important; right: auto !important; }
+#home.bubble #go::after { content: none !important; display: none !important; }
+#home.bubble #go svg.ic, #home.bubble #go svg { width: 24px !important; height: 24px !important; }
+#home.bubble .lvcard { width: 230px !important; padding-right: 74px !important; }
+#home.bubble .lvcard .lc-stars { margin-right: 0 !important; }
+#home.bubble #go { left: calc(var(--bx) + 115px - 64px) !important; }

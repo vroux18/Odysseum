@@ -298,6 +298,20 @@
         openVoyage();
       });
       $('#home').appendChild(card);
+      // bulle flottante : la carte suit la tête d'Ulysse sur la carte 3D (repli en bas si l'ancre sort du cadre)
+      const home = $('#home');
+      const follow = () => {
+        requestAnimationFrame(follow);
+        if (home.hidden) return;
+        const a = worldReady && C.world.anchorScreen ? C.world.anchorScreen() : null;
+        const ok = a && a.visible;
+        home.classList.toggle('bubble', !!ok);
+        if (!ok) return;
+        const bx = Math.max(118, Math.min(innerWidth - 118, a.x)), by = Math.max(150, Math.min(innerHeight - 120, a.y));
+        home.style.setProperty('--bx', bx.toFixed(1) + 'px');
+        home.style.setProperty('--by', by.toFixed(1) + 'px');
+      };
+      requestAnimationFrame(follow);
     }
     const won = (J.stars && J.stars[selected]) || 0, past = selected < J.done;
     card.hidden = b.hidden;

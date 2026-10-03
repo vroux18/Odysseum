@@ -4478,6 +4478,14 @@
     setMarker();
   };
   World.select = function (L) { travelTo(Math.min(L, done)); };
+  // point d'ancrage à l'écran juste au-dessus de la tête d'Ulysse (pierre choisie) : pour la bulle du niveau de l'appli
+  World.anchorScreen = function () {
+    if (!World.ok || !camera || !host) return null;
+    const p = nodePos(selected);
+    const v = new THREE.Vector3(p.x, p.y + 1.55, p.z).project(camera);
+    const W = host.clientWidth, H = host.clientHeight;
+    return { x: (v.x + 1) / 2 * W, y: (1 - v.y) / 2 * H, visible: v.z < 1 && Math.abs(v.x) < 1.15 && v.y > -1.1 && v.y < 1.2 };
+  };
   // Événements spéciaux : list = [{ c, id, accent, done, open }] (une entrée par île)
   World.setEvents = function (list) {
     (list || []).forEach((e) => { if (e && e.c != null) evState[e.c] = Object.assign({}, e); });
