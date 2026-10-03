@@ -1769,3 +1769,6 @@ svg.ic.ic-solid { --duo-o: 1; }
 .coffre-reveal .slots .slot, .coffre-reveal .slots .chip { width: var(--slot, 30px); height: var(--slot, 30px); }
 .coffre-reveal .slots { gap: 6px; }
 
+/* titres du joueur et phrase complice de fin de niveau */
+.lb-rank { display: block; font-style: italic; font-size: 0.72em; opacity: 0.7; font-weight: 400; letter-spacing: 0.02em; }
+.ld-quip { margin: -4px 0 6px; font-style: italic; font-size: 0.85rem; opacity: 0.65; text-align: center; }

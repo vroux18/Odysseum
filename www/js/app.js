@@ -458,6 +458,10 @@
     const before = info.xpStart || {};
     const rows = SKILLS.filter((sk) => (C.store.xp[sk.id] || 0) > (before[sk.id] || 0));
     $('#ld-title').textContent = info.boss ? 'Épreuve réussie' : 'Niveau ' + (info.L + 1);
+    // petite phrase complice ; si le niveau global monte, on annonce le nouveau titre
+    const pBefore = levelFrom(SKILLS.reduce((s, sk) => s + (before[sk.id] || 0), 0), 100).level, pNow = playerStats().level;
+    $('#ld-quip').textContent = pNow > pBefore && rankOf(pNow) !== rankOf(pBefore) ? 'Nouveau titre : ' + rankOf(pNow)
+      : QUIPS[Math.floor(Math.random() * QUIPS.length)];
     box.innerHTML = rows.map((sk, i) => {
       const was = levelFrom(before[sk.id] || 0, 40), now = skillStats(sk);
       const gain = (C.store.xp[sk.id] || 0) - (before[sk.id] || 0);
@@ -727,15 +731,15 @@
   // Les jauges reflètent la pratique dans le jeu, pas une mesure des capacités.
   const SKILLS = [
     { id: 'logique', name: 'Déduction', games: ['reines', 'astres', 'demineur'], at: [72, 160], r: [50, 56],
-      desc: 'Tirer des certitudes des règles, une case après l\'autre, sans jamais deviner.' },
+      desc: 'Aiguise ta logique : des certitudes, une case après l\'autre, jamais de hasard.' },
     { id: 'espace', name: 'Espace', games: ['paves', 'pixels', 'tuyaux'], at: [168, 160], r: [50, 56],
-      desc: 'Se représenter les formes et la place qu\'elles occupent avant de les tracer.' },
+      desc: 'Fais tourner les formes dans ta tête avant de les poser.' },
     { id: 'anticipation', name: 'Anticipation', games: ['flux', 'serpent', 'rushhour'], at: [120, 84], r: [80, 48],
-      desc: 'Prévoir plusieurs coups à l\'avance pour ne pas se fermer de chemin.' },
+      desc: 'Garde toujours trois coups d\'avance, comme Ulysse face au Cyclope.' },
     { id: 'raisonnement', name: 'Hypothèses', games: ['lumieres', 'coffre', 'bataille'], at: [80, 252], r: [52, 48],
-      desc: 'Proposer une idée, l\'éprouver, et retenir ce que chaque essai révèle.' },
+      desc: 'Lance une idée, mets-la à l\'épreuve, tire la leçon de chaque essai.' },
     { id: 'memoire', name: 'Mémoire', games: ['simon'], at: [164, 254], r: [46, 46],
-      desc: 'Retenir une suite qui s\'allonge et la restituer dans l\'ordre.' }
+      desc: 'Retiens le chant des sirènes, note après note, sans en perdre une.' }
   ];
   SKILLS.forEach((sk) => { sk.games = sk.games.filter((id) => C.games.some((g) => g.id === id)); });
   const NODES = 10;
@@ -770,6 +774,12 @@
     return Object.assign({ total }, levelFrom(total, 100));
   }
 
+  // titres du joueur : un clin d'œil, pas une mesure ; ils suivent le niveau global
+  const RANKS = [[1, 'Esprit en éveil'], [3, 'Tête bien faite'], [5, 'Esprit vif'], [8, 'Rusé comme Ulysse'],
+    [12, 'Conseiller d\'Ithaque'], [16, 'Disciple d\'Athéna'], [22, 'Stratège de Troie'], [30, 'Esprit olympien']];
+  const rankOf = (level) => RANKS.filter((r) => level >= r[0]).pop()[1];
+  const QUIPS = ['Ça carbure là-haut', 'Neurones en éveil', 'Ruse +1', 'Athéna approuve', 'Bien joué, tête chercheuse', 'Ulysse n\'aurait pas fait mieux'];
+
   function renderBadge() {
     const p = playerStats();
     $('#level-num').textContent = p.level;
@@ -780,6 +790,7 @@
   function renderBrain() {
     const p = playerStats();
     $('#brain-level').textContent = p.level;
+    $('#brain-rank').textContent = rankOf(p.level);
     $('#brain-xp').textContent = p.cur + ' / ' + p.need;
     $('#brain-xp-bar').style.width = Math.round(p.frac * 100) + '%';
     $('#games-detail').hidden = true;
