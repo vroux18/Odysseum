@@ -9,8 +9,13 @@
   // soleil : disque sable ; lune : croissant bleu brume
   // symboles foncés posés sur des pastilles colorées (soleil doré, lune bleue)
   // soleil rayonnant et croissant de lune, clairs sur leur pastille colorée
-  const SUN_SVG = '<svg viewBox="0 0 24 24" class="glyph-sun"><circle cx="12" cy="12" r="4.8" fill="#fffaf0"/><path d="M12 2.6v2.6M12 18.8v2.6M2.6 12h2.6M18.8 12h2.6M5.4 5.4l1.8 1.8M16.8 16.8l1.8 1.8M5.4 18.6l1.8-1.8M16.8 7.2l1.8-1.8" stroke="#fffaf0" stroke-width="2" stroke-linecap="round" fill="none"/></svg>';
-  const MOON_SVG = '<svg viewBox="0 0 24 24" class="glyph-moon"><path d="M15.2 3.6a8.6 8.6 0 1 0 5.2 14.9A7 7 0 0 1 15.2 3.6z" fill="#f4f7ff"/><circle cx="18.2" cy="6.4" r="1" fill="#f4f7ff"/></svg>';
+  // symboles cartoon : un soleil rieur aux joues roses, une lune qui somnole avec son étoile
+  const SUN_SVG = '<svg viewBox="0 0 24 24" class="gl-sun"><path class="ray" d="M12 1.6v2.6M12 19.8v2.6M1.6 12h2.6M19.8 12h2.6M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8"/>' +
+    '<circle class="face" cx="12" cy="12" r="6.6"/><circle class="eye" cx="9.7" cy="11.1" r="1"/><circle class="eye" cx="14.3" cy="11.1" r="1"/>' +
+    '<circle class="cheek" cx="8.3" cy="13.5" r="1.1"/><circle class="cheek" cx="15.7" cy="13.5" r="1.1"/><path class="smile" d="M9.9 13.7q2.1 1.9 4.2 0"/></svg>';
+  const MOON_SVG = '<svg viewBox="0 0 24 24" class="gl-moon"><path class="face" d="M14.6 2.8a9.3 9.3 0 1 0 6.6 15.6A7.6 7.6 0 0 1 14.6 2.8z"/>' +
+    '<path class="lid" d="M7.6 11.2q1.3 1.2 2.6 0"/><circle class="cheek" cx="8.4" cy="14" r="1.1"/><path class="smile" d="M9.6 15.6q1 .8 2 0"/>' +
+    '<path class="star" d="M19.4 3.2l.7 1.6 1.6.7-1.6.7-.7 1.6-.7-1.6-1.6-.7 1.6-.7z"/></svg>';
 
   // triples alignés en diagonale passant par la case i
   function diagTriples(n, i) {
@@ -149,6 +154,7 @@
     function errors() {
       const bad = new Set();
       const badEdges = new Set();
+      const zone = new Set(); // toute la zone fautive (ligne ou colonne entière, trio, paire) : teintée de rouge
       const half = n / 2;
       const lines = [];
       for (let r = 0; r < n; r++) lines.push([...Array(n)].map((_, k) => r * n + k));
@@ -159,29 +165,30 @@
           const v = state[i];
           if (v === SUN) s++; else if (v === MOON) m++;
           if (k >= 2 && v && v === state[line[k - 1]] && v === state[line[k - 2]]) {
-            bad.add(i); bad.add(line[k - 1]); bad.add(line[k - 2]);
+            [i, line[k - 1], line[k - 2]].forEach((j) => { bad.add(j); zone.add(j); });
           }
         });
-        if (s > half) line.forEach((i) => { if (state[i] === SUN) bad.add(i); });
-        if (m > half) line.forEach((i) => { if (state[i] === MOON) bad.add(i); });
+        if (s > half) line.forEach((i) => { zone.add(i); if (state[i] === SUN) bad.add(i); });
+        if (m > half) line.forEach((i) => { zone.add(i); if (state[i] === MOON) bad.add(i); });
       });
       if (puzzle.variant === 'diagonales') {
         for (let i = 0; i < n * n; i++) {
           diagTriples(n, i).forEach(([a, b, c]) => {
-            if (state[a] && state[a] === state[b] && state[a] === state[c]) { bad.add(a); bad.add(b); bad.add(c); }
+            if (state[a] && state[a] === state[b] && state[a] === state[c]) [a, b, c].forEach((j) => { bad.add(j); zone.add(j); });
           });
         }
       }
       puzzle.edges.forEach((e, k) => {
         const va = state[e.a], vb = state[e.b];
-        if (va && vb && (e.same ? va !== vb : va === vb)) { badEdges.add(k); bad.add(e.a); bad.add(e.b); }
+        if (va && vb && (e.same ? va !== vb : va === vb)) { badEdges.add(k); bad.add(e.a); bad.add(e.b); zone.add(e.a); zone.add(e.b); }
       });
-      return { bad, badEdges };
+      return { bad, badEdges, zone };
     }
 
     function render() {
-      const { bad, badEdges } = errors();
+      const { bad, badEdges, zone } = errors();
       cells.forEach((d, i) => {
+        d.classList.toggle('zone', zone.has(i));
         const k = String(state[i] || '');
         if (d.dataset.k !== k) { d.dataset.k = k; d.innerHTML = state[i] === SUN ? SUN_SVG : state[i] === MOON ? MOON_SVG : ''; } // seul le symbole qui change s'anime
         d.classList.toggle('sun', state[i] === SUN);
