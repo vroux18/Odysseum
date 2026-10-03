@@ -541,8 +541,12 @@
         let best = null;
         for (const k of todo) {
           const sol = solOf(k);
+          // un début déjà juste, tracé depuis une extrémité : on ne repart que de celle-là (sinon on l'effacerait)
+          const p0 = paths[k], refOf = (s) => (sol[0] === s ? sol : sol.slice().reverse());
+          const anchor = p0.length > 1 && puzzle.endpoints[k].includes(p0[0]) && p0[1] === refOf(p0[0])[1] ? p0[0] : -1;
           for (const start of puzzle.endpoints[k]) {
-            const ref = sol[0] === start ? sol : sol.slice().reverse();
+            if (anchor >= 0 && start !== anchor) continue;
+            const ref = refOf(start);
             // on repart du bout déjà juste du tuyau tracé par le joueur, s'il y en a un
             const p = paths[k];
             let pre = [start];
