@@ -224,16 +224,40 @@
         // retire d'abord une couronne mal placée, sinon en pose une juste
         for (let i = 0; i < n * n; i++) {
           if (state[i] === 2 && puzzle.solution[Math.floor(i / n)] !== i % n) {
-            state[i] = 0; render(); api.onChange(); return true;
+            state[i] = 0; render(); api.onChange();
+            return 'Cette couronne empêche de compléter une autre région : retire-la.';
           }
         }
-        for (let r = 0; r < n; r++) {
+        // on cherche une couronne qui se déduit : seule case libre de sa région, de sa ligne ou de sa colonne
+        const block = blocked();
+        const free = (i) => state[i] !== 2 && !block[i];
+        let pick = -1, why = '';
+        for (let r = 0; r < n && pick < 0; r++) {
           const i = r * n + puzzle.solution[r];
-          if (state[i] !== 2) {
+          if (state[i] === 2) continue;
+          const reg = puzzle.region[i], c = i % n;
+          let inReg = 0, inRow = 0, inCol = 0;
+          for (let j = 0; j < n * n; j++) {
+            if (!free(j)) continue;
+            if (puzzle.region[j] === reg) inReg++;
+            if (Math.floor(j / n) === r) inRow++;
+            if (j % n === c) inCol++;
+          }
+          if (inReg === 1) { pick = i; why = 'Dans cette région, c\'est la seule case que les autres couronnes laissent libre.'; }
+          else if (inRow === 1) { pick = i; why = 'Sur cette ligne, toutes les autres cases sont déjà prises par une colonne, une région ou un voisinage.'; }
+          else if (inCol === 1) { pick = i; why = 'Dans cette colonne, c\'est la seule case encore possible.'; }
+        }
+        if (pick < 0) {
+          for (let r = 0; r < n && pick < 0; r++) { const i = r * n + puzzle.solution[r]; if (state[i] !== 2) pick = i; }
+          why = 'Essaie cette couronne : regarde ensuite quelles cases elle rend impossibles autour d\'elle.';
+        }
+        if (pick >= 0) {
+          const i = pick;
+          {
             state[i] = 2; render(); api.onChange();
             const { bad, queens } = conflicts();
             if (queens === n && bad.size === 0) api.onWin();
-            return true;
+            return why;
           }
         }
         return false;

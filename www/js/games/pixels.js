@@ -236,7 +236,7 @@
             state[i] = want ? 1 : 2;
             if (mirror) state[twin(i)] = state[i];
             render(); api.onChange(); check();
-            return true;
+            return want ? 'Les indices de cette ligne et de cette colonne obligent cette case à être pleine.' : 'Cette case reste vide : remplie, elle dépasserait les indices de sa ligne ou de sa colonne.';
           }
         }
         return false;

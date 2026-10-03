@@ -238,7 +238,7 @@
           spin(i);
           if (!raf) raf = requestAnimationFrame(animate);
           check();
-          return true;
+          return 'Tournée ainsi, cette pièce se raccorde à ses voisines sans laisser d\'extrémité ouverte vers un bord.';
         }
         return false;
       },

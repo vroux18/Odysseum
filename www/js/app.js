@@ -142,6 +142,16 @@
     $('#btn-hint').classList.toggle('empty', left <= 0);
   }
 
+  // bulle d'explication d'une astuce : discrète, elle s'efface d'elle-même ou au toucher
+  function showTip(text) {
+    const tip = $('#hint-tip');
+    tip.textContent = text;
+    tip.hidden = false;
+    tip.classList.remove('in'); void tip.offsetWidth; tip.classList.add('in');
+    clearTimeout(showTip.timer);
+    showTip.timer = setTimeout(() => { tip.hidden = true; }, 6000);
+  }
+
   function playStep(info, stepIndex) {
     if (session) session.stop();
     const step = info.steps[stepIndex];
@@ -159,6 +169,7 @@
     $('#board').classList.remove('leaving');
     $('#play-name').textContent =g.name + (variant !== 'classic' ? ' · ' + variantsOf(g).find((v) => v.id === variant).name : '');
     $('#tools').hidden = true;
+    $('#hint-tip').hidden = true;
     $('#win').hidden = true;
     $('#level-done').hidden = true;
     // boss : trois petits points indiquent l'épreuve en cours
@@ -252,9 +263,11 @@
         g, variant, inst, info,
         hint() {
           if (won || hints >= MAX_HINTS) { C.sfx.error && C.sfx.error(); return; }
-          if (inst.hint()) {
+          const res = inst.hint();
+          if (res) {
             hints++;
             renderHints(MAX_HINTS - hints);
+            if (typeof res === 'string') showTip(res); // l'astuce explique le coup, pas seulement le résultat
             if (info.t0) info.penalty += 10; // compet : chaque indice coûte 10 secondes
           }
         },
@@ -864,6 +877,7 @@
   $('#btn-reset').addEventListener('click', () => session && session.inst.reset());
   $('#btn-hint').addEventListener('click', () => session && session.hint());
   $('#btn-autosolve').addEventListener('click', () => session && session.solve());
+  $('#hint-tip').addEventListener('click', () => { $('#hint-tip').hidden = true; });
   $('#btn-rules').addEventListener('click', () => session && openTutorial(session.g, session.variant, false));
   $('#rules-close').addEventListener('click', nextTuto);
   // carte du cerveau : toucher une capacité lance le mode focus
@@ -949,8 +963,29 @@
     setTimeout(() => intro.remove(), 1500);
   }
   if (intro) {
-    intro.addEventListener('click', embark);
-    intro.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') embark(); });
+    // le voilier traverse l'écran jusqu'à droite : quand il sort, le voyage commence.
+    // Premier toucher : il hisse les voiles et accélère ; second toucher : on embarque tout de suite.
+    const boat = intro.querySelector('.intro-boat');
+    let x = -40, speed = 1, target = 1, last = performance.now(), taps = 0;
+    const t0 = last;
+    const sail = (now) => {
+      if (!intro.isConnected || intro.classList.contains('leaving')) return;
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      speed += (target - speed) * Math.min(1, dt * 2.5); // accélération douce
+      if (now - t0 > 600) x += 64 * speed * dt;
+      const y = 179 + Math.sin(now / 650) * 1.6, rot = Math.sin(now / 900) * 2 - (speed - 1) * 0.8;
+      boat.setAttribute('transform', 'translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ') rotate(' + rot.toFixed(1) + ')');
+      if (x > 400) embark(); else requestAnimationFrame(sail);
+    };
+    if (boat) requestAnimationFrame(sail);
+    const tap = () => {
+      C.audio.unlock();
+      taps++;
+      if (taps === 1 && boat) { target = 6; intro.classList.add('hurry'); C.sfx.tap(); } else embark();
+    };
+    intro.addEventListener('click', tap);
+    intro.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') tap(); });
     intro.focus();
   }
 

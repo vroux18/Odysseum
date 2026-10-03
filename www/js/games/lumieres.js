@@ -108,7 +108,7 @@
           if (need[i] ^ mine[i]) {
             cells[i].classList.add('hinted');
             setTimeout(() => cells[i].classList.remove('hinted'), 1600);
-            return true;
+            return 'Appuie sur la case qui scintille : elle fait partie de la combinaison qui éteint tout.';
           }
         }
         return false;

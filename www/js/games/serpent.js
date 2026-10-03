@@ -202,7 +202,7 @@
         path = sol.slice(0, Math.min(sol.length, ok + 3));
         draw(); api.onChange();
         if (path.length === n * n) api.onWin();
-        return true;
+        return 'Le chemin doit filer par ici pour rejoindre le prochain numéro sans s\'enfermer dans un coin.';
       },
       redraw: draw,
       destroy() { window.removeEventListener('resize', resize); }

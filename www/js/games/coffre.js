@@ -224,7 +224,7 @@
       hint() {
         if (over) return false;
         for (let i = 0; i < L; i++) {
-          if (!locked.has(i)) { locked.set(i, code[i]); cur[i] = undefined; render(); api.onChange(); return true; }
+          if (!locked.has(i)) { locked.set(i, code[i]); cur[i] = undefined; render(); api.onChange(); return 'Le jeton n°' + (i + 1) + ' est révélé : garde-le et sers-toi des témoins pour trouver les autres.'; }
         }
         return false;
       },

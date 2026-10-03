@@ -8,8 +8,9 @@
 
   // soleil : disque sable ; lune : croissant bleu brume
   // symboles foncés posés sur des pastilles colorées (soleil doré, lune bleue)
-  const SUN_SVG = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6.6" fill="#15191e" stroke="none"/></svg>';
-  const MOON_SVG = '<svg viewBox="0 0 24 24"><path d="M14.5 5.2a7 7 0 1 0 4.2 12A5.8 5.8 0 0 1 14.5 5.2z" fill="#15191e" stroke="none"/></svg>';
+  // soleil rayonnant et croissant de lune, clairs sur leur pastille colorée
+  const SUN_SVG = '<svg viewBox="0 0 24 24" class="glyph-sun"><circle cx="12" cy="12" r="4.8" fill="#fffaf0"/><path d="M12 2.6v2.6M12 18.8v2.6M2.6 12h2.6M18.8 12h2.6M5.4 5.4l1.8 1.8M16.8 16.8l1.8 1.8M5.4 18.6l1.8-1.8M16.8 7.2l1.8-1.8" stroke="#fffaf0" stroke-width="2" stroke-linecap="round" fill="none"/></svg>';
+  const MOON_SVG = '<svg viewBox="0 0 24 24" class="glyph-moon"><path d="M15.2 3.6a8.6 8.6 0 1 0 5.2 14.9A7 7 0 0 1 15.2 3.6z" fill="#f4f7ff"/><circle cx="18.2" cy="6.4" r="1" fill="#f4f7ff"/></svg>';
 
   // triples alignés en diagonale passant par la case i
   function diagTriples(n, i) {
@@ -139,7 +140,8 @@
       const horizontal = e.b === e.a + 1;
       m.style.left = ((horizontal ? ca + 1 : ca + 0.5) / n) * 100 + '%';
       m.style.top = ((horizontal ? ra + 0.5 : ra + 1) / n) * 100 + '%';
-      m.textContent = e.same ? '=' : '×';
+      m.innerHTML = e.same ? '<svg viewBox="0 0 12 12"><path d="M3 4.6h6M3 7.4h6"/></svg>' : '<svg viewBox="0 0 12 12"><path d="M3.8 3.8l4.4 4.4M8.2 3.8 3.8 8.2"/></svg>'; // = même symbole, × symbole inverse
+      m.classList.add(e.same ? 'same' : 'diff');
       wrap.appendChild(m);
       return m;
     });
@@ -224,12 +226,40 @@
           if (v && v !== puzzle.solution[i]) wrong.push(i);
           else if (!v) empty.push(i);
         });
-        const i = wrong.length ? wrong[0] : empty[0];
+        const name = (v, pl) => (v === SUN ? 'soleil' : 'lune') + (pl ? 's' : '');
+        if (wrong.length) {
+          const i = wrong[0];
+          history.push(state.slice());
+          state[i] = puzzle.solution[i];
+          render(); api.onChange(); check();
+          return 'Cette case était fausse : c\'est un' + (puzzle.solution[i] === SUN ? ' soleil' : 'e lune') + ' qui permet de tout équilibrer.';
+        }
+        // une case qui se déduit d'une règle simple, avec sa raison
+        const half = n / 2;
+        const reason = (i) => {
+          const v = puzzle.solution[i], o = v === SUN ? MOON : SUN;
+          const r = Math.floor(i / n), c = i % n;
+          const row = [...Array(n)].map((_, k) => r * n + k), col = [...Array(n)].map((_, k) => k * n + c);
+          if (row.filter((j) => state[j] === o).length === half) return 'Cette ligne a déjà ses ' + half + ' ' + name(o, true) + ' : le reste ne peut être que des ' + name(v, true) + '.';
+          if (col.filter((j) => state[j] === o).length === half) return 'Cette colonne a déjà ses ' + half + ' ' + name(o, true) + ' : il ne reste que des ' + name(v, true) + '.';
+          for (const line of [row, col]) {
+            const k = line.indexOf(i), at = (d) => state[line[k + d]];
+            if ((at(-1) === o && at(-2) === o) || (at(1) === o && at(2) === o) || (at(-1) === o && at(1) === o)) return 'Trois ' + name(o, true) + ' à la suite, c\'est interdit : ici il faut un' + (v === SUN ? ' soleil' : 'e lune') + '.';
+          }
+          for (const e of puzzle.edges) {
+            const other = e.a === i ? e.b : e.b === i ? e.a : -1;
+            if (other >= 0 && state[other]) return e.same ? 'Le signe = impose le même symbole que sa voisine.' : 'Le × impose le symbole inverse de sa voisine.';
+          }
+          return '';
+        };
+        let i = empty.find((j) => reason(j));
+        const why = i !== undefined ? reason(i) : 'Pose ce' + (puzzle.solution[empty[0]] === SUN ? ' soleil' : 'tte lune') + ' : chaque ligne et colonne a autant de soleils que de lunes.';
+        if (i === undefined) i = empty[0];
         if (i === undefined) return false;
         history.push(state.slice());
         state[i] = puzzle.solution[i];
         render(); api.onChange(); check();
-        return true;
+        return why;
       },
       destroy() {}
     };

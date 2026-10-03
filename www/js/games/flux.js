@@ -514,7 +514,7 @@
           applyCuts();
           drag = null;
           draw(); api.onChange(); checkWin();
-          return true;
+          return 'Cette couleur ne peut passer que par là sans barrer la route aux autres.';
         }
         return false;
       },

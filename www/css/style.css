@@ -1021,3 +1021,42 @@ svg .f { fill: currentColor; stroke: none; }
 .brain .zone-games text, .brain .star { stroke: none; }
 .brain .gyri, .brain .hemi { vector-effect: non-scaling-stroke; }
 .brain .region, .brain ellipse { stroke: none !important; }
+
+/* Astres : glyphes clairs, légère ombre portée */
+.astres .cell svg { width: 62%; height: 62%; filter: drop-shadow(0 1px 1.5px rgba(40, 30, 10, .28)); }
+.astres .cell.given svg { opacity: 1; }
+
+
+/* intro : après un toucher, le texte s'efface pendant que le voilier file */
+.intro.hurry .intro-tap { animation: none; opacity: 0; transition: opacity .5s; }
+
+/* grille + boutons : un bloc centré verticalement dans l'écran */
+#play .board { margin-top: auto; width: 100%; }
+
+.astres .glyph-sun circle, .astres .glyph-moon path, .astres .glyph-moon circle { stroke: none !important; }
+.astres .glyph-sun path { stroke: #fffaf0 !important; stroke-width: 2px; }
+
+
+/* explication d'une astuce */
+.hint-tip { margin: 0 auto; max-width: 320px; padding: 10px 14px; border-radius: 14px; background: var(--tile); color: var(--ink); font-size: 14px; line-height: 1.4; text-align: center;
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--game) 45%, transparent); }
+.hint-tip.in { animation: tip-in .45s var(--spring); }
+@keyframes tip-in { from { opacity: 0; transform: translateY(6px) scale(.96); } }
+
+/* accueil : barre de navigation groupée autour du bouton play
+   [caméra] [niveau]  ( ▶ )  [mini-jeux] [réglages] */
+#home #open-brain, #home #open-settings, #home #open-library, #home #cam-mode {
+  position: fixed; top: auto; right: auto; z-index: 5; width: 48px; height: 48px; padding: 0;
+  bottom: calc(53px + env(safe-area-inset-bottom, 0px));
+}
+#home #open-brain { left: calc(50% - 101px); width: 52px; height: 52px; bottom: calc(51px + env(safe-area-inset-bottom, 0px)); }
+#home #cam-mode { left: calc(50% - 161px); }
+#home #open-library { left: calc(50% + 51px); }
+#home #open-settings { left: calc(50% + 111px); }
+#home #open-settings svg, #home #open-library svg, #home #cam-mode svg { width: 22px; height: 22px; }
+
+/* Astres : repères = et × sobres, petites pastilles nettes */
+.astres .edge-mark { width: 18px; height: 18px; border: 0 !important; border-radius: 50%; background: var(--surface); color: var(--muted);
+  box-shadow: 0 1px 3px rgba(20, 25, 35, .22); display: grid; place-items: center; font-size: 0; z-index: 2; }
+.astres .edge-mark svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; animation: none; filter: none; }
+.astres .edge-mark.bad { background: var(--bad, #c4553f); color: #fff; }

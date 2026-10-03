@@ -24,7 +24,7 @@
           if (!free) break;
           const area = w * h;
           if (area > maxArea) break;
-          if (area >= 2 || rng() < 0.08) options.push([w, h]);
+          if (area >= 2) options.push([w, h]); // jamais de pavé d'une seule case
         }
       }
       const [w, h] = options.length ? rng.pick(options) : [1, 1];
@@ -91,6 +91,7 @@
     let fallback = null;
     for (let t = 0; t < 150; t++) {
       const rects = partition(p.n, p.maxArea, rng);
+      if (rects.some((rc) => rc.w * rc.h === 1)) continue; // une case isolée forcée : on recommence
       const clues = rects.map((rc) => {
         const y = rc.r + rng.int(rc.h), x = rc.c + rng.int(rc.w);
         return { cell: y * p.n + x, value: rc.w * rc.h };
@@ -266,7 +267,7 @@
         rects = rects.filter((x) => !overlap(x, target));
         rects.push(Object.assign({}, target));
         render(); api.onChange(); check();
-        return true;
+        return 'Ce ' + (target.w * target.h) + ' tient en ' + target.w + ' × ' + target.h + ' : c\'est la seule forme qui ne déborde ni sur un autre chiffre ni hors de la grille.';
       },
       destroy() {}
     };
