@@ -124,6 +124,7 @@
 
   function startLevel(L) {
     const info = levelInfo(L);
+    info.xpStart = Object.assign({}, C.store.xp); // pour le récapitulatif de fin de niveau
     playStep(info, 0);
   }
 
@@ -138,9 +139,14 @@
     $('#play').style.setProperty('--game', ACCENT[g.id]);
     $('#play').classList.remove('done');
     $('#play-icon').innerHTML = icon(g.id);
-    $('#play-name').textContent = g.name + (variant !== 'classic' ? ' · ' + variantsOf(g).find((v) => v.id === variant).name : '');
+    $('#play-level').textContent = info.free ? (info.focus ? 'concentration' : 'jeu libre') : (info.boss ? 'épreuve · niveau ' : 'niveau ') + (info.L + 1);
+    // passage d'un mini-jeu au suivant dans une série : la grille arrive par la droite
+    $('#board').classList.toggle('next-step', stepIndex > 0);
+    $('#board').classList.remove('leaving');
+    $('#play-name').textContent =g.name + (variant !== 'classic' ? ' · ' + variantsOf(g).find((v) => v.id === variant).name : '');
     $('#tools').hidden = true;
     $('#win').hidden = true;
+    $('#level-done').hidden = true;
     // boss : trois petits points indiquent l'épreuve en cours
     const steps = $('#steps');
     steps.hidden = info.steps.length < 2;
@@ -182,7 +188,9 @@
           host.classList.add('solved');
           if (stepIndex + 1 < info.steps.length) {
             // boss : la grille suivante arrive après une respiration
-            setTimeout(() => playStep(info, stepIndex + 1), 2100);
+            // enchaînement rapide dans une série : la grille finie glisse et s'efface, la suivante arrive
+            setTimeout(() => host.classList.add('leaving'), 1000);
+            setTimeout(() => playStep(info, stepIndex + 1), 1300);
           } else {
             finishLevel(info);
           }
@@ -261,9 +269,43 @@
     C.save();
     $('#play').classList.add('done');
     clearTimeout(finishLevel.timer);
-    finishLevel.timer = setTimeout(() => {
-      if (!screens.play.hidden) startLevel(next);
-    }, 2300);
+    // série terminée : récapitulatif de l'XP gagnée par capacité, puis retour à la carte
+    finishLevel.timer = setTimeout(() => { if (!screens.play.hidden) showLevelDone(info); }, 1400);
+  }
+
+  // Récapitulatif animé : chaque capacité travaillée, son gain d'XP, sa barre qui se remplit.
+  function showLevelDone(info) {
+    const box = $('#ld-skills');
+    const before = info.xpStart || {};
+    const rows = SKILLS.filter((sk) => (C.store.xp[sk.id] || 0) > (before[sk.id] || 0));
+    $('#ld-title').textContent = info.boss ? 'Épreuve réussie' : 'Niveau ' + (info.L + 1);
+    box.innerHTML = rows.map((sk, i) => {
+      const was = levelFrom(before[sk.id] || 0, 40), now = skillStats(sk);
+      const gain = (C.store.xp[sk.id] || 0) - (before[sk.id] || 0);
+      const startW = now.level > was.level ? 0 : Math.round(was.frac * 100);
+      return '<div class="ld-row" style="--game:' + ACCENT[sk.games[0]] + ';--d:' + (0.35 + i * 0.45) + 's">' +
+        '<div class="ld-head"><span>' + sk.name + '</span><b class="ld-gain" data-gain="' + gain + '">+0</b></div>' +
+        '<div class="skill-bar"><i style="width:' + startW + '%" data-to="' + Math.round(now.frac * 100) + '"></i></div>' +
+        (now.level > was.level ? '<small class="ld-up">niveau ' + now.level + '</small>' : '<small>niv. ' + now.level + '</small>') + '</div>';
+    }).join('') || '<p class="ld-none">Sans XP cette fois : les grilles résolues automatiquement n\'en donnent pas.</p>';
+    const ov = $('#level-done');
+    ov.hidden = false;
+    C.sfx.place();
+    // les barres se remplissent et les compteurs montent, une capacité après l'autre
+    box.querySelectorAll('.ld-row').forEach((row, i) => {
+      setTimeout(() => {
+        const bar = row.querySelector('.skill-bar i');
+        bar.style.width = bar.dataset.to + '%';
+        const el = row.querySelector('.ld-gain'), total = +el.dataset.gain, t0 = performance.now();
+        const count = (now) => {
+          const k = Math.min(1, (now - t0) / 900);
+          el.textContent = '+' + Math.round(total * (1 - Math.pow(1 - k, 3))) + ' xp';
+          if (k < 1) requestAnimationFrame(count);
+        };
+        requestAnimationFrame(count);
+        if (row.querySelector('.ld-up')) setTimeout(() => { row.classList.add('leveled'); C.sfx.win(); }, 900);
+      }, 350 + i * 450);
+    });
   }
 
   // Tutoriel illustré : une page = un petit dessin + une phrase ; la flèche avance.
@@ -653,6 +695,8 @@
   applyA11y();
   $('#rules').addEventListener('click', (e) => { if (e.target.id === 'rules') $('#rules').hidden = true; });
   $('#win-next').addEventListener('click', goHome);
+  // « niveau suivant » : retour sur la carte, où l'on voit Ulysse marcher jusqu'à la pierre suivante
+  $('#ld-next').addEventListener('click', () => { $('#level-done').hidden = true; goHome(); });
 
   $('#open-settings').addEventListener('click', () => { $('#settings').hidden = false; });
   $('#settings').addEventListener('click', (e) => { if (e.target.id === 'settings') $('#settings').hidden = true; });
@@ -672,6 +716,11 @@
 
   // exposé pour les tests
   window.Odysseum = { levelInfo, journey: J };
+
+  // appli installée depuis Chrome : toujours à jour (voir sw.js) ; inutile dans l'APK
+  if ('serviceWorker' in navigator && location.protocol === 'https:' && !window.Capacitor) {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* sans mise en cache, le jeu marche quand même */ });
+  }
 
   initWorld();
   applyTheme();
