@@ -589,6 +589,16 @@
     window.addEventListener('resize', () => { if (Z.host && Z.s > 1) zoomTo(1, 0, 0); });
   }
 
+  let playRun = null;
+  // « Arrêter » : si de l'XP a été gagnée depuis le début de la partie, petit bilan avant de rentrer
+  function stopPlay() {
+    const before = (playRun && playRun.xp) || {};
+    const gained = SKILLS.some((sk) => (C.store.xp[sk.id] || 0) > (before[sk.id] || 0));
+    if (!gained || !$('#level-done').hidden) { goHome(); return; }
+    clearTimeout(finishLevel.timer);
+    if (session) { session.stop(); session = null; }
+    showLevelDone({ summary: true, xpStart: before, steps: [{ id: playRun.id }] });
+  }
   function playStep(info, stepIndex) {
     if (session) session.stop();
     const step = info.steps[stepIndex];
@@ -596,6 +606,7 @@
     const variant = step.variant;
 
     if (worldReady) C.world.stop();
+    if (screens.play.hidden) playRun = { xp: Object.assign({}, C.store.xp), id: step.id }; // début de partie : bilan d'XP au bouton « Arrêter »
     show('play');
     $('#play').style.setProperty('--game', ACCENT[g.id]);
     $('#play').classList.remove('done');
@@ -883,7 +894,7 @@
     }
     const before = info.xpStart || {};
     const rows = SKILLS.filter((sk) => (C.store.xp[sk.id] || 0) > (before[sk.id] || 0));
-    $('#ld-title').textContent = info.daily ? game(info.steps[0].id).name : info.event != null || info.mega ? 'Méga ' + game(info.steps[0].id).name : info.boss ? 'Épreuve réussie' : 'Niveau ' + (info.L + 1);
+    $('#ld-title').textContent = info.summary ? 'Bilan de la partie' : info.daily ? game(info.steps[0].id).name : info.event != null || info.mega ? 'Méga ' + game(info.steps[0].id).name : info.boss ? 'Épreuve réussie' : 'Niveau ' + (info.L + 1);
     // trois grosses étoiles sous le titre : elles éclosent une à une (les manquantes restent grises)
     const ldStars = $('#ld-stars');
     const hasStars = info.stars != null && !info.assisted; // résolu d'office (outil de test) : ni étoiles ni chrono
@@ -1746,7 +1757,7 @@
     applyTheme();
   }));
   $('#go').addEventListener('click', () => startLevel(selected));
-  $('#back').addEventListener('click', goHome);
+  $('#back').addEventListener('click', stopPlay);
   $('#btn-undo').addEventListener('click', () => session && session.inst.undo());
   $('#btn-reset').addEventListener('click', () => session && session.inst.reset());
   $('#btn-hint').addEventListener('click', () => session && session.hint(false));
