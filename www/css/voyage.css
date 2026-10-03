@@ -366,3 +366,6 @@
 
 /* « ne plus afficher » retiré de l'écran de fin (le réglage « Bilan de fin de niveau » reste dans les réglages) */
 .ld-skip { display: none !important; }
+
+/* écran de jeu : un peu d'air au-dessus de l'en-tête */
+#play .topbar { margin-top: 18px !important; }
