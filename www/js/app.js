@@ -289,7 +289,12 @@
       card = document.createElement('button');
       card.id = 'lvcard'; card.className = 'lvcard';
       card.setAttribute('aria-label', 'Voyage : tous les niveaux');
-      card.addEventListener('click', openVoyage);
+      card.addEventListener('click', (e) => {
+        // petites flèches ‹ › autour du numéro : niveau précédent / suivant ; ailleurs : le voyage
+        const nav = e.target.closest('.lc-nav');
+        if (nav) { e.stopPropagation(); stepLevel(+nav.dataset.d); return; }
+        openVoyage();
+      });
       $('#home').appendChild(card);
     }
     const won = (J.stars && J.stars[selected]) || 0, past = selected < J.done;
@@ -299,7 +304,9 @@
     let isle = ''; // nom de l'île (la liste est définie plus bas : pas encore prête au tout premier affichage)
     try { isle = voyageName(Math.floor(selected / PER)); } catch (e) { /* premier rendu */ }
     card.innerHTML = '<span class="lc-isle">' + isle + '</span>' +
-      '<span class="lc-title">' + (info.boss ? 'Épreuve ' : 'Niveau ') + (selected + 1) + '</span>' +
+      '<span class="lc-title"><i class="lc-nav" data-d="-1"' + (selected <= 0 ? ' hidden' : '') + '>‹</i>' +
+      (info.boss ? 'Épreuve ' : 'Niveau ') + (selected + 1) +
+      '<i class="lc-nav" data-d="1"' + (selected >= J.done ? ' hidden' : '') + '>›</i></span>' +
       '<span class="lc-stars' + (past ? '' : ' todo') + '">' + starRow(past ? won : 0, 'lc-st') + '</span>' +
       '<span class="lc-games">' + ids.map((id) => '<i style="--c:' + ACCENT[id] + '"><svg viewBox="0 0 24 24">' + (ICON[id] || '') + '</svg></i>').join('') + '</span>';
   }

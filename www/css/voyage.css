@@ -306,3 +306,10 @@
 .lvcard .lc-games i { width: 24px !important; height: 24px !important; }
 .lvcard .lc-games svg { width: 14px !important; height: 14px !important; }
 .lvcard { justify-items: start !important; text-align: left !important; }
+
+/* flèches ‹ › autour du numéro de niveau, dans la carte */
+.lc-title { display: inline-flex; align-items: center; gap: 4px; }
+.lc-nav { display: inline-grid; place-items: center; width: 28px; height: 28px; margin: -4px 0; border-radius: 50%; font-style: normal;
+  font: 700 22px/1 var(--k-font, 'Fredoka', sans-serif); color: var(--k-ink, #3a3550); background: var(--k-well, #f1ecf8); cursor: pointer; }
+.lc-nav[hidden] { visibility: hidden; display: inline-grid; }
+.lc-nav:active { transform: scale(.9); }
