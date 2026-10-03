@@ -187,17 +187,25 @@
       const i = cellAt(e);
       if (i < 0) return;
       grid.setPointerCapture(e.pointerId);
-      down = { start: i, dragging: false, snapshot: state.slice() };
+      const snap = state.slice(); snap.cl = cleared.slice(); // l'annulation rend aussi les points effacés
+      down = { start: i, dragging: false, snapshot: snap, auto: blocked() };
     });
     grid.addEventListener('pointermove', (e) => {
       if (!down) return;
       const i = cellAt(e);
       if (i < 0) return;
+      // glisser depuis une case vide pose des points ; glisser depuis un point les efface (couronnes intactes)
+      const shown = (j) => state[j] === 1 || (state[j] === 0 && !cleared[j] && down.auto[j]);
+      const paint = (j) => {
+        if (down.erase) { if (shown(j)) { state[j] = 0; cleared[j] = 1; } }
+        else if (state[j] === 0) { state[j] = 1; cleared[j] = 0; }
+      };
       if (!down.dragging && i !== down.start) {
         down.dragging = true;
-        if (state[down.start] === 0) state[down.start] = 1;
+        down.erase = shown(down.start);
+        paint(down.start);
       }
-      if (down.dragging && state[i] === 0) { state[i] = 1; render(); }
+      if (down.dragging) { paint(i); render(); }
     });
     const up = () => {
       if (!down) return;
@@ -227,7 +235,7 @@
         const { queens } = conflicts();
         return 'Couronnes ' + queens + '/' + n;
       },
-      undo() { if (history.length) { state = history.pop(); render(); api.onChange(); } },
+      undo() { if (history.length) { state = history.pop(); if (state.cl) cleared = state.cl; render(); api.onChange(); } },
       reset() { history.push(state.slice()); state = new Uint8Array(n * n); render(); api.onChange(); },
       hint() {
         const N = n * n;
