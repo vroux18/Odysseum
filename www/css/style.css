@@ -1687,3 +1687,85 @@ svg.ic.ic-solid { --duo-o: 1; }
 .coffre-row.current { order: 2; }
 .coffre-left, .coffre-reveal { order: 3; }
 
+
+/* ==========================================================================
+   Indices v2 : l'astuce montre OÙ (anneau doré qui pulse) et POURQUOI
+   (surlignage doux des cases, nombres ou lignes qui justifient le coup).
+   Classes posées par app.js : .hint-where, .hint-why ; calque .hint-layer
+   pour les plateaux dessinés (canvas) et les zones de plusieurs cases.
+   ========================================================================== */
+:root { --hint: #d99a1e; --hint-glow: rgba(232, 168, 40, .55); --hint-soft: rgba(240, 186, 64, .26); --hint-ink: #7a5208; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --hint: #f3c552; --hint-glow: rgba(243, 197, 82, .5); --hint-soft: rgba(243, 197, 82, .2); --hint-ink: #ffe3a0; }
+}
+:root[data-theme="dark"] { --hint: #f3c552; --hint-glow: rgba(243, 197, 82, .5); --hint-soft: rgba(243, 197, 82, .2); --hint-ink: #ffe3a0; }
+
+/* le coup joué : anneau doré bien visible, qui pulse trois fois puis reste allumé */
+.hint-where {
+  position: relative; z-index: 4;
+  box-shadow: inset 0 0 0 3px var(--hint), 0 0 0 2px var(--hint), 0 0 16px 4px var(--hint-glow) !important;
+  animation: hint-pulse .85s ease-in-out 3 !important;
+}
+@keyframes hint-pulse {
+  0%, 100% { box-shadow: inset 0 0 0 3px var(--hint), 0 0 0 2px var(--hint), 0 0 16px 4px var(--hint-glow); }
+  50% { box-shadow: inset 0 0 0 4px var(--hint), 0 0 0 5px var(--hint), 0 0 28px 12px var(--hint-glow); }
+}
+/* la raison : voile doré léger et liseré, sans masquer la case */
+.hint-why {
+  position: relative; z-index: 3;
+  background-image: linear-gradient(var(--hint-soft), var(--hint-soft)) !important;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--hint) 70%, transparent) !important;
+  animation: hint-why-in .5s ease-out both !important;
+}
+@keyframes hint-why-in { from { box-shadow: inset 0 0 0 0 transparent; } }
+
+/* nombres et indices du bord (Pixels, Bataille, Pavés) : le chiffre lui-même s'illumine */
+.nono-row.hint-why, .nono-col.hint-why, .bn-rows > span.hint-why, .bn-cols > span.hint-why {
+  color: var(--hint-ink) !important; border-radius: 8px; font-weight: 600;
+}
+.paves .clue.hint-why { color: var(--hint-ink) !important; border-radius: 50%; }
+.paves .clue.hint-where { border-radius: 50%; }
+/* petits signes = / × des Astres */
+.astres .edge-mark.hint-why { z-index: 5; border-radius: 50%; background: var(--hint) !important; color: #fff; box-shadow: 0 0 0 3px var(--hint-soft), 0 0 12px 2px var(--hint-glow) !important; }
+.astres .edge-mark.hint-why svg { stroke: #fff !important; }
+
+/* Port : le bateau garde sa position (transform) ; la lueur suit sa silhouette */
+.rh-boat.hint-where, .rh-boat.hint-why { box-shadow: none !important; background-image: none !important; border-radius: 10px; }
+.rh-boat.hint-where { animation: hint-boat .85s ease-in-out 3 !important; filter: drop-shadow(0 0 2px var(--hint)) drop-shadow(0 0 8px var(--hint)); }
+.rh-boat.hint-why { animation: none !important; filter: drop-shadow(0 0 1.5px var(--hint)) drop-shadow(0 0 5px var(--hint-glow)); }
+.rh-exit.hint-why { background-image: linear-gradient(var(--hint-glow), var(--hint-glow)) !important; box-shadow: 0 0 12px 2px var(--hint-glow) !important; }
+@keyframes hint-boat {
+  0%, 100% { filter: drop-shadow(0 0 2px var(--hint)) drop-shadow(0 0 8px var(--hint)); }
+  50% { filter: drop-shadow(0 0 3px var(--hint)) drop-shadow(0 0 18px var(--hint)); }
+}
+
+/* Coffre : rangées d'essais et témoins qui servent la déduction */
+.coffre-row.hint-why { border-radius: 14px; }
+.coffre .slot.hint-where { border-radius: 50%; }
+
+/* calque posé sur un plateau dessiné (Flux, Serpent, Tuyaux) ou une zone (Pavés) */
+.hint-layer { position: absolute; pointer-events: none; z-index: 6; animation: none !important; }
+.hint-box { position: absolute; display: grid; place-items: center; box-sizing: border-box; border-radius: 22%; font: 600 13px/1 var(--font, sans-serif); color: var(--hint-ink); }
+.hint-box.round { border-radius: 50%; }
+.hint-box.hint-why { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--hint) 75%, transparent) !important; background: var(--hint-soft); }
+.hint-box.line.hint-why { box-shadow: none !important; background: var(--hint); border-radius: 4px; opacity: .9; }
+.hint-box.hint-where { background: color-mix(in srgb, var(--hint) 16%, transparent); }
+
+/* la bulle : posée sous la grille, elle ne la recouvre pas ; une pastille « ? » dorée en tête */
+.hint-tip { align-self: center; margin: 4px auto 2px; max-width: min(360px, calc(100% - 24px)); font-size: 14.5px; line-height: 1.45; text-wrap: pretty; }
+.hint-tip::before {
+  content: '?'; -webkit-mask: none !important; mask: none !important; display: grid; place-items: center;
+  width: 22px; height: 22px; border-radius: 50%; background: var(--hint); color: #fff; font: 700 13px/1 var(--font, sans-serif);
+  box-shadow: 0 0 0 3px var(--hint-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hint-where, .rh-boat.hint-where { animation: none !important; }
+}
+:root.a11y-motion .hint-where, :root.a11y-motion .rh-boat.hint-where { animation: none !important; }
+
+/* Coffre : le code révélé s'aligne sur les jetons des essais (même place que la colonne des témoins) */
+.coffre-reveal .slots { padding: 4px 10px; box-sizing: content-box; margin-right: 34px; }
+.coffre-reveal .slots .slot, .coffre-reveal .slots .chip { width: var(--slot, 30px); height: var(--slot, 30px); }
+.coffre-reveal .slots { gap: 6px; }
+
