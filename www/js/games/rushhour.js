@@ -287,6 +287,13 @@
       // le navire d'Ulysse : une ligne d'or le long du pont et l'œil peint à la proue
       s += '<path d="M' + (W * 0.62).toFixed(2) + ' ' + (W / 2).toFixed(2) + 'H' + (L - W * 0.9).toFixed(2) + '" stroke="' + GOLD + '" stroke-width="' + (W * 0.09).toFixed(2) + '" stroke-linecap="round"/>';
       s += '<circle cx="' + (L - W * 0.55).toFixed(2) + '" cy="' + (W / 2).toFixed(2) + '" r="' + (W * 0.1).toFixed(2) + '" fill="' + GOLD + '"/>';
+      // les rames, rangées le long de la coque : elles n'apparaissent qu'au départ (classe .sail)
+      const oh = (W * 0.34).toFixed(2), ow = (W * 0.075).toFixed(2);
+      [0.34, 0.5].forEach((t, k) => {
+        const x = (L * t).toFixed(2);
+        s += '<line class="rh-oar up" style="--o:' + k + '" x1="' + x + '" y1="0" x2="' + x + '" y2="-' + oh + '" stroke="#8a5d3b" stroke-width="' + ow + '" stroke-linecap="round"/>';
+        s += '<line class="rh-oar down" style="--o:' + k + '" x1="' + x + '" y1="' + W.toFixed(2) + '" x2="' + x + '" y2="' + (W + +oh).toFixed(2) + '" stroke="#8a5d3b" stroke-width="' + ow + '" stroke-linecap="round"/>';
+      });
     } else {
       s += '<circle cx="' + (L * 0.62).toFixed(2) + '" cy="' + (W / 2).toFixed(2) + '" r="' + (W * 0.11).toFixed(2) + '" fill="#fff" opacity=".55"/>';
     }
@@ -370,13 +377,101 @@
       root.classList.remove('still');
     }
 
-    // le navire quitte le port par la passe (purement visuel)
+    // --- fin de partie : le navire prend la mer (purement visuel, l'état est déjà gagné) ---
+    // Chronologie (ms après la victoire) :
+    //   0     le navire se ramasse (léger recul), les rames sortent
+    //   180   il s'élance, accélère en s'allongeant ; sillage d'écume et ronds dans l'eau
+    //   ~250  la vague passe sous les barques, qui tanguent l'une après l'autre
+    //   300   une lumière dorée glisse sur le quai
+    //   600   les feux de la passe s'allument, l'eau scintille à la sortie
+    //   ~1100 le navire a franchi la passe et s'efface
+    //   900-2200  deux mouettes s'envolent, l'écume se dissipe (arrière-plan apaisé)
+    const SAIL_AT = 180;
+    const timers = [];
+    const later = (fn, ms) => { timers.push(setTimeout(fn, ms)); };
+    const calm = () => document.documentElement.classList.contains('a11y-motion') ||
+      !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    let fxUnder = null, fxOver = null;
+    function clearFx() {
+      if (fxUnder) fxUnder.remove();
+      if (fxOver) fxOver.remove();
+      fxUnder = fxOver = null;
+    }
+    function fx(layer, cls, x, y, extra) {
+      const e = document.createElement('i');
+      e.className = cls;
+      e.style.left = x.toFixed(1) + 'px'; e.style.top = y.toFixed(1) + 'px';
+      if (extra) Object.keys(extra).forEach((k) => e.style.setProperty(k, extra[k]));
+      layer.appendChild(e);
+      return e;
+    }
     function sailAway(now) {
       const el = els[0];
-      const [, y] = xy(0, GOAL);
       el.classList.add('sail');
+      if (calm()) return; // mouvement réduit : le navire s'efface simplement sur place
+      const [, y] = xy(0, GOAL);
       const go = () => { el.style.transform = 'translate3d(' + (size + cell * 0.6).toFixed(2) + 'px,' + y.toFixed(2) + 'px,0)'; };
-      if (now) go(); else setTimeout(go, 260);
+      if (now) { clearFx(); go(); return; }
+      later(go, SAIL_AT);
+      celebrate();
+    }
+    function celebrate() {
+      clearFx();
+      const [x0, y0] = xy(0, GOAL);
+      const W = cell - 2 * gapM, L = 2 * cell - 2 * gapM;
+      const rowY = pad + EXIT * cell, midY = y0 + W / 2;
+      const travel = size + cell * 0.6 - x0;
+      fxUnder = document.createElement('div'); fxUnder.className = 'rh-fx';
+      fxOver = document.createElement('div'); fxOver.className = 'rh-fx over';
+      root.insertBefore(fxUnder, els[0]); // sous les bateaux, sur l'eau
+      root.appendChild(fxOver);
+
+      // le sillage : il s'étire derrière le navire, au même rythme que lui
+      const wake = fx(fxUnder, 'rh-wake', x0, rowY);
+      wake.style.width = travel.toFixed(1) + 'px';
+      wake.style.height = cell.toFixed(1) + 'px';
+      later(() => wake.classList.add('go'), SAIL_AT);
+
+      // ronds dans l'eau : à la poupe, puis au bout des rames de part et d'autre
+      // (f = part du trajet parcourue à cet instant, pour suivre l'accélération)
+      [[120, 0, 0], [330, 0.1, -1], [380, 0.12, 1], [560, 0.3, 0], [700, 0.45, -1], [740, 0.48, 1], [880, 0.7, 0]].forEach(([t, f, side]) => {
+        const rx = x0 + travel * f + (side ? L * 0.42 : W * 0.1);
+        const ry = midY + side * W * 0.78;
+        later(() => fx(fxUnder, 'rh-ripple' + (side ? ' small' : ''), rx, ry), t);
+      });
+
+      // la vague du départ fait tanguer les barques, de gauche à droite
+      for (let i = 1; i < B; i++) {
+        const b = boats[i];
+        const cx = (b.hor ? cur[i] + b.len / 2 : b.line + 0.5);
+        const cy = (b.hor ? b.line + 0.5 : cur[i] + b.len / 2);
+        const near = Math.abs(cy - (EXIT + 0.5));
+        const svg = els[i].firstElementChild;
+        if (!svg) continue;
+        svg.style.setProperty('--bd', Math.round(220 + cx * 95 + near * 40) + 'ms');
+        svg.style.setProperty('--amp', (1 / (1 + near * 0.45)).toFixed(2));
+        svg.style.setProperty('--dir', b.hor ? 1 : -1);
+      }
+      root.classList.add('wave');
+
+      // lumière dorée qui balaie le quai
+      fx(fxOver, 'rh-shine', 0, 0);
+
+      // l'eau scintille dans la passe
+      const gx = size - pad * 0.55, gy = rowY + cell / 2;
+      [[0, -0.32, 0], [0.5, 0.22, 1], [-0.45, 0.05, 2], [0.15, -0.05, 3], [-0.2, 0.36, 4]].forEach(([dx, dy, k]) => {
+        fx(fxOver, 'rh-glint', gx + dx * pad * 1.4, gy + dy * cell, { '--g': k });
+      });
+
+      // deux mouettes s'envolent au-dessus de la passe
+      const gull = '<svg viewBox="0 0 14 6"><path d="M1 4.6Q4 .6 7 3.6Q10 .6 13 4.6"/></svg>';
+      const g1 = fx(fxOver, 'rh-gull', size - pad - cell * 0.9, rowY - cell * 0.15, { '--s': 1 });
+      const g2 = fx(fxOver, 'rh-gull', size - pad - cell * 0.35, rowY + cell * 0.35, { '--s': 0.8, '--gd': '160ms' });
+      g1.innerHTML = gull; g2.innerHTML = gull;
+      g1.style.width = g2.style.width = (cell * 0.36).toFixed(1) + 'px';
+
+      // une fois tout apaisé, on retire les effets
+      later(() => { root.classList.remove('wave'); clearFx(); }, 2600);
     }
 
     function checkWin() {
@@ -517,7 +612,7 @@
         checkWin();
       },
       redraw: resize,
-      destroy() { window.removeEventListener('resize', resize); }
+      destroy() { window.removeEventListener('resize', resize); timers.forEach(clearTimeout); }
     };
   }
 
