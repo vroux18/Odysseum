@@ -363,3 +363,6 @@
 
 /* Pavés : pendant le tracé, l'aperçu est déjà un rectangle de couleur (un peu transparent, liseré blanc) */
 .paves .rect.preview { opacity: .78; box-shadow: inset 0 0 0 2.5px rgba(255, 255, 255, .85), 0 4px 10px rgba(0, 0, 0, .18) !important; border-radius: 12px; }
+
+/* « ne plus afficher » retiré de l'écran de fin (le réglage « Bilan de fin de niveau » reste dans les réglages) */
+.ld-skip { display: none !important; }
