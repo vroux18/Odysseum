@@ -229,6 +229,43 @@
     // la bonne orientation d'une pièce (les pièces symétriques ont plusieurs bonnes positions)
     const correct = (i) => cur[i] === puzzle.solution[i];
 
+    // Déductions sur les orientations, comme le ferait un joueur : une sortie ne donne jamais dans le vide,
+    // une pièce se raccorde à une voisine qui pointe vers elle, ne vise pas une voisine qui lui tourne le dos,
+    // et deux bouts ne se branchent pas l'un sur l'autre. fixedAt : ordre dans lequel chaque pièce se fixe.
+    function deduce() {
+      const N = n * n, shapes = puzzle.solution;
+      const deg = (m) => [1, 2, 4, 8].filter((b) => m & b).length;
+      const cand = shapes.map((m) => { const out = []; let x = m; for (let t = 0; t < 4; t++) { if (!out.includes(x)) out.push(x); x = rot(x); } return out; });
+      const fixedAt = new Int32Array(N).fill(-1);
+      const acc = Array.from({ length: N }, () => ({ borders: new Set(), open: new Set(), closed: new Set(), leaf: new Set() }));
+      const side = (j, bit) => { let a = 0, b = 0; cand[j].forEach((m) => { if (m & bit) a++; else b++; }); return b === 0 ? 1 : a === 0 ? 0 : -1; };
+      let step = 0;
+      for (let i = 0; i < N; i++) if (cand[i].length === 1) fixedAt[i] = step++;
+      let changed = true, guard = 0;
+      while (changed && guard++ < 200) {
+        changed = false;
+        for (let i = 0; i < N; i++) {
+          if (cand[i].length === 1) continue;
+          const used = acc[i];
+          const keep = cand[i].filter((m) => DIRS.every(([bit, dr, dc, opp]) => {
+            const j = neighbor(n, wrap, i, dr, dc);
+            if (j < 0) { if (m & bit) { used.borders.add(bit); return false; } return true; }
+            const s = side(j, opp);
+            if (s === 1 && !(m & bit)) { used.open.add(j); return false; }
+            if (s === 0 && (m & bit)) { used.closed.add(j); return false; }
+            if ((m & bit) && N > 2 && deg(shapes[i]) === 1 && deg(shapes[j]) === 1) { used.leaf.add(j); return false; }
+            return true;
+          }));
+          if (keep.length && keep.length < cand[i].length) {
+            cand[i] = keep; changed = true;
+            if (keep.length === 1) fixedAt[i] = step++;
+          }
+        }
+      }
+      const reasons = acc.map((a) => ({ borders: [...a.borders], open: [...a.open], closed: [...a.closed], leaf: [...a.leaf] }));
+      return { fixedAt, reasons };
+    }
+
     return {
       status() { return ''; },
       undo() { if (history.length) { cur = history.pop(); draw(); api.onChange(); } },
@@ -238,16 +275,43 @@
         draw(); api.onChange();
       },
       hint() {
-        for (let i = 0; i < n * n; i++) {
-          if (correct(i)) continue;
-          history.push(cur.slice());
-          cur[i] = puzzle.solution[i];
-          spin(i);
-          if (!raf) raf = requestAnimationFrame(animate);
-          check();
-          return 'Tournée ainsi, cette pièce se raccorde à ses voisines sans laisser d\'extrémité ouverte vers un bord.';
+        if (won) return false;
+        const { fixedAt, reasons } = deduce();
+        const wrongs = [];
+        for (let i = 0; i < n * n; i++) if (!correct(i)) wrongs.push(i);
+        if (!wrongs.length) return false;
+        // la pièce fausse qui se déduit le plus tôt, sinon un coup de pouce
+        const ded = wrongs.filter((i) => fixedAt[i] >= 0).sort((a, b) => fixedAt[a] - fixedAt[b]);
+        const i = ded.length ? ded[0] : wrongs[0];
+        history.push(cur.slice());
+        cur[i] = puzzle.solution[i];
+        spin(i);
+        if (!raf) raf = requestAnimationFrame(animate);
+        check();
+        // surlignage : la pièce, les bords et les voisines qui imposent son orientation
+        const x0 = (k) => pad + (k % n) * cell, y0 = (k) => pad + Math.floor(k / n) * cell;
+        const boxes = [{ x: x0(i) + 2, y: y0(i) + 2, w: cell - 4, h: cell - 4, kind: 'where' }];
+        let text;
+        if (ded.length) {
+          const rs = reasons[i], parts = [];
+          const t = Math.max(4, cell * 0.08);
+          rs.borders.forEach((bit) => {
+            const x = x0(i), y = y0(i);
+            boxes.push(bit === 1 ? { x, y: y - t / 2, w: cell, h: t } : bit === 4 ? { x, y: y + cell - t / 2, w: cell, h: t }
+              : bit === 8 ? { x: x - t / 2, y, w: t, h: cell } : { x: x + cell - t / 2, y, w: t, h: cell });
+            boxes[boxes.length - 1].line = true;
+          });
+          rs.open.concat(rs.closed, rs.leaf).forEach((j) => boxes.push({ x: x0(j) + 3, y: y0(j) + 3, w: cell - 6, h: cell - 6 }));
+          if (rs.borders.length) parts.push('ne peut rien ouvrir vers le bord (trait doré)');
+          if (rs.open.length) parts.push('doit se brancher sur ' + (rs.open.length > 1 ? 'les voisines qui pointent' : 'la voisine qui pointe') + ' vers elle');
+          if (rs.closed.length) parts.push('ne peut pas viser ' + (rs.closed.length > 1 ? 'des voisines qui lui tournent' : 'une voisine qui lui tourne') + ' le dos');
+          if (rs.leaf.length) parts.push('ne doit pas se brancher sur un autre bout de tuyau (les deux resteraient isolés du réseau)');
+          const list = parts.length > 1 ? parts.slice(0, -1).join(', ') + ' et ' + parts[parts.length - 1] : parts[0] || 'n\'a qu\'une position possible';
+          text = 'La pièce dorée ' + list + '. Une seule orientation convient : la voici.';
+        } else {
+          text = 'Coup de pouce : la pièce dorée se tourne ainsi. Aucune déduction simple ici ; pars des bords et des coins, leurs pièces ont peu de choix.';
         }
-        return false;
+        return Object.assign({ text }, C.hintBoxes(canvas, boxes));
       },
       solve() { history.push(cur.slice()); cur = puzzle.solution.slice(); if (!raf) raf = requestAnimationFrame(animate); check(); },
       redraw: draw,

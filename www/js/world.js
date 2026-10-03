@@ -254,6 +254,7 @@
     if (sea.material.userData.deep) {
       setLin(sea.material.userData.deep.value, p.sea[0]);
       setLin(sea.material.userData.shallow.value, p.sea[1]);
+      sea.material.userData.spark.value = 1 - p.night * 0.85;
     }
     setLin(hemi.color, p.hemi[0]); setLin(hemi.groundColor, p.hemi[1]);
     // avec le ciel HDRI, l'ambiance vient surtout de l'environnement : l'hémisphère complète
@@ -291,6 +292,7 @@
     U.deep = { value: lin('#5fa9bf') };
     U.shallow = { value: lin('#9ee0d6') };
     U.isl = { value: [0, 1, 2, 3, 4, 5].map(() => new THREE.Vector4(0, 0, -99, 0)) };
+    U.spark = { value: 1 };
     seaMat.onBeforeCompile = (sh) => {
       sh.uniforms.uTime = U.time; sh.uniforms.deep = U.deep; sh.uniforms.shallow = U.shallow; sh.uniforms.isl = U.isl;
       sh.vertexShader = 'uniform float uTime;\nvarying vec3 vW;\n' + sh.vertexShader
@@ -301,20 +303,43 @@
           'vec3 objectNormal = normalize(vec3(-cos(a1) * 0.0225, 1.0, sin(a2) * 0.024));'
         ].join('\n'))
         .replace('#include <begin_vertex>', 'vec3 transformed = vec3(position); transformed.y += wv; vW = wp0;');
-      sh.fragmentShader = 'uniform float uTime;\nuniform vec3 deep;\nuniform vec3 shallow;\nuniform vec4 isl[6];\nvarying vec3 vW;\n' + sh.fragmentShader
+      sh.uniforms.uSpark = U.spark;
+      sh.fragmentShader = 'uniform float uTime;\nuniform float uSpark;\nuniform vec3 deep;\nuniform vec3 shallow;\nuniform vec4 isl[6];\nvarying vec3 vW;\n' + sh.fragmentShader
         .replace('vec4 diffuseColor = vec4( diffuse, opacity );', [
           'float near = 99.0;',
           'for (int i = 0; i < 6; i++) { vec4 s = isl[i]; near = min(near, length(vW.xz - s.xy) - s.z + (1.0 - s.w) * 2.5); }',
           'float sh = 1.0 - smoothstep(0.0, 3.4, near);',
           'vec3 base = mix(deep, shallow, sh * sh);',
-          'float n = sin(vW.x * 3.1 + uTime * 1.3) * sin(vW.z * 2.7 - uTime * 1.1);',
-          'float foam = smoothstep(0.32, 0.0, abs(near - 0.12 - 0.08 * sin(uTime * 0.8 + n))) * (0.65 + 0.35 * n);',
-          'float foam2 = smoothstep(0.1, 0.0, abs(near - 0.75 - 0.25 * sin(uTime * 0.6 + n * 0.5))) * 0.3 * (0.5 + 0.5 * n);',
-          'base = mix(base, vec3(0.95), clamp(foam + foam2, 0.0, 1.0));',
+          // profondeur : le bleu se fonce au large
+          'base = mix(base, deep * vec3(0.72, 0.8, 0.9), smoothstep(5.0, 16.0, near) * 0.7);',
+          'vec2 p = vW.xz; float t = uTime;',
+          // caustiques dans le lagon
+          'float cA = sin(p.x * 3.7 + sin(p.y * 2.3 + t * 0.8) * 1.6 + t * 0.6);',
+          'float cB = sin(p.y * 4.1 + sin(p.x * 2.7 - t * 0.7) * 1.6 - t * 0.5);',
+          'float caus = pow(1.0 - abs(cA * cB), 7.0);',
+          'base += vec3(0.75, 0.95, 0.9) * caus * 0.14 * sh;',
+          'float n = sin(p.x * 3.1 + t * 1.3) * sin(p.y * 2.7 - t * 1.1);',
+          'float foam = smoothstep(0.32, 0.0, abs(near - 0.12 - 0.08 * sin(t * 0.8 + n))) * (0.65 + 0.35 * n);',
+          'float foam2 = smoothstep(0.1, 0.0, abs(near - 0.75 - 0.25 * sin(t * 0.6 + n * 0.5))) * 0.3 * (0.5 + 0.5 * n);',
+          // moutons au large : petites crêtes d'écume qui naissent et s'effacent
+          'float wc = sin(p.x * 0.9 + t * 0.4) * sin(p.y * 1.13 - t * 0.33) * sin((p.x + p.y) * 0.71 + t * 0.52);',
+          'float caps = smoothstep(0.72, 0.86, wc) * smoothstep(5.0, 10.0, near) * smoothstep(0.2, 1.0, sin(p.x * 7.0 + p.y * 5.0));',
+          'base = mix(base, vec3(0.95), clamp(foam + foam2 + caps * 0.3, 0.0, 1.0));',
+          // paillettes de soleil
+          'vec2 g2 = p + vec2(sin(p.y * 0.73 + t * 0.3), cos(p.x * 0.61 - t * 0.25)) * 1.7;',
+          'float gl = pow(max(0.0, sin(g2.x * 13.0 + t * 2.1) * sin(g2.y * 11.0 - t * 1.7)), 30.0) * smoothstep(0.55, 0.95, sin(p.x * 0.45 + p.y * 0.31 + t * 0.2) * 0.5 + 0.5);',
+          'base += vec3(1.0, 0.97, 0.88) * gl * 1.3 * uSpark;',
           'vec4 diffuseColor = vec4(base, opacity);'
         ].join('\n'))
-        .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n' +
-          'normal = normalize(normal + vec3(sin(vW.x * 1.7 + vW.z * 0.6 + uTime) * 0.05, 0.0, cos(vW.z * 1.9 - vW.x * 0.4 + uTime * 0.8) * 0.05));');
+        .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n' + [
+          // vagues : quatre trains de houle croisés (normales perturbées, sans texture)
+          'vec2 q = vW.xz; float tt = uTime; vec2 gw = vec2(0.0);',
+          'gw += vec2(0.8, 0.6) * cos(dot(q, vec2(0.8, 0.6)) * 2.1 + tt * 1.3) * 0.07;',
+          'gw += vec2(-0.5, 0.85) * cos(dot(q, vec2(-0.5, 0.85)) * 3.3 + tt * 1.7) * 0.05;',
+          'gw += vec2(0.95, -0.3) * cos(dot(q, vec2(0.95, -0.3)) * 5.7 + tt * 2.3) * 0.035;',
+          'gw += vec2(-0.2, -1.0) * cos(dot(q, vec2(-0.2, -1.0)) * 9.1 + tt * 3.1) * 0.022;',
+          'normal = normalize(normal + (viewMatrix * vec4(gw.x, 0.0, gw.y, 0.0)).xyz);'
+        ].join('\n'));
     };
     sea = new THREE.Mesh(geo, seaMat);
     sea.receiveShadow = true;
@@ -344,12 +369,13 @@
     shape.moveTo(0, 0); shape.lineTo(0.5, 0.12); shape.lineTo(0.08, 0.16); shape.lineTo(0, 0);
     const wingGeo = new THREE.ShapeGeometry(shape);
     const mat = new THREE.MeshBasicMaterial({ color: lin('#8a9399'), side: THREE.DoubleSide });
-    for (let i = 0; i < 4; i++) {
+    const gull = new THREE.MeshBasicMaterial({ color: lin('#e9ecec'), side: THREE.DoubleSide });
+    for (let i = 0; i < 7; i++) { // goélands et martinets
       const b = new THREE.Group();
-      const l = new THREE.Mesh(wingGeo, mat), r = new THREE.Mesh(wingGeo, mat);
+      const l = new THREE.Mesh(wingGeo, i % 2 ? gull : mat), r = new THREE.Mesh(wingGeo, i % 2 ? gull : mat);
       r.scale.x = -1;
       b.add(l, r);
-      b.userData = { l, r, a: i * 1.6, rad: 9 + i * 2.5, y: 6 + i * 0.7, speed: 0.13 + i * 0.03, phase: i };
+      b.userData = { l, r, a: i * 1.6, rad: 7 + (i % 4) * 2.5 + i * 0.6, y: 3.2 + (i % 3) * 1.6, speed: (0.11 + i * 0.025) * (i % 2 ? -1 : 1), phase: i };
       scene.add(b);
       birds.push(b);
     }
@@ -372,6 +398,88 @@
     g.scale.setScalar(1.2);
     scene.add(g);
     boat = g;
+  }
+
+  // la mer vivante : dauphins qui sautent de temps en temps, barques de pêche qui dérivent
+  const sea2 = { dolphins: [], boats: [], splash: [], next: 5, jump: null };
+  function nearIsland(x, z, k) {
+    return chapters.some((ch) => ch && Math.hypot(x - ch.group.position.x, z - ch.group.position.z) < ch.r * (k || 1.3));
+  }
+  function makeSeaLife() {
+    const parts = [];
+    const body = new THREE.SphereGeometry(1, 14, 10);
+    parts.push({ geo: body, color: '#6f8796', m: M4(0, 0, 0, 0, 0.11, 0.1, 0.46) });
+    parts.push({ geo: body, color: '#dfe5e6', m: M4(0, -0.035, 0.02, 0, 0.085, 0.07, 0.38) });
+    parts.push({ geo: new THREE.ConeGeometry(0.05, 0.14, 6), color: '#5f7786', m: M4(0, 0.13, -0.05, 0, 0.5, 1, 1.4, -0.5) });
+    parts.push({ geo: new THREE.BoxGeometry(0.26, 0.015, 0.08), color: '#5f7786', m: M4(0, 0, -0.47) });
+    parts.push({ geo: new THREE.ConeGeometry(0.03, 0.12, 6), color: '#6f8796', m: M4(0, -0.01, 0.5, 0, 1, 1, 1, Math.PI / 2) });
+    const geo = mergeParts(parts);
+    const mat = toonMat({ color: '#ffffff', vertexColors: true, roughness: 0.45 });
+    for (let k = 0; k < 2; k++) {
+      const d = new THREE.Mesh(geo, mat);
+      d.visible = false;
+      d.castShadow = true;
+      scene.add(d);
+      sea2.dolphins.push(d);
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.6, 0.75, 32),
+        new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false }));
+      ring.rotation.x = -Math.PI / 2;
+      scene.add(ring);
+      sea2.splash.push(ring);
+    }
+    ['#3a6ea8', '#b4493a', '#2f8a80'].forEach((hull, i) => {
+      const b = fishingBoat(hull);
+      b.scale.setScalar(1.15);
+      b.userData = { a: i * 2.1, r: 9 + i * 2.2, speed: 0.012 + i * 0.004, keepGeo: true };
+      scene.add(b);
+      sea2.boats.push(b);
+    });
+  }
+  function seaLife(dt, t, focus) {
+    if (!sea2.dolphins.length) return;
+    sea2.boats.forEach((b, i) => {
+      const u = b.userData;
+      if (!calm) u.a += dt * u.speed;
+      const x = focus.x + Math.cos(u.a) * u.r, z = focus.z + Math.sin(u.a) * u.r * 0.8;
+      b.position.set(x, Math.sin(t * 1.2 + i) * 0.04 - 0.02, z);
+      b.rotation.y = Math.atan2(-Math.sin(u.a), Math.cos(u.a) * 0.8) + Math.PI;
+      b.rotation.z = Math.sin(t * 1.0 + i * 2) * 0.06;
+      b.visible = !nearIsland(x, z, 1.35);
+    });
+    // un saut de dauphins de temps en temps, dans le champ de la caméra
+    sea2.next -= dt;
+    if (!sea2.jump && sea2.next <= 0 && !calm) {
+      sea2.next = 7 + Math.random() * 9;
+      for (let tries = 0; tries < 12; tries++) {
+        const a = cam.theta + Math.PI + (Math.random() - 0.5) * 1.6; // devant la caméra
+        const d = 4 + Math.random() * 6;
+        const x = cam.tx + Math.cos(a) * d, z = cam.tz + Math.sin(a) * d;
+        if (nearIsland(x, z, 1.3)) continue;
+        const h = Math.random() * Math.PI * 2;
+        sea2.jump = { x, z, h, t: 0 };
+        break;
+      }
+    }
+    sea2.splash.forEach((r) => { r.material.opacity = Math.max(0, r.material.opacity - dt * 0.8); r.scale.multiplyScalar(1 + dt * 0.8); });
+    const J = sea2.jump;
+    if (!J) return;
+    J.t += dt;
+    sea2.dolphins.forEach((d, i) => {
+      const tt = (J.t - i * 0.32) / 1.25;
+      if (tt < 0 || tt > 1) { d.visible = false; return; }
+      d.visible = true;
+      const dx = Math.sin(J.h), dz = Math.cos(J.h);
+      const off = i * 0.5;
+      const s = (tt - 0.5) * 2.4;
+      d.position.set(J.x + dx * s + dz * off, Math.sin(Math.PI * tt) * 0.85 - 0.12, J.z + dz * s - dx * off);
+      d.rotation.set(0, J.h, 0);
+      d.rotateX(-Math.cos(Math.PI * tt) * 0.9);
+      if ((tt > 0.04 && tt < 0.08) || (tt > 0.93 && tt < 0.97)) { // éclaboussures
+        const r = sea2.splash[i];
+        if (r.material.opacity < 0.2) { r.position.set(d.position.x, 0.08, d.position.z); r.scale.setScalar(0.4); r.material.opacity = 0.8; }
+      }
+    });
+    if (J.t > 2) sea2.jump = null;
   }
 
   function makeMotes() {
@@ -471,51 +579,57 @@
   }
 
   // ------------------------------------------------------------------
-  // Le sentier : des niveaux répartis sur toute l'île, reliés sans se croiser
+  // Le sentier : UNE route continue qui serpente sur l'île, de la plage d'arrivée au
+  // portique de sortie, puis traverse la mer sur un ponton de bois jusqu'à l'île suivante.
+  // Les niveaux sont posés à intervalles réguliers le long de cette ligne (ordre = ordre des niveaux).
   // ------------------------------------------------------------------
-  function layoutNodes(ch, entry, exit) {
-    const rng = ch.rng, R = ch.r;
-    const first = entry.clone().multiplyScalar(0.8);
-    const last = exit.clone().multiplyScalar(0.72);
-    // échantillonnage « au plus loin » pour bien couvrir l'île
-    const cands = [];
-    while (cands.length < 500) {
-      const x = (rng() * 2 - 1) * R * 0.72, z = (rng() * 2 - 1) * R * 0.72;
-      if (Math.hypot(x, z) < R * 0.72) cands.push(new THREE.Vector3(x, 0, z));
+  const LV0 = 0.1, LV1 = 0.8, GATE_F = 0.9, PATH_W = 0.27;
+  const levelF = (k) => LV0 + (LV1 - LV0) * k / (PER - 1);
+  function layoutPath(ch, entry, exit) {
+    const R = ch.r, rng = ch.rng;
+    const a = entry.clone().setLength(R * 0.98), b = exit.clone().setLength(R * 0.98);
+    const dir = b.clone().sub(a);
+    const len = dir.length();
+    dir.normalize();
+    const side = new THREE.Vector3(-dir.z, 0, dir.x);
+    const waves = rng() < 0.5 ? 1 : 1.5, amp = R * (0.42 + rng() * 0.1), ph = rng() < 0.5 ? 0 : Math.PI;
+    const pts = [a];
+    const n = 9;
+    for (let i = 1; i <= n; i++) {
+      const t = i / (n + 1);
+      const p = a.clone().addScaledVector(dir, len * t).addScaledVector(side, Math.sin(Math.PI * 2 * waves * t + ph) * amp * Math.sin(Math.PI * t));
+      const r = Math.hypot(p.x, p.z);
+      if (r > R * 0.76) p.multiplyScalar(R * 0.76 / r);
+      pts.push(p);
     }
-    const chosen = [first, last];
-    while (chosen.length < PER) {
-      let best = null, bd = -1;
-      cands.forEach((p) => {
-        const d = Math.min(...chosen.map((q) => p.distanceTo(q)));
-        if (d > bd) { bd = d; best = p; }
-      });
-      chosen.push(best);
-    }
-    // ordre : plus proche voisin depuis l'entrée, puis amélioration 2-opt (extrémités fixes)
-    const mids = chosen.slice(2);
-    const order = [first];
-    let cur = first;
-    while (mids.length) {
-      let bi = 0;
-      mids.forEach((p, i) => { if (p.distanceTo(cur) < mids[bi].distanceTo(cur)) bi = i; });
-      cur = mids.splice(bi, 1)[0];
-      order.push(cur);
-    }
-    order.push(last);
-    const len = (a) => a.reduce((s, p, i) => (i ? s + p.distanceTo(a[i - 1]) : 0), 0);
-    let improved = true;
-    while (improved) {
-      improved = false;
-      for (let i = 1; i < order.length - 2; i++) {
-        for (let j = i + 1; j < order.length - 1; j++) {
-          const cand = order.slice(0, i).concat(order.slice(i, j + 1).reverse(), order.slice(j + 1));
-          if (len(cand) < len(order) - 1e-6) { order.splice(0, order.length, ...cand); improved = true; }
-        }
-      }
-    }
-    return order;
+    pts.push(b);
+    const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal');
+    const M = 260;
+    const samp = curve.getSpacedPoints(M);
+    samp.forEach((p) => { p.y = 0; });
+    const cum = [0];
+    for (let i = 1; i < samp.length; i++) cum.push(cum[i - 1] + samp[i].distanceTo(samp[i - 1]));
+    ch.path = { samp, cum, len: cum[cum.length - 1] };
+    ch.pathPts = samp.filter((p, i) => i % 3 === 0 || i === samp.length - 1);
   }
+  // point du sentier à la fraction f (0 → plage d'arrivée, 1 → plage de départ), repère de l'île
+  function pathAt(ch, f) {
+    const P = ch.path, s = Math.max(0, Math.min(1, f)) * P.len;
+    let lo = 0, hi = P.cum.length - 1;
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (P.cum[m] < s) lo = m; else hi = m; }
+    const k = (s - P.cum[lo]) / Math.max(1e-6, P.cum[hi] - P.cum[lo]);
+    return P.samp[lo].clone().lerp(P.samp[hi], k);
+  }
+  const pathWorld = (c, f) => pathAt(chapters[c], f).add(chapters[c].group.position).setY(0);
+  // points de passage le long du sentier entre deux fractions (bornes exclues)
+  function curveWps(c, f0, f1) {
+    const ch = chapters[c], out = [];
+    const n = Math.floor(Math.abs(f1 - f0) * ch.path.len / 0.42);
+    for (let i = 1; i <= n; i++) out.push({ c, at: pathWorld(c, f0 + (f1 - f0) * i / (n + 1)) });
+    return out;
+  }
+  // fraction du sentier → « temps » du voyage, en niveaux (k-ième niveau = c·PER + k)
+  const pathLevel = (c, f) => c * PER + (f - LV0) / (LV1 - LV0) * (PER - 1);
 
   function distToPath(ch, x, z) {
     let best = Infinity;
@@ -527,6 +641,141 @@
       best = Math.min(best, Math.hypot(a.x + abx * t - x, a.z + abz * t - z));
     }
     return best;
+  }
+
+  // dallage du sentier : pierres claires irrégulières, joints doux, bords fondus (alpha)
+  let pathTex = null;
+  function pathTexture() {
+    if (pathTex) return pathTex;
+    const W = 128, H = 256, r = C.makeRng('dallage');
+    pathTex = canvasTexture(W, H, (g) => {
+      g.fillStyle = '#d9cdb4'; g.fillRect(0, 0, W, H);
+      let y = 0;
+      while (y < H) {
+        const h = 26 + r() * 22;
+        let x = -r() * 30;
+        while (x < W) {
+          const w = 30 + r() * 34;
+          const v = 228 + Math.floor(r() * 22);
+          g.fillStyle = 'rgb(' + v + ',' + (v - 8) + ',' + (v - 24) + ')';
+          const rr = 7;
+          g.beginPath();
+          g.moveTo(x + rr + 2, y + 2); g.arcTo(x + w - 2, y + 2, x + w - 2, y + h - 2, rr); g.arcTo(x + w - 2, y + h - 2, x + 2, y + h - 2, rr);
+          g.arcTo(x + 2, y + h - 2, x + 2, y + 2, rr); g.arcTo(x + 2, y + 2, x + w - 2, y + 2, rr); g.fill();
+          for (let k = 0; k < 6; k++) { g.fillStyle = 'rgba(120,100,70,' + (0.04 + r() * 0.05) + ')'; g.fillRect(x + r() * w, y + r() * h, 2 + r() * 3, 2 + r() * 3); }
+          x += w;
+        }
+        y += h;
+      }
+      // bords fondus dans l'herbe
+      g.globalCompositeOperation = 'destination-in';
+      const grd = g.createLinearGradient(0, 0, W, 0);
+      grd.addColorStop(0, 'rgba(0,0,0,0)'); grd.addColorStop(0.16, 'rgba(0,0,0,1)');
+      grd.addColorStop(0.84, 'rgba(0,0,0,1)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = grd; g.fillRect(0, 0, W, H);
+    });
+    pathTex.wrapS = THREE.ClampToEdgeWrapping; pathTex.wrapT = THREE.RepeatWrapping;
+    return pathTex;
+  }
+  // progression du voyage le long du sentier (niveaux), partagée par tous les rubans
+  const pathU = { value: 0 };
+  function pathMaterial() {
+    const mat = toonMat({ color: '#ffffff', map: pathTexture(), transparent: true, depthWrite: false, roughness: 0.95,
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    mat.onBeforeCompile = (sh) => {
+      sh.uniforms.uDone = pathU;
+      sh.vertexShader = 'attribute float along;\nvarying float vAlong;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvAlong = along;');
+      sh.fragmentShader = 'uniform float uDone;\nvarying float vAlong;\n' + sh.fragmentShader
+        .replace('#include <map_fragment>', [
+          '#include <map_fragment>',
+          // derrière Ulysse : dallage doré et lumineux ; devant : pierre grise, pointillés estompés
+          'float lit = 1.0 - smoothstep(uDone - 0.05, uDone + 0.3, vAlong);',
+          'diffuseColor.rgb *= mix(vec3(0.8, 0.82, 0.84), vec3(1.1, 0.98, 0.74), lit);',
+          'float dash = smoothstep(0.38, 0.46, fract(vAlong * 1.6)) * (1.0 - smoothstep(0.88, 0.96, fract(vAlong * 1.6)));',
+          'diffuseColor.a *= mix(0.62 * mix(0.35, 1.0, dash), 1.0, lit);'
+        ].join('\n'))
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(0.16, 0.11, 0.03) * lit * diffuseColor.rgb;');
+    };
+    return mat;
+  }
+  // ruban du sentier, posé sur le relief
+  function pathRibbon(ch) {
+    const S = ch.path.samp, cum = ch.path.cum, L = ch.path.len;
+    const pos = [], uv = [], along = [], idx = [];
+    for (let i = 0; i < S.length; i++) {
+      const a = S[Math.max(0, i - 1)], b = S[Math.min(S.length - 1, i + 1)];
+      const tx = b.x - a.x, tz = b.z - a.z, tl = Math.hypot(tx, tz) || 1;
+      const nx = -tz / tl, nz = tx / tl;
+      const w = PATH_W * (i < 4 || i > S.length - 5 ? 0.8 : 1);
+      [[1, 0], [-1, 1]].forEach(([sg, u]) => {
+        const x = S[i].x + nx * w * sg, z = S[i].z + nz * w * sg;
+        const r = Math.hypot(x, z);
+        const y = r < ch.r ? heightLocal(ch, x, z) : TOP;
+        pos.push(x, y + 0.028, z);
+        uv.push(u, cum[i] / 0.62);
+        along.push(pathLevel(ch.c, cum[i] / L));
+      });
+      if (i) { const k = i * 2; idx.push(k - 2, k, k - 1, k - 1, k, k + 1); }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    geo.setAttribute('along', new THREE.Float32BufferAttribute(along, 1));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    const mat = pathMaterial();
+    ch.fadeMats.push(mat);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.receiveShadow = true;
+    mesh.renderOrder = 1;
+    ch.group.add(mesh);
+    ch.ribbon = mesh;
+  }
+
+  // petite fusion de géométries colorées (un seul appel de dessin) : [{ geo, color, m: Matrix4 }]
+  function mergeParts(parts) {
+    const pos = [], nor = [], col = [];
+    const v = new THREE.Vector3(), c = new THREE.Color(), nm = new THREE.Matrix3();
+    parts.forEach((p) => {
+      const g = p.geo.index ? p.geo.toNonIndexed() : p.geo;
+      const P = g.attributes.position, N = g.attributes.normal;
+      nm.getNormalMatrix(p.m);
+      c.copy(lin(p.color));
+      for (let i = 0; i < P.count; i++) {
+        v.fromBufferAttribute(P, i).applyMatrix4(p.m); pos.push(v.x, v.y, v.z);
+        v.fromBufferAttribute(N, i).applyMatrix3(nm).normalize(); nor.push(v.x, v.y, v.z);
+        col.push(c.r, c.g, c.b);
+      }
+    });
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    geo.computeBoundingSphere();
+    return geo;
+  }
+  const M4 = (x, y, z, ry, sx, sy, sz, rx, rz) => new THREE.Matrix4().compose(new THREE.Vector3(x || 0, y || 0, z || 0),
+    new THREE.Quaternion().setFromEuler(new THREE.Euler(rx || 0, ry || 0, rz || 0, 'YXZ')), new THREE.Vector3(sx || 1, sy || 1, sz || 1));
+
+  // un tronçon de ponton : trois planches et deux pieux (géométrie partagée)
+  let pierGeo = null, pierMat = null;
+  function pierSegment() {
+    if (!pierGeo) {
+      const parts = [];
+      const plank = new THREE.BoxGeometry(0.7, 0.05, 0.19);
+      [-0.21, 0, 0.21].forEach((z, i) => parts.push({ geo: plank, color: i === 1 ? '#b58f68' : '#a98260', m: M4(0, 0, z, (i - 1) * 0.03) }));
+      const beam = new THREE.BoxGeometry(0.06, 0.06, 0.66);
+      [-0.3, 0.3].forEach((x) => parts.push({ geo: beam, color: '#8a6a4c', m: M4(x, -0.05, 0) }));
+      const post = new THREE.CylinderGeometry(0.045, 0.05, 1.5, 7);
+      [-0.36, 0.36].forEach((x) => parts.push({ geo: post, color: '#7d5f44', m: M4(x, -0.62, 0) }));
+      const top = new THREE.SphereGeometry(0.05, 7, 5);
+      [-0.36, 0.36].forEach((x) => parts.push({ geo: top, color: '#7d5f44', m: M4(x, 0.12, 0) }));
+      pierGeo = mergeParts(parts);
+      pierMat = toonMat({ color: '#ffffff', vertexColors: true, roughness: 0.85 });
+    }
+    const m = new THREE.Mesh(pierGeo, pierMat);
+    m.castShadow = m.receiveShadow = true;
+    return m;
   }
 
   // ------------------------------------------------------------------
@@ -670,7 +919,7 @@
   const TEX_DIR = 'assets/textures/';
   const MK = 'megakit/';
   const MODELS = {
-    man: 'man.glb', boat: 'sailboat.glb', column: 'column.glb', columnRound: 'column_round.glb', arch: 'arch.glb',
+    man: 'hero.glb', boat: 'sailboat.glb', column: 'column.glb', columnRound: 'column_round.glb', arch: 'arch.glb',
     palmTall: 'nature/tree_palmDetailedTall.glb', palmBend: 'nature/tree_palmBend.glb',
     // Quaternius — Stylized Nature MegaKit (CC0), textures peintes à la main
     tree3: MK + 'CommonTree_3.glb', tree5: MK + 'CommonTree_5.glb', pine5: MK + 'Pine_5.glb',
@@ -703,7 +952,11 @@
     dirt: '#d9c5a7', stone: '#e5e1d8', _defaultMat: '#e5e1d8', Stone: '#e3ded4',
     colorPurple: '#c8b4ee', colorRed: '#f2a49c', colorYellow: '#f7d586',
     Marble: '#f4f0e8', Grey_Floor: '#f3efe7', DarkGrey_Floor: '#e6e0d5', HalloweenBits: '#efe9de',
-    DarkWood: '#a07c5f', LightWood: '#dabf9c', Sail: '#fcf9f2', Steel: '#b9bdc0'
+    DarkWood: '#a07c5f', LightWood: '#dabf9c', Sail: '#fcf9f2', Steel: '#b9bdc0',
+    // village grec (gabarits procéduraux) : chaux, volets bleus, tuiles, bois, terre cuite
+    houseWhite: '#f7f4ee', houseShade: '#e9e4da', houseBlue: '#3d78b8', roofTerra: '#c8714c', domeBlue: '#2e6bb0',
+    straw: '#cfb489', woodPier: '#a98563', terracotta: '#c8784c', drystone: '#ddd5c6', sailCloth: '#f8f4ea',
+    hullWhite: '#f1ede4', hullBlue: '#3a6ea8', hullRed: '#b4493a', islet: '#d9d0c2', bandRed: '#c0473b'
   };
   const THEME_COL = {
     dunes: { grass: '#d3cd97', leafsGreen: '#a3c486', Grass: '#f0e6b0' },
@@ -922,32 +1175,291 @@
     Cl.needsUpdate = true;
   }
 
-  // petits pavés le long du sentier, qui suivent le relief (galets texturés si disponibles)
-  function pathStones(ch, batch, decor, m) {
-    const order = ch.pathPts;
-    const pebbles = KINDS.pebble.path.map((k) => assets.tpl[k]).filter(Boolean);
-    const rng = C.makeRng('pave:' + ch.c);
-    const dots = batch && pebbles.length ? batch : newBatch();
-    const dotTpl = pebbles.length && batch ? null : makeTemplate(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.04, 14)));
-    for (let k = 0; k + 1 < order.length; k++) {
-      const a = order[k], b = order[k + 1];
-      const n = Math.max(1, Math.floor(a.distanceTo(b) / 0.32));
-      for (let j = 1; j < n; j++) {
-        const p = a.clone().lerp(b, j / n);
-        if (j * (a.distanceTo(b) / n) < 0.35 || (n - j) * (a.distanceTo(b) / n) < 0.35) continue;
-        const y = heightLocal(ch, p.x, p.z);
-        if (dotTpl) dots.add(dotTpl, p.x, y - 0.01, p.z, 0, 0.04, 0.04, null, null);
-        else {
-          const tpl = pebbles[Math.floor(rng() * pebbles.length)];
-          const s = (0.2 + rng() * 0.07) / Math.max(1, tpl.w, tpl.d);
-          dots.add(tpl, p.x + (rng() - 0.5) * 0.06, y - 0.025, p.z + (rng() - 0.5) * 0.06, rng() * 6.28, s, s * 0.8, null, rng);
+  // ------------------------------------------------------------------
+  // Gabarits procéduraux du monde habité : maisons cubiques, chapelle à coupole, moulin,
+  // phare, amphores, murets, îlots. Fusionnés dans le lot de chaque île (un appel de dessin).
+  // ------------------------------------------------------------------
+  const procTpl = {};
+  function namedMat(name) { const m = new THREE.MeshBasicMaterial(); m.name = name; return m; }
+  function buildProcTemplates() {
+    if (procTpl.house) return;
+    const T = (fill) => { const g = new THREE.Group(); fill(g, (geo, mat, x, y, z, ry) => { const m = new THREE.Mesh(geo, namedMat(mat)); m.position.set(x || 0, y || 0, z || 0); m.rotation.y = ry || 0; g.add(m); return m; }); return makeTemplate(g, { keepXZ: true }); };
+    const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+    // maison cubique à toit plat, porte et volets bleus
+    procTpl.house = T((g, a) => {
+      a(box(1, 0.8, 0.9), 'houseWhite', 0, 0.4, 0);
+      a(box(1.06, 0.06, 0.96), 'houseShade', 0, 0.83, 0);
+      a(box(0.22, 0.4, 0.04), 'houseBlue', 0.18, 0.2, 0.46);
+      a(box(0.16, 0.16, 0.04), 'houseBlue', -0.25, 0.5, 0.46);
+      a(box(0.04, 0.16, 0.16), 'houseBlue', 0.51, 0.5, 0.1);
+    });
+    // maison à deux niveaux (terrasse)
+    procTpl.house2 = T((g, a) => {
+      a(box(1, 0.7, 0.9), 'houseWhite', 0, 0.35, 0);
+      a(box(0.55, 0.5, 0.6), 'houseWhite', -0.2, 0.95, -0.12);
+      a(box(1.04, 0.05, 0.94), 'houseShade', 0, 0.72, 0);
+      a(box(0.2, 0.36, 0.04), 'houseBlue', 0.25, 0.18, 0.46);
+      a(box(0.14, 0.14, 0.04), 'houseBlue', -0.2, 1.0, 0.19);
+      a(box(0.14, 0.14, 0.04), 'houseBlue', -0.2, 0.45, 0.46);
+    });
+    // maison à toit de tuiles
+    procTpl.houseTile = T((g, a) => {
+      a(box(1, 0.7, 0.8), 'houseWhite', 0, 0.35, 0);
+      const roof = new THREE.CylinderGeometry(0.5, 0.5, 1.1, 3); roof.rotateZ(Math.PI / 2); roof.scale(1, 0.62, 1.05);
+      a(roof, 'roofTerra', 0, 0.84, 0);
+      a(box(0.2, 0.36, 0.04), 'houseBlue', 0, 0.18, 0.41);
+    });
+    // chapelle à coupole bleue
+    procTpl.chapel = T((g, a) => {
+      a(box(0.9, 0.75, 0.9), 'houseWhite', 0, 0.375, 0);
+      a(new THREE.CylinderGeometry(0.34, 0.36, 0.16, 18), 'houseWhite', 0, 0.83, 0);
+      a(new THREE.SphereGeometry(0.34, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), 'domeBlue', 0, 0.9, 0);
+      a(box(0.04, 0.2, 0.04), 'houseShade', 0, 1.33, 0);
+      a(box(0.14, 0.04, 0.04), 'houseShade', 0, 1.36, 0);
+      a(box(0.22, 0.38, 0.04), 'houseBlue', 0, 0.19, 0.46);
+    });
+    // tour du moulin (les ailes tournent à part)
+    procTpl.mill = T((g, a) => {
+      a(new THREE.CylinderGeometry(0.34, 0.42, 1.2, 16), 'houseWhite', 0, 0.6, 0);
+      a(new THREE.ConeGeometry(0.42, 0.42, 16), 'straw', 0, 1.4, 0);
+      a(box(0.2, 0.34, 0.04), 'houseBlue', 0, 0.17, 0.4);
+    });
+    // phare : tour fuselée à bande, lanterne
+    procTpl.lighthouse = T((g, a) => {
+      a(new THREE.CylinderGeometry(0.22, 0.32, 1.6, 16), 'houseWhite', 0, 0.8, 0);
+      a(new THREE.CylinderGeometry(0.245, 0.27, 0.22, 16), 'bandRed', 0, 0.95, 0);
+      a(new THREE.CylinderGeometry(0.3, 0.3, 0.06, 16), 'houseShade', 0, 1.62, 0);
+      a(new THREE.CylinderGeometry(0.17, 0.17, 0.24, 12), 'sailCloth', 0, 1.77, 0);
+      a(new THREE.ConeGeometry(0.22, 0.2, 12), 'domeBlue', 0, 1.99, 0);
+    });
+    // amphore de terre cuite
+    procTpl.amphora = T((g, a) => {
+      const prof = [[0.0, 0], [0.12, 0.02], [0.3, 0.25], [0.32, 0.5], [0.22, 0.78], [0.1, 0.9], [0.1, 1.0], [0.14, 1.04]].map(([r, y]) => new THREE.Vector2(r, y));
+      a(new THREE.LatheGeometry(prof, 12), 'terracotta');
+    });
+    // muret de pierres sèches
+    procTpl.wall = T((g, a) => {
+      const r = C.makeRng('muret');
+      for (let k = 0; k < 7; k++) for (let j = 0; j < 2; j++) {
+        a(box(0.3 + r() * 0.12, 0.17, 0.26), 'drystone', -0.95 + k * 0.32 + j * 0.14, 0.09 + j * 0.17, (r() - 0.5) * 0.04, (r() - 0.5) * 0.15);
+      }
+    });
+    // ponton du port : planches sur pieux
+    procTpl.jetty = T((g, a) => {
+      for (let k = 0; k < 9; k++) a(box(0.55, 0.05, 0.17), 'woodPier', 0, 0.62, k * 0.2);
+      for (let k = 0; k < 3; k++) [-0.3, 0.3].forEach((x) => a(new THREE.CylinderGeometry(0.04, 0.045, 0.75, 6), 'DarkWood', x, 0.3, k * 0.8));
+    });
+    // îlot rocheux (parfois coiffé d'une maison)
+    procTpl.islet = T((g, a) => {
+      const geo = new THREE.IcosahedronGeometry(1, 1);
+      const p = geo.attributes.position, r = C.makeRng('ilot');
+      for (let i = 0; i < p.count; i++) { const f = 0.85 + r() * 0.3; p.setXYZ(i, p.getX(i) * f, Math.max(-0.2, p.getY(i)) * 0.45 * f, p.getZ(i) * f); }
+      geo.computeVertexNormals();
+      a(geo, 'islet', 0, 0.09, 0);
+    });
+    procTpl.buoy = T((g, a) => {
+      a(new THREE.SphereGeometry(0.5, 10, 8), 'bandRed', 0, 0.5, 0);
+      a(new THREE.CylinderGeometry(0.08, 0.08, 0.6, 6), 'houseWhite', 0, 1.1, 0);
+    });
+  }
+
+  // petite barque de pêche (géométrie partagée, une couleur de coque par variante)
+  const boatGeos = {};
+  function fishingBoatGeo(hull) {
+    if (boatGeos[hull]) return boatGeos[hull];
+    const parts = [];
+    const shell = new THREE.SphereGeometry(0.5, 14, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
+    parts.push({ geo: shell, color: '#f1ede4', m: M4(0, 0.16, 0, 0, 0.32, 0.36, 1) });
+    parts.push({ geo: new THREE.TorusGeometry(0.5, 0.04, 5, 20), color: hull, m: M4(0, 0.15, 0, 0, 0.33, 1, 1.02, Math.PI / 2) });
+    parts.push({ geo: new THREE.BoxGeometry(0.22, 0.03, 0.5), color: '#b08a64', m: M4(0, 0.12, 0) });
+    parts.push({ geo: new THREE.CylinderGeometry(0.014, 0.014, 0.75, 5), color: '#8a6a4c', m: M4(0, 0.5, 0.08) });
+    const sail = new THREE.BufferGeometry();
+    sail.setAttribute('position', new THREE.Float32BufferAttribute([0, 0.2, 0.1, 0, 0.85, 0.09, 0, 0.22, -0.32, 0, 0.2, 0.1, 0, 0.22, -0.32, 0, 0.85, 0.09], 3));
+    sail.computeVertexNormals();
+    parts.push({ geo: sail, color: '#f8f1e2', m: M4(0.01, 0, 0) });
+    boatGeos[hull] = mergeParts(parts);
+    return boatGeos[hull];
+  }
+  let boatMat = null;
+  function fishingBoat(hull) {
+    boatMat = boatMat || toonMat({ color: '#ffffff', vertexColors: true, roughness: 0.8, side: THREE.DoubleSide });
+    const m = new THREE.Mesh(fishingBoatGeo(hull), boatMat);
+    m.castShadow = true;
+    m.userData.keepGeo = true;
+    return m;
+  }
+
+  // Village, moulin, phare et port d'une île ; îlots au large. (Les objets animés — ailes du
+  // moulin, barques amarrées, feu du phare — sont gardés dans ch.life pour la boucle.)
+  function settle(ch, batch, placed, rng) {
+    buildProcTemplates();
+    const R = ch.r, theme = THEMES[ch.c % THEMES.length];
+    const free = (x, z, room, clear) => distToPath(ch, x, z) > clear && ch.gateLocal.distanceTo(new THREE.Vector3(x, 0, z)) > 1.3 &&
+      !placed.some((p) => Math.hypot(p.x - x, p.z - z) < Math.max(room, p.room));
+    const put = (tpl, x, z, h, rot, room, ao, sink) => {
+      batch.add(tpl, x, heightLocal(ch, x, z) - (sink == null ? 0.03 : sink), z, rot, h, h, null, null);
+      placed.push({ x, z, room, ao: ao || 0.2, s: room * 0.7 });
+    };
+    ch.life = { sails: null, boats: [], lamp: null };
+    // le village : 4 à 7 maisons serrées autour d'une placette, portes vers le centre de l'île
+    let vc = null;
+    for (let t = 0; t < 60 && !vc; t++) {
+      const a = rng() * Math.PI * 2, d = R * (0.4 + rng() * 0.32);
+      const x = Math.cos(a) * d, z = Math.sin(a) * d;
+      if (free(x, z, 1.2, 1.25)) vc = { x, z };
+    }
+    if (vc) {
+      const kinds = theme === 'dunes' ? ['house', 'house', 'house2', 'chapel'] : ['house', 'house2', 'houseTile', 'house', 'chapel', 'houseTile'];
+      const n = 4 + Math.floor(rng() * 4);
+      let chapel = false;
+      for (let k = 0; k < n; k++) {
+        for (let t = 0; t < 25; t++) {
+          const a = rng() * Math.PI * 2, d = 0.25 + rng() * 0.95;
+          const x = vc.x + Math.cos(a) * d, z = vc.z + Math.sin(a) * d;
+          if (Math.hypot(x, z) > R * 0.84 || !free(x, z, 0.42, 0.62)) continue;
+          let kind = kinds[Math.floor(rng() * kinds.length)];
+          if (kind === 'chapel') { if (chapel) kind = 'house'; chapel = true; }
+          const h = kind === 'chapel' ? 0.62 : 0.4 + rng() * 0.14;
+          // les maisons regardent vers la placette (axes « carrés » : rues étroites)
+          const rot = Math.round((Math.atan2(vc.x - x, vc.z - z)) / (Math.PI / 2)) * (Math.PI / 2) + (rng() - 0.5) * 0.12;
+          put(procTpl[kind], x, z, h, rot, 0.45, 0.22, 0.03);
+          break;
         }
       }
+      // amphores et muret au bord de la placette
+      for (let k = 0; k < 3; k++) {
+        const a = rng() * Math.PI * 2, x = vc.x + Math.cos(a) * 0.35, z = vc.z + Math.sin(a) * 0.35;
+        if (free(x, z, 0.12, 0.5)) put(procTpl.amphora, x, z, 0.16 + rng() * 0.05, rng() * 6, 0.12, 0.1, 0.01);
+      }
     }
-    if (dotTpl && dots.count()) {
-      const g = dots.build(m('#ece7dc'));
-      g.children.forEach((o) => { o.castShadow = false; });
-      decor.add(g);
+    // moulin à vent sur une hauteur (îles herbeuses)
+    if (theme === 'pinede' || theme === 'jardin' || theme === 'ruines') {
+      for (let t = 0; t < 50; t++) {
+        const a = rng() * Math.PI * 2, d = R * (0.2 + rng() * 0.55);
+        const x = Math.cos(a) * d, z = Math.sin(a) * d;
+        if (!free(x, z, 0.7, 1.0)) continue;
+        put(procTpl.mill, x, z, 1.05, rng() * 6, 0.6, 0.25, 0.04);
+        // ailes : quatre voiles triangulaires sur un moyeu
+        const parts = [];
+        for (let k = 0; k < 4; k++) {
+          const ang = k * Math.PI / 2;
+          parts.push({ geo: new THREE.BoxGeometry(0.03, 0.62, 0.02), color: '#8a6a4c', m: M4(0, 0, 0, 0, 1, 1, 1, 0, 0).multiply(new THREE.Matrix4().makeRotationZ(ang)).multiply(new THREE.Matrix4().makeTranslation(0, 0.31, 0)) });
+          parts.push({ geo: new THREE.BoxGeometry(0.2, 0.5, 0.01), color: '#f4efe2', m: new THREE.Matrix4().makeRotationZ(ang).multiply(new THREE.Matrix4().makeTranslation(0.11, 0.36, 0)) });
+        }
+        const sails = new THREE.Mesh(mergeParts(parts), toonMat({ color: '#ffffff', vertexColors: true, roughness: 0.85, side: THREE.DoubleSide }));
+        const hub = new THREE.Group();
+        hub.position.set(x, heightLocal(ch, x, z) + 1.05 * 0.7, z);
+        hub.rotation.y = Math.atan2(-x, -z) + Math.PI; // face au large
+        sails.position.z = 0.28;
+        sails.scale.setScalar(0.72);
+        sails.castShadow = true;
+        hub.add(sails);
+        ch.decor.add(hub);
+        ch.fadeMats.push(sails.material);
+        ch.life.sails = sails;
+        break;
+      }
+    }
+    // le port : un ponton vers le large, deux barques amarrées, une bouée
+    const pa = Math.atan2(ch.path.samp[0].z, ch.path.samp[0].x), pb = Math.atan2(ch.path.samp[ch.path.samp.length - 1].z, ch.path.samp[ch.path.samp.length - 1].x);
+    let best = 0, bd = -1;
+    for (let k = 0; k < 24; k++) { // l'angle le plus éloigné des deux bouts du sentier
+      const a = (k / 24) * Math.PI * 2;
+      const d = Math.min(Math.abs(Math.atan2(Math.sin(a - pa), Math.cos(a - pa))), Math.abs(Math.atan2(Math.sin(a - pb), Math.cos(a - pb))));
+      if (d > bd) { bd = d; best = a; }
+    }
+    const ox = Math.cos(best), oz = Math.sin(best);
+    const jx = ox * R * 0.93, jz = oz * R * 0.93;
+    batch.add(procTpl.jetty, jx, -0.42, jz, Math.atan2(ox, oz), 0.95, 0.95, null, null);
+    ch.harbor = { x: ox * R * 1.35, z: oz * R * 1.35, a: best };
+    [[0.55, 1.1], [-0.6, 1.45]].forEach(([side, dist], i) => {
+      const b = fishingBoat(i ? '#b4493a' : '#3a6ea8');
+      const tx = -oz, tz = ox;
+      b.position.set(ox * R * dist + tx * side, 0, oz * R * dist + tz * side);
+      b.rotation.y = Math.atan2(ox, oz) + (i ? 0.25 : -0.2);
+      b.userData.base = b.rotation.y;
+      b.userData.phase = rng() * 6;
+      ch.decor.add(b);
+      ch.life.boats.push(b);
+    });
+    batch.add(procTpl.buoy, ox * R * 1.7 - oz * 0.9, -0.02, oz * R * 1.7 + ox * 0.9, 0, 0.16, 0.16, null, null);
+    // phare au bout de l'île, une île sur deux
+    if (ch.c % 2 === 1) {
+      const a = best + Math.PI * 0.55;
+      const x = Math.cos(a) * R * 0.86, z = Math.sin(a) * R * 0.86;
+      if (free(x, z, 0.5, 0.7)) {
+        put(procTpl.lighthouse, x, z, 1.5, 0, 0.5, 0.2, 0.02);
+        const lamp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: '#ffe3a0', transparent: true, opacity: 0, depthWrite: false, toneMapped: false }));
+        lamp.position.set(x, heightLocal(ch, x, z) + 1.5 * 0.88, z);
+        lamp.scale.set(1.4, 1.4, 1);
+        ch.decor.add(lamp);
+        ch.life.lamp = lamp;
+      }
+    }
+    // îlots et rochers au large (loin des traversées)
+    const avoid = [pa, pb];
+    for (let k = 0, made = 0; k < 30 && made < 6; k++) {
+      const a = rng() * Math.PI * 2;
+      if (avoid.some((v) => Math.abs(Math.atan2(Math.sin(a - v), Math.cos(a - v))) < 0.7)) continue;
+      const d = R * (1.55 + rng() * 1.3);
+      const x = Math.cos(a) * d, z = Math.sin(a) * d;
+      const big = made < 2;
+      const s = big ? 0.9 + rng() * 0.6 : 0.25 + rng() * 0.3;
+      batch.add(procTpl.islet, x, -0.12, z, rng() * 6, s, s * (big ? 1.4 : 1.1), null, null);
+      if (big) { // un îlot habité : une maison, un cyprès
+        batch.add(procTpl.house, x + 0.1, -0.12 + s * 1.4 * 0.82, z, rng() * 6, 0.32, 0.32, null, null);
+        const cy = KINDS.cypress.m.map((m) => assets.tpl[m]).filter(Boolean)[0];
+        if (cy) batch.add(cy, x - s * 0.3, -0.12 + s * 1.4 * 0.7, z + s * 0.2, 0, 0.8 * 0.42, 0.8, null, rng);
+      }
+      made++;
+    }
+  }
+
+  // bordures du sentier : galets clairs, touffes, fleurs ; parfois une amphore ou un muret
+  function pathBorder(ch, batch, rng) {
+    buildProcTemplates();
+    const S = ch.path.samp, cum = ch.path.cum;
+    const peb = KINDS.pebble.path.map((k) => assets.tpl[k]).filter(Boolean);
+    const grass = ['grassS', 'grassT'].map((k) => assets.tpl[k]).filter(Boolean);
+    const flow = ['flower3s', 'flower3'].map((k) => assets.tpl[k]).filter(Boolean);
+    const nodes = ch.nodes.map((n) => n.local);
+    let next = 0.3, wallAt = 2 + rng() * 2;
+    for (let i = 1; i < S.length - 1; i++) {
+      if (cum[i] < next) continue;
+      next = cum[i] + 0.3 + rng() * 0.18;
+      const a = S[i - 1], b = S[i + 1];
+      const tx = b.x - a.x, tz = b.z - a.z, tl = Math.hypot(tx, tz) || 1;
+      const nx = -tz / tl, nz = tx / tl;
+      const sg = rng() < 0.5 ? 1 : -1;
+      const off = PATH_W + 0.06 + rng() * 0.14;
+      const x = S[i].x + nx * off * sg, z = S[i].z + nz * off * sg;
+      if (Math.hypot(x, z) > ch.r * 0.92) continue;
+      if (nodes.some((p) => Math.hypot(p.x - x, p.z - z) < 0.5)) continue;
+      const y = heightLocal(ch, x, z);
+      const r = rng();
+      if (cum[i] > wallAt && Math.hypot(S[i].x - ch.gateLocal.x, S[i].z - ch.gateLocal.z) > 1.2) { // muret ou amphores
+        wallAt = cum[i] + 2.5 + rng() * 2.5;
+        const w = PATH_W + 0.38;
+        const wx = S[i].x + nx * w * sg, wz = S[i].z + nz * w * sg;
+        if (nodes.some((p) => Math.hypot(p.x - wx, p.z - wz) < 0.8)) continue;
+        if (rng() < 0.55) batch.add(procTpl.wall, wx, heightLocal(ch, wx, wz) - 0.03, wz, Math.atan2(tx, tz) + Math.PI / 2, 0.36, 0.3, null, null);
+        else {
+          batch.add(procTpl.amphora, wx, heightLocal(ch, wx, wz) - 0.01, wz, rng() * 6, 0.2, 0.2, null, null);
+          batch.add(procTpl.amphora, wx + tx / tl * 0.14, heightLocal(ch, wx, wz) - 0.01, wz + tz / tl * 0.14, rng() * 6, 0.15, 0.15, null, null);
+        }
+        continue;
+      }
+      if (r < 0.42 && peb.length) {
+        const tpl = peb[Math.floor(rng() * peb.length)];
+        const s = (0.13 + rng() * 0.08) / Math.max(1, tpl.w, tpl.d);
+        batch.add(tpl, x, y - 0.02, z, rng() * 6.28, s, s * 0.7, null, rng);
+      } else if (r < 0.75 && grass.length) {
+        const tpl = grass[Math.floor(rng() * grass.length)];
+        batch.add(tpl, x, y - 0.01, z, rng() * 6.28, 0.22 + rng() * 0.1, 0.22 + rng() * 0.1, null, rng);
+      } else if (flow.length) {
+        const tpl = flow[Math.floor(rng() * flow.length)];
+        batch.add(tpl, x, y - 0.01, z, rng() * 6.28, 0.24 + rng() * 0.08, 0.24 + rng() * 0.08, null, rng);
+      }
     }
   }
 
@@ -961,6 +1473,7 @@
     ch.group.add(decor);
     const batch = assets.ready ? newBatch() : null;
     const themeCol = THEME_COL[theme] || {};
+    if (batch) { try { settle(ch, batch, placed, rng); } catch (e) { console.warn('[world] village', e); } }
     (batch ? SCENES_3D : SCENES)[theme].forEach(([type, count, clear]) => {
       const kind = batch ? KINDS[type] : null;
       const tpls = kind ? kind.m.map((k) => assets.tpl[k]).filter(Boolean) : [];
@@ -1001,7 +1514,7 @@
         }
       }
     });
-    pathStones(ch, batch, decor, m);
+    if (batch) pathBorder(ch, batch, rng);
     if (batch && batch.count()) decor.add(batch.build((key) => decorMaterial(ch, key)));
     shadeGround(ch, placed);
     // des moutons sur les îles herbeuses
@@ -1013,7 +1526,7 @@
   function redecorate(ch) {
     if (ch.decor) {
       ch.group.remove(ch.decor);
-      ch.decor.traverse((o) => { if (o.isMesh) o.geometry.dispose(); });
+      ch.decor.traverse((o) => { if (o.isMesh && !o.userData.keepGeo) o.geometry.dispose(); });
     }
     decorate(ch, ch.m);
   }
@@ -1162,6 +1675,60 @@
   }
 
   // ------------------------------------------------------------------
+  // Pierres de niveau : géométries partagées (pierre, boss, anneaux d'or, couronne de laurier)
+  // ------------------------------------------------------------------
+  let STONE_GEO = null, BOSS_RING_MAT = null, LAUREL_MAT = null, CUR_RING = null;
+  function makeShared() {
+    if (STONE_GEO) return;
+    const laurel = (R) => {
+      const parts = [];
+      const leaf = new THREE.SphereGeometry(1, 6, 4);
+      for (let k = 0; k < 22; k++) {
+        const a = (k / 22) * Math.PI * 2;
+        parts.push({ geo: leaf, color: k % 4 === 0 ? '#e3b54f' : k % 2 ? '#6f9a45' : '#86ad55',
+          m: M4(Math.cos(a) * R, 0.02 + (k % 2) * 0.01, Math.sin(a) * R, -a + Math.PI / 2, 0.07, 0.022, 0.035, 0.0, k % 2 ? 0.5 : -0.5) });
+      }
+      return mergeParts(parts);
+    };
+    const ring = (r) => { const g = new THREE.TorusGeometry(r, 0.022, 6, 48); g.rotateX(Math.PI / 2); return g; };
+    const rings = new THREE.BufferGeometry();
+    {
+      const a = ring(0.6), b = ring(0.7);
+      const pos = [...a.toNonIndexed().attributes.position.array, ...b.toNonIndexed().attributes.position.array];
+      const nor = [...a.toNonIndexed().attributes.normal.array, ...b.toNonIndexed().attributes.normal.array];
+      rings.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      rings.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    }
+    STONE_GEO = {
+      normal: new THREE.CylinderGeometry(0.3, 0.34, 0.12, 28),
+      boss: new THREE.CylinderGeometry(0.46, 0.52, 0.16, 32),
+      bossRings: rings,
+      laurel: laurel(0.42), laurelBoss: laurel(0.6)
+    };
+    BOSS_RING_MAT = toonMat({ color: '#e0b24e', roughness: 0.35, metalness: 0.7, emissive: lin('#6b4a10'), transparent: true });
+    LAUREL_MAT = toonMat({ color: '#ffffff', vertexColors: true, roughness: 0.6 });
+    // anneau fixe du niveau en cours (en plus de l'onde qui pulse)
+    CUR_RING = new THREE.Mesh(new THREE.RingGeometry(0.41, 0.47, 48),
+      new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.85, depthWrite: false, toneMapped: false }));
+    CUR_RING.rotation.x = -Math.PI / 2;
+    scene.add(CUR_RING);
+  }
+  // île à l'horizon : un relief doux et quelques maisons blanches (couleurs de sommets × brume)
+  function horizonIsland(rng) {
+    const parts = [];
+    const hill = new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2);
+    parts.push({ geo: hill, color: '#c8c8c8', m: M4(0, 0, 0, 0, 9 + rng() * 4, 3.5 + rng() * 3, 6 + rng() * 2) });
+    parts.push({ geo: hill, color: '#bdbdbd', m: M4(5 + rng() * 3, 0, 2, 0, 5, 2 + rng() * 1.5, 4) });
+    const cube = new THREE.BoxGeometry(1, 1, 1);
+    for (let k = 0; k < 9; k++) {
+      const x = (rng() - 0.5) * 9, z = 3 + rng() * 2.5;
+      const y = Math.max(0, 3.2 * Math.sqrt(Math.max(0, 1 - (x * x) / 81 - (z * z) / 49)));
+      parts.push({ geo: cube, color: '#ffffff', m: M4(x, y + 0.2, z, rng(), 0.6 + rng() * 0.5, 0.5 + rng() * 0.3, 0.6) });
+    }
+    return mergeParts(parts);
+  }
+
+  // ------------------------------------------------------------------
   // Construction d'une île
   // ------------------------------------------------------------------
   function buildChapter(c) {
@@ -1230,28 +1797,35 @@
     beach.position.y = 0.04;
     group.add(beach);
 
-    // sentier
+    // sentier : une seule route, de la plage d'arrivée au portique de sortie
     const entry = entryOf(c).sub(ctr), exit = exitOf(c).sub(ctr);
-    ch.gateLocal = exitOf(c, 0.86).sub(ctr);
-    const order = layoutNodes(ch, entry, exit);
-    ch.pathPts = order;
-    ch.nodes = order.map((p, k) => {
+    layoutPath(ch, entry, exit);
+    ch.gateLocal = pathAt(ch, GATE_F);
+    ch.nodes = [];
+    for (let k = 0; k < PER; k++) {
+      const p = pathAt(ch, levelF(k));
       const boss = k === PER - 1;
-      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(boss ? 0.44 : 0.29, boss ? 0.5 : 0.33, 0.12, 28),
-        lambert('#f4f2ed', { transparent: true, map: texture('pierre', 1) }));
+      const mesh = new THREE.Mesh(boss ? STONE_GEO.boss : STONE_GEO.normal,
+        toonMat({ color: '#b9b6ae', transparent: true, map: texture('pierre', 1), roughness: 0.75 }));
       mesh.position.set(p.x, heightLocal(ch, p.x, p.z) + 0.04, p.z);
       mesh.receiveShadow = mesh.castShadow = true;
       mesh.userData.level = c * PER + k;
       group.add(mesh);
-      return { mesh, local: p };
-    });
-    // (les petits pavés du sentier sont posés avec le décor : voir pathStones)
+      const n = { mesh, local: p, boss };
+      if (boss) { // double anneau d'or : le boss se repère de loin
+        n.rings = new THREE.Mesh(STONE_GEO.bossRings, BOSS_RING_MAT);
+        n.rings.position.copy(mesh.position).add(new THREE.Vector3(0, 0.05, 0));
+        group.add(n.rings);
+      }
+      ch.nodes.push(n);
+    }
+    pathRibbon(ch);
 
-    // le portique du boss
+    // le portique du boss, en travers du sentier
     const gate = new THREE.Group();
     gate.position.set(ch.gateLocal.x, heightLocal(ch, ch.gateLocal.x, ch.gateLocal.z) - 0.02, ch.gateLocal.z);
-    const next = centerOf(c + 1).sub(ctr);
-    gate.lookAt(next.x, gate.position.y, next.z);
+    const ahead = pathAt(ch, 1);
+    gate.lookAt(ahead.x, gate.position.y, ahead.z);
     const white = lambert('#f7f5f0');
     [-0.7, 0.7].forEach((x) => {
       const base = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.1, 0.34), white);
@@ -1269,7 +1843,7 @@
     pediment.rotation.z = Math.PI / 2; pediment.scale.set(1, 1, 0.45);
     pediment.position.y = 2.2;
     const veil = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.8),
-      new THREE.MeshBasicMaterial({ color: lin(accent), transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false }));
+      new THREE.MeshBasicMaterial({ color: lin('#e3b54f'), transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false }));
     veil.position.y = 0.95;
     [lintel, pediment].forEach((o) => { o.castShadow = true; });
     gate.add(lintel, pediment, veil);
@@ -1278,17 +1852,25 @@
 
     decorate(ch, m);
 
-    // pierres de gué vers l'île suivante (immergées tant que le boss n'est pas battu)
+    // le ponton vers l'île suivante : il sort de l'eau, planche après planche, quand le boss est battu
     ch.stones = [];
-    const from = exitOf(c, 1.02), to = entryOf(c + 1, 1.02);
-    const d = from.distanceTo(to);
-    const count = Math.max(3, Math.floor(d / 1.05));
+    const from = exitOf(c, 1.0), to = entryOf(c + 1, 1.0);
+    const span = from.distanceTo(to);
+    const dirv = to.clone().sub(from).normalize();
+    const sidev = new THREE.Vector3(-dirv.z, 0, dirv.x);
+    const bend = (rng() - 0.5) * 1.6;
+    const ctrl = from.clone().lerp(to, 0.5).addScaledVector(sidev, bend);
+    const count = Math.max(4, Math.round(span / 0.64));
+    const bez = (t) => new THREE.Vector3().copy(from).multiplyScalar((1 - t) * (1 - t)).addScaledVector(ctrl, 2 * t * (1 - t)).addScaledVector(to, t * t);
     for (let k = 1; k <= count; k++) {
-      const s = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.38, 0.22, 24), lambert('#f7f6f2'));
-      s.position.lerpVectors(from, to, k / (count + 1));
-      s.position.z += Math.sin(k * 0.9) * 0.35;
-      s.userData = { phase: k + c, dip: 0, raise: 0 };
-      s.castShadow = s.receiveShadow = true;
+      const t = k / (count + 1);
+      const p = bez(t), q = bez(Math.min(1, t + 0.01));
+      const s = pierSegment();
+      const deck = 0.31 + 0.3 * Math.pow(1 - Math.sin(Math.PI * t), 1.6);
+      s.position.set(p.x, deck, p.z);
+      s.rotation.y = Math.atan2(q.x - p.x, q.z - p.z);
+      s.userData = { phase: k + c, dip: 0, raise: 0, base: deck, pier: true };
+      s.visible = false;
       scene.add(s);
       ch.stones.push(s);
     }
@@ -1305,12 +1887,13 @@
       ch.ripples.push(ring);
     }
 
-    // montagnes lointaines, de part et d'autre de la route
+    // îles lointaines à l'horizon, de part et d'autre de la route, avec leurs maisons blanches
     [-1, 1].forEach((side) => {
-      const h = 6 + rng() * 6;
-      const mtn = new THREE.Mesh(new THREE.ConeGeometry(7 + rng() * 5, h, 32), lambert(mtnColor, { map: texture('roche', 1, 3, 2) }));
+      const mtn = new THREE.Mesh(horizonIsland(rng), lambert(mtnColor, { vertexColors: true }));
       mountains.push(mtn);
-      mtn.position.set(ctr.x + (rng() - 0.5) * 8, h / 2 - 0.6, ctr.z + side * (30 + rng() * 10));
+      const s = 0.8 + rng() * 0.6;
+      mtn.scale.set(s, s * (0.8 + rng() * 0.5), s);
+      mtn.position.set(ctr.x + (rng() - 0.5) * 8, -0.3, ctr.z + side * (30 + rng() * 10));
       mtn.rotation.y = rng() * 3;
       scene.add(mtn);
     });
@@ -1328,39 +1911,43 @@
     for (let c = 0; c <= need; c++) if (!chapters[c]) buildChapter(c);
   }
 
-  function bloom(ch, k, accent, animate) {
+  // niveau réussi : couronne de laurier autour de la pierre dorée (elle pousse quand on vient de gagner)
+  function bloom(ch, k, animate) {
     const n = ch.nodes[k];
-    const g = new THREE.Group();
-    for (let j = 0; j < 5; j++) {
-      const a = (j / 5) * Math.PI * 2 + k;
-      const f = new THREE.Mesh(new THREE.SphereGeometry(0.055, 6, 5), lambert(j % 2 ? tint(accent, 0.7) : '#ffffff'));
-      f.position.set(Math.cos(a) * 0.48, 0, Math.sin(a) * 0.48);
-      g.add(f);
-    }
-    g.position.set(n.local.x, heightLocal(ch, n.local.x, n.local.z) + 0.04, n.local.z);
+    const g = new THREE.Mesh(n.boss ? STONE_GEO.laurelBoss : STONE_GEO.laurel, LAUREL_MAT);
+    g.position.set(n.local.x, heightLocal(ch, n.local.x, n.local.z) + 0.07, n.local.z);
+    g.castShadow = true;
     if (animate) { g.scale.setScalar(0.01); g.userData.grow = true; }
     ch.group.add(g);
     ch.flowers[k] = g;
   }
 
+  // Code couleur unique et lisible : fait = pierre dorée qui luit + laurier ; en cours = pierre
+  // blanche + anneau à la couleur du jeu ; à venir = pierre grise estompée. Boss : grande pierre,
+  // double anneau d'or.
   function refresh(animate) {
     ensureChapters();
+    pathU.target = done;
     chapters.forEach((ch) => {
       if (!ch) return;
       ch.nodes.forEach((n, k) => {
         const L = ch.c * PER + k;
-        const info = opts.levelInfo(L);
         const mat = n.mesh.material;
         if (L < done) {
-          mat.color.copy(tint(info.accent, 0.7)); n.mesh.userData.alpha = 1;
-          if (!ch.flowers[k]) bloom(ch, k, info.accent, animate);
-        } else if (L === done) { mat.color.set('#ffffff'); n.mesh.userData.alpha = 1; }
-        else { setLin(mat.color, '#efece6'); n.mesh.userData.alpha = 0.6; }
+          setLin(mat.color, '#f3c75e'); mat.emissive.copy(lin('#c98a1c')).multiplyScalar(0.5);
+          mat.roughness = 0.45; mat.metalness = 0.2; n.mesh.userData.alpha = 1;
+          if (!ch.flowers[k]) bloom(ch, k, animate);
+        } else if (L === done) {
+          setLin(mat.color, '#ffffff'); mat.emissive.setRGB(0.06, 0.06, 0.06); mat.roughness = 0.6; mat.metalness = 0; n.mesh.userData.alpha = 1;
+        } else {
+          setLin(mat.color, '#a9a7a1'); mat.emissive.setRGB(0, 0, 0); mat.roughness = 0.85; mat.metalness = 0; n.mesh.userData.alpha = 0.78;
+        }
+        if (n.rings) n.rings.userData.alpha = L <= done ? 1 : 0.45;
       });
       const beaten = done > ch.c * PER + PER - 1;
       if (beaten && !ch.opened) {
         ch.opened = true;
-        ch.lintelMat.color.copy(tint(ch.accent, 0.6));
+        setLin(ch.lintelMat.color, '#f0d58c');
         ch.stones.forEach((s, i) => { s.userData.delay = animate ? 1.0 + i * 0.16 : 0; if (!animate) s.userData.raise = 1; });
       }
     });
@@ -1369,7 +1956,7 @@
   function nodePos(L) {
     const ch = chapters[chapterOf(L)];
     const n = ch.nodes[L % PER];
-    return new THREE.Vector3(ch.group.position.x + n.local.x, ch.group.position.y + heightLocal(ch, n.local.x, n.local.z) + 0.1,
+    return new THREE.Vector3(ch.group.position.x + n.local.x, ch.group.position.y + heightLocal(ch, n.local.x, n.local.z) + (n.boss ? 0.12 : 0.1),
       ch.group.position.z + n.local.z);
   }
   function groundPos(c, at) {
@@ -1379,10 +1966,11 @@
   }
   // direction du sentier au niveau L (pour placer la caméra derrière le voyageur)
   function pathDir(L) {
-    const nextOk = chapters[chapterOf(L + 1)];
-    const a = nodePos(Math.max(0, L - 1)), b = nodePos(nextOk ? L + 1 : L);
-    const d = b.sub(a); d.y = 0;
-    return d.lengthSq() > 0.001 ? d.normalize() : new THREE.Vector3(1, 0, 0);
+    const ch = chapters[chapterOf(L)];
+    if (!ch) return new THREE.Vector3(1, 0, 0);
+    const f = levelF(L % PER);
+    const d = pathAt(ch, f + 0.03).sub(pathAt(ch, f - 0.01)); d.y = 0;
+    return d.lengthSq() > 1e-6 ? d.normalize() : new THREE.Vector3(1, 0, 0);
   }
 
   // ------------------------------------------------------------------
@@ -1503,82 +2091,153 @@
       o.add(hull);
     });
     scene.add(g);
-    Object.assign(hero, { group: g, body, scarf: scarfMat, shadow, cape: capePivot, legs, head, emblem, arms, mind, spear, focus: 0, focusTarget: 0 });
+    Object.assign(hero, { group: g, body, scarf: scarfMat, capeMat, shadow, cape: capePivot, legs, head, emblem, arms, mind, spear, focus: 0, focusTarget: 0,
+      procMats: { tunic: tunicMat, hair: hairMat, skin } });
+    applySkin();
   }
 
-  // Ulysse animé (personnage « Man » de Quaternius, CC0) : il remplace le corps procédural.
-  // La cape est accrochée à l'os du torse, la lance reste plantée à côté de lui.
+  // ------------------------------------------------------------------
+  // Garde-robe d'Ulysse : costumes, couleurs, coiffes, armes, boucliers.
+  // Les identifiants sont stables (l'interface les enregistre).
+  // ------------------------------------------------------------------
+  const SKIN_OPTIONS = {
+    outfit: [
+      { id: 'voyageur', name: 'Voyageur' }, { id: 'hoplite', name: 'Hoplite' },
+      { id: 'roi', name: "Roi d'Ithaque" }, { id: 'marin', name: 'Marin' }, { id: 'pelerin', name: 'Pèlerin' }
+    ],
+    tunic: [
+      { id: 'egee', name: 'Bleu Égée', color: '#2f6f9f' }, { id: 'terre', name: 'Terre cuite', color: '#c0643c' },
+      { id: 'olive', name: 'Olivier', color: '#7b8a4c' }, { id: 'tyr', name: 'Pourpre de Tyr', color: '#7a2e5c' },
+      { id: 'lin', name: 'Lin blanc', color: '#eee6d4' }, { id: 'nuit', name: 'Noir de nuit', color: '#2c2e35' },
+      { id: 'safran', name: 'Safran', color: '#d5a03c' }, { id: 'ocean', name: 'Vert océan', color: '#2f8a80' }
+    ],
+    cape: [
+      { id: 'blanc', name: 'Blanc', color: '#f4f1ea' }, { id: 'or', name: 'Or', color: '#d4a640' },
+      { id: 'rouge', name: 'Rouge garance', color: '#a63a30' }, { id: 'egee', name: 'Bleu Égée', color: '#2f5f8f' },
+      { id: 'tyr', name: 'Pourpre de Tyr', color: '#6e2a55' }, { id: 'nuit', name: 'Noir', color: '#26282e' },
+      { id: 'none', name: 'Sans cape' }
+    ],
+    hair: [
+      { id: 'brun', name: 'Brun', color: '#4a3424' }, { id: 'noir', name: 'Noir', color: '#1d1916' },
+      { id: 'chatain', name: 'Châtain', color: '#6f4b2e' }, { id: 'blond', name: 'Blond', color: '#c49a5e' },
+      { id: 'roux', name: 'Roux', color: '#94451f' }, { id: 'gris', name: 'Gris', color: '#9b958d' }
+    ],
+    skin: [
+      { id: 's1', name: 'Ivoire', color: '#f2d3bb' }, { id: 's2', name: 'Sable', color: '#e2b38f' },
+      { id: 's3', name: 'Olive', color: '#c68e64' }, { id: 's4', name: 'Cannelle', color: '#a06a45' },
+      { id: 's5', name: 'Bronze', color: '#7a4c2f' }, { id: 's6', name: 'Ébène', color: '#4e2f1f' }
+    ],
+    accessory: [
+      { id: 'none', name: 'Aucun' }, { id: 'laurel', name: 'Laurier' }, { id: 'helmet', name: 'Casque corinthien' },
+      { id: 'band', name: 'Bandeau' }, { id: 'petasos', name: 'Pétase' }
+    ],
+    weapon: [
+      { id: 'spear', name: 'Lance' }, { id: 'staff', name: 'Bâton' }, { id: 'bow', name: 'Arc' },
+      { id: 'sword', name: 'Xiphos' }, { id: 'none', name: 'Aucune' }
+    ],
+    shield: [
+      { id: 'none', name: 'Aucun' }, { id: 'chouette', name: "Chouette d'Athéna" }, { id: 'poulpe', name: 'Poulpe' },
+      { id: 'oeil', name: 'Œil' }, { id: 'soleil', name: 'Soleil' }
+    ]
+  };
+  const SKIN_LABELS = { outfit: 'Costume', tunic: 'Tunique', cape: 'Cape', hair: 'Cheveux', skin: 'Peau', accessory: 'Coiffe', weapon: 'Arme', shield: 'Bouclier' };
+  const SKIN_DEFAULT = { outfit: 'voyageur', tunic: 'egee', cape: 'blanc', hair: 'brun', skin: 's2', accessory: 'none', weapon: 'spear', shield: 'none' };
+  const skinState = Object.assign({}, SKIN_DEFAULT);
+  const skinOpt = (cat, id) => SKIN_OPTIONS[cat].find((o) => o.id === id) || SKIN_OPTIONS[cat].find((o) => o.id === SKIN_DEFAULT[cat]);
+
+  // motif peint d'un bouclier (toile 256 px, aucune image externe)
+  const shieldTexCache = {};
+  function shieldTexture(motif) {
+    if (shieldTexCache[motif]) return shieldTexCache[motif];
+    shieldTexCache[motif] = canvasTexture(256, 256, (g) => {
+      const R = 128;
+      g.fillStyle = motif === 'oeil' ? '#e9e1cf' : motif === 'soleil' ? '#2b2f3a' : '#b0402f';
+      g.beginPath(); g.arc(R, R, R, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = '#d9b25b'; g.lineWidth = 14; g.beginPath(); g.arc(R, R, R - 9, 0, Math.PI * 2); g.stroke();
+      g.fillStyle = g.strokeStyle = '#1e1b19';
+      g.lineCap = 'round'; g.lineWidth = 7;
+      if (motif === 'chouette') {
+        g.beginPath(); g.ellipse(R, R + 12, 44, 58, 0, 0, Math.PI * 2); g.fill();
+        g.fillStyle = '#efe4c8';
+        [-20, 20].forEach((dx) => { g.beginPath(); g.arc(R + dx, R - 12, 16, 0, Math.PI * 2); g.fill(); });
+        g.fillStyle = '#1e1b19';
+        [-20, 20].forEach((dx) => { g.beginPath(); g.arc(R + dx, R - 12, 7, 0, Math.PI * 2); g.fill(); });
+        g.beginPath(); g.moveTo(R - 40, R - 46); g.lineTo(R - 24, R - 30); g.moveTo(R + 40, R - 46); g.lineTo(R + 24, R - 30); g.stroke();
+      } else if (motif === 'poulpe') {
+        g.beginPath(); g.ellipse(R, R - 30, 30, 36, 0, 0, Math.PI * 2); g.fill();
+        for (let k = 0; k < 8; k++) {
+          const a = Math.PI * (0.15 + k * 0.1);
+          g.beginPath(); g.moveTo(R + Math.cos(a) * 18, R - 8);
+          g.bezierCurveTo(R + Math.cos(a) * 60, R + 30, R + Math.cos(a) * 30, R + 60, R + Math.cos(a) * 80, R + 80);
+          g.stroke();
+        }
+        g.fillStyle = '#efe4c8';
+        [-12, 12].forEach((dx) => { g.beginPath(); g.arc(R + dx, R - 34, 6, 0, Math.PI * 2); g.fill(); });
+      } else if (motif === 'oeil') {
+        g.beginPath(); g.ellipse(R, R, 74, 38, 0, 0, Math.PI * 2); g.lineWidth = 9; g.stroke();
+        g.fillStyle = '#2f6f9f'; g.beginPath(); g.arc(R, R, 30, 0, Math.PI * 2); g.fill();
+        g.fillStyle = '#1e1b19'; g.beginPath(); g.arc(R, R, 13, 0, Math.PI * 2); g.fill();
+      } else if (motif === 'soleil') {
+        g.fillStyle = g.strokeStyle = '#e3b54f';
+        g.beginPath(); g.arc(R, R, 30, 0, Math.PI * 2); g.fill();
+        for (let k = 0; k < 16; k++) {
+          const a = (k / 16) * Math.PI * 2;
+          g.beginPath(); g.moveTo(R + Math.cos(a) * 42, R + Math.sin(a) * 42); g.lineTo(R + Math.cos(a) * (k % 2 ? 70 : 88), R + Math.sin(a) * (k % 2 ? 70 : 88)); g.stroke();
+        }
+      }
+    });
+    return shieldTexCache[motif];
+  }
+
+  // Ulysse animé : base « Universal Base Characters » + tenue « Modular Character Outfits »
+  // + animations « Universal Animation Library » (Quaternius, CC0), assemblés dans hero.glb.
+  // Les pièces grecques (cuirasse, jupe, casque, couronne, armes, bouclier) sont construites
+  // ici et accrochées aux os ; setSkin() ne fait que montrer/cacher et recolorer.
   function upgradeHero(gltf) {
     const src = gltf.scene;
     const clips = gltf.animations || [];
-    const clip = (suffix) => clips.find((c) => c.name === suffix || c.name.endsWith('|' + suffix) || c.name.endsWith(suffix));
-    if (!clip('Man_Idle') || !clip('Man_Run')) throw new Error('animations manquantes');
-    const bone = (name) => src.getObjectByName(name) || src.getObjectByName(name.replace(/\./g, ''));
-    const need = ['Head', 'Head_end', 'Torso', 'UpperArm.L', 'LowerArm.L', 'MiddleHand.L', 'UpperArm.R', 'LowerArm.R', 'MiddleHand.R'];
+    const clip = (n) => clips.find((c) => c.name === n || c.name.endsWith('|' + n));
+    if (!clip('Idle') || !clip('Run')) throw new Error('animations manquantes');
     const B = {};
-    need.forEach((n) => { B[n] = bone(n); if (!B[n]) throw new Error('os manquant ' + n); });
+    ['Head', 'neck_01', 'spine_03', 'spine_02', 'pelvis', 'upperarm_l', 'lowerarm_l', 'hand_l', 'middle_01_l', 'upperarm_r', 'lowerarm_r',
+      'hand_r', 'middle_01_r', 'thigh_l', 'calf_l', 'foot_l', 'ball_l', 'thigh_r', 'calf_r', 'foot_r', 'ball_r'].forEach((n) => {
+      B[n] = src.getObjectByName(n);
+      if (!B[n]) throw new Error('os manquant ' + n);
+    });
 
     const rig = new THREE.Group();
     rig.add(src);
     src.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(src);
-    const s = 1.1 / (box.max.y - box.min.y);
+    // taille : 1,2 unité (un peu plus grand que l'ancien modèle, pour rester lisible de loin)
+    const box = new THREE.Box3();
+    src.traverse((o) => { if (o.isMesh) { o.geometry.computeBoundingBox(); box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); } });
+    const s = 1.2 / (box.max.y - box.min.y);
     src.scale.setScalar(s);
-    src.position.set(-(box.min.x + box.max.x) / 2 * s, -box.min.y * s, -(box.min.z + box.max.z) / 2 * s);
+    src.position.set(0, -box.min.y * s, 0);
 
-    const COL = { Shirt: '#4d5862', Pants: '#6b737a', Skin: '#ecd5bd', Hair: '#5a4636', Eyes: '#2b2622', Socks: '#8a7a68' };
-    const skinned = [];
+    // matériaux : textures du modèle, teintes de la garde-robe
+    const mats = {};
     src.traverse((o) => {
       if (!o.isMesh) return;
-      const name = o.material && o.material.name;
-      o.material = toonMat({ color: COL[name] || '#d9d4cc', skinning: !!o.isSkinnedMesh, roughness: name === 'Eyes' ? 0.4 : 0.75 });
+      const old = o.material, name = old.name;
+      const m = toonMat({ color: '#ffffff', map: old.map || null, skinning: true,
+        roughness: name === 'Eyes' ? 0.3 : name === 'Skin' || name === 'Hands' || name === 'Legs' ? 0.62 : 0.85 });
+      if (m.map) { m.map.encoding = THREE.sRGBEncoding; m.map.anisotropy = 2; }
+      m.name = name;
+      o.material = m;
+      mats[name] = m;
       o.castShadow = true;
+      o.receiveShadow = true;
       o.frustumCulled = false; // la boîte englobante ne suit pas l'animation
-      if (o.isSkinnedMesh && name !== 'Eyes') skinned.push(o);
     });
-    rig.updateMatrixWorld(true);
-    // contour encré : coque inversée gonflée le long des normales (suit le squelette)
-    const ws = new THREE.Vector3();
-    const inkMat = new THREE.MeshBasicMaterial({ color: '#2a2622', side: THREE.BackSide, skinning: true });
-    if (skinned.length) {
-      skinned[0].getWorldScale(ws);
-      const thick = 0.011 / (ws.x || 1);
-      inkMat.onBeforeCompile = (sh) => {
-        sh.uniforms.outline = { value: thick };
-        sh.vertexShader = 'uniform float outline;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\ttransformed += normalize(normal) * outline;');
-      };
-    }
-    // le modèle est à facettes : on gonfle le contour selon des normales lissées
-    // (moyenne par position), sinon la coque se fendille aux arêtes
-    const smoothGeo = (geo) => {
-      const g = geo.clone();
-      const P = g.attributes.position, N = g.attributes.normal;
-      if (!N) return g;
-      const acc = {}, key = (i) => Math.round(P.getX(i) * 1e5) + ',' + Math.round(P.getY(i) * 1e5) + ',' + Math.round(P.getZ(i) * 1e5);
-      for (let i = 0; i < P.count; i++) {
-        const k = key(i), a = acc[k] || (acc[k] = [0, 0, 0]);
-        a[0] += N.getX(i); a[1] += N.getY(i); a[2] += N.getZ(i);
-      }
-      const out = new Float32Array(P.count * 3);
-      for (let i = 0; i < P.count; i++) {
-        const a = acc[key(i)], l = Math.hypot(a[0], a[1], a[2]) || 1;
-        out[i * 3] = a[0] / l; out[i * 3 + 1] = a[1] / l; out[i * 3 + 2] = a[2] / l;
-      }
-      g.setAttribute('normal', new THREE.BufferAttribute(out, 3));
-      return g;
-    };
-    if (OUTLINE) skinned.forEach((o) => {
-      const hull = new THREE.SkinnedMesh(smoothGeo(o.geometry), inkMat);
-      hull.bind(o.skeleton, o.bindMatrix);
-      hull.position.copy(o.position); hull.quaternion.copy(o.quaternion); hull.scale.copy(o.scale);
-      hull.frustumCulled = false;
-      o.parent.add(hull);
-    });
+    const meshOf = (name) => { let f = null; src.traverse((o) => { if (o.isMesh && o.name === name) f = o; }); return f; };
+    const parts = {};
+    ['Tunic', 'Trousers', 'Shoes', 'Legs', 'Hair', 'Beard', 'Head', 'Hands'].forEach((n) => { parts[n] = meshOf(n); });
 
-    // animations : repos, marche, course, mélangées selon le déplacement
+    // animations : repos, marche, course ; mélange selon le déplacement
     const mixer = new THREE.AnimationMixer(src);
     const acts = {};
-    [['idle', 'Man_Idle'], ['walk', 'Man_Walk'], ['run', 'Man_Run']].forEach(([k, n]) => {
+    [['idle', 'Idle'], ['walk', 'Walk'], ['run', 'Run']].forEach(([k, n]) => {
       const c = clip(n);
       if (!c) return;
       const a = mixer.clipAction(c);
@@ -1589,40 +2248,343 @@
     mixer.update(0);
     rig.updateMatrixWorld(true);
 
-    const P = (o) => o.getWorldPosition(new THREE.Vector3()); // (rig encore à l'origine : repère du rig)
-    const ul = P(B['UpperArm.L']), ur = P(B['UpperArm.R']);
+    const P = (o) => o.getWorldPosition(new THREE.Vector3()); // (rig à l'origine : repère du rig)
+    const ul = P(B.upperarm_l), ur = P(B.upperarm_r);
     const width = ul.distanceTo(ur);
+    const headBone = P(B.Head);
+    // haut du crâne : boîte de la tête (pose de liaison, à l'échelle)
+    let headTop = headBone.y + 0.14;
+    if (parts.Head) {
+      const hb = parts.Head.geometry.boundingBox || (parts.Head.geometry.computeBoundingBox(), parts.Head.geometry.boundingBox);
+      headTop = hb.max.y * s - box.min.y * s;
+    }
+    const headSize = headTop - headBone.y;
+    const unit = 1.2 / 1.84; // (le modèle mesure 1,84 m)
+    const brass = toonMat({ color: '#c9973f', roughness: 0.38, metalness: 0.75, skinning: false });
+    const bronzeDark = toonMat({ color: '#8a5f2a', roughness: 0.45, metalness: 0.7 });
+    const leather = toonMat({ color: '#7a5034', roughness: 0.8 });
+    const wood = toonMat({ color: '#a7835c', roughness: 0.8 });
+    const gold = toonMat({ color: '#e0b24e', roughness: 0.32, metalness: 0.85 });
+    const linen = toonMat({ color: '#efe7d6', roughness: 0.9, side: THREE.DoubleSide });
+    const tunicCloth = toonMat({ color: '#2f6f9f', roughness: 0.9, side: THREE.DoubleSide });
+    const leafMat = toonMat({ color: '#7f9f4a', roughness: 0.7 });
+    const crestMat = toonMat({ color: '#b03a2e', roughness: 0.95 });
+    const bandMat = toonMat({ color: '#a63a30', roughness: 0.85 });
+    const strap = toonMat({ color: '#5a3a24', roughness: 0.8 });
+    const add = (parent, geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x || 0, y || 0, z || 0); m.castShadow = true; parent.add(m); return m; };
+    // attache : on place l'objet dans le repère du rig, puis on le confie à l'os (transformation conservée)
+    const attach = (bone, obj) => { rig.add(obj); rig.updateMatrixWorld(true); bone.attach(obj); return obj; };
+
+    // tour de taille et de poitrine mesurés sur la tunique (pose de liaison)
+    const torsoAt = (y0, y1) => {
+      const g = parts.Tunic && parts.Tunic.geometry, p = g && g.attributes.position;
+      let rx = 0.16, rz = 0.11;
+      if (!p) return { rx: rx * unit / 0.6, rz };
+      let mx = 0, mz = 0, cz = 0, n = 0;
+      for (let i = 0; i < p.count; i++) {
+        const y = p.getY(i);
+        if (y < y0 || y > y1 || Math.abs(p.getX(i)) > 0.24) continue;
+        mx = Math.max(mx, Math.abs(p.getX(i))); mz = Math.max(mz, Math.abs(p.getZ(i) - 0)); cz += p.getZ(i); n++;
+      }
+      return n ? { rx: mx * s, rz: mz * s, cz: (cz / n) * s } : { rx: rx, rz: rz, cz: 0 };
+    };
+    const pelvis = P(B.pelvis), chest = P(B.spine_03);
+    const waist = torsoAt(0.95, 1.05), ribs = torsoAt(1.15, 1.3);
+    const acc = {}; // pièces de garde-robe
+
+    // cuirasse de bronze « musclée » (hoplite) : coque tournée autour du torse
+    const chestRx = Math.max(ribs.rx * 1.25, width * 0.64), chestRz = Math.max(ribs.rz * 1.35, chestRx * 0.66);
+    {
+      const g = new THREE.Group();
+      const y0 = pelvis.y + 0.04, h = (ul.y + 0.035) - y0;
+      const prof = [[0.8, 0], [0.84, 0.12], [0.93, 0.42], [1.0, 0.68], [0.98, 0.86], [0.8, 0.97], [0.5, 1.02]]
+        .map(([r, y]) => new THREE.Vector2(r, y * h));
+      const geo = new THREE.LatheGeometry(prof, 22);
+      // bombé des pectoraux et des abdominaux, sur le devant
+      const p = geo.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        const z = p.getZ(i), y = p.getY(i) / h;
+        if (z > 0) p.setZ(i, z * (1 + 0.12 * Math.sin(Math.PI * Math.min(1, y * 1.15))));
+      }
+      geo.scale(chestRx, 1, chestRz);
+      geo.computeVertexNormals();
+      add(g, geo, brass, 0, 0, 0);
+      const rim = new THREE.TorusGeometry(1, 0.07, 6, 24); rim.rotateX(Math.PI / 2); rim.scale(chestRx * 0.81, 0.3, chestRz * 0.81);
+      add(g, rim, bronzeDark, 0, 0.004, 0);
+      g.position.set(0, y0, (ribs.cz || 0) + 0.005);
+      acc.cuirass = attach(B.spine_02, g);
+    }
+    // ptéruges : lanières de cuir sous la cuirasse
+    {
+      const g = new THREE.Group();
+      const n = 18, r = chestRx * 0.8, rz = chestRz * 0.8, len = 0.15;
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2;
+        const piv = new THREE.Group();
+        piv.position.set(Math.sin(a) * r, 0, Math.cos(a) * rz);
+        piv.rotation.order = 'YXZ';
+        piv.rotation.y = a;
+        piv.rotation.x = -0.22; // les lanières s'évasent vers l'extérieur
+        g.add(piv);
+        add(piv, new THREE.BoxGeometry(0.036, len, 0.008), k % 2 ? leather : linen, 0, -len / 2, 0);
+        add(piv, new THREE.BoxGeometry(0.036, 0.014, 0.011), brass, 0, -len + 0.007, 0);
+      }
+      g.position.set(0, pelvis.y + 0.05, (ribs.cz || 0) + 0.005);
+      acc.pteruges = attach(B.pelvis, g);
+    }
+    // jupe de chiton (marin : courte ; roi et pèlerin : longue) — couleur de la tunique
+    const skirt = (len, flare, mat) => {
+      const g = new THREE.Group();
+      const geo = new THREE.CylinderGeometry(1, flare, len, 22, 4, true);
+      geo.scale(waist.rx * 1.02, 1, waist.rz * 1.18);
+      // plis : ondulation douce du bas
+      const p = geo.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        const y = p.getY(i), k = (len / 2 - y) / len, a = Math.atan2(p.getZ(i), p.getX(i));
+        const f = 1 + Math.sin(a * 11) * 0.06 * k;
+        p.setX(i, p.getX(i) * f); p.setZ(i, p.getZ(i) * f);
+      }
+      geo.computeVertexNormals();
+      add(g, geo, mat, 0, -len / 2, 0);
+      const hem = new THREE.TorusGeometry(1, 0.03, 5, 28); hem.rotateX(Math.PI / 2); hem.scale(waist.rx * 1.02 * flare, 0.5, waist.rz * 1.18 * flare);
+      const hemM = add(g, hem, gold, 0, -len + 0.004, 0);
+      const belt = new THREE.TorusGeometry(1, 0.05, 5, 24); belt.rotateX(Math.PI / 2); belt.scale(waist.rx * 1.0, 0.45, waist.rz * 1.12);
+      add(g, belt, leather, 0, 0.005, 0);
+      g.userData.hem = hemM;
+      g.position.set(0, pelvis.y + 0.07, waist.cz || 0);
+      return attach(B.pelvis, g);
+    };
+    acc.skirtShort = skirt(0.2, 1.45, tunicCloth);
+    acc.skirtLong = skirt(0.43, 1.75, tunicCloth);
+    // jambières de bronze (cnémides)
+    acc.greaves = [];
+    ['l', 'r'].forEach((sd) => {
+      const a = P(B['calf_' + sd]), b = P(B['foot_' + sd]);
+      const len = a.distanceTo(b) * 0.78;
+      const geo = new THREE.CylinderGeometry(0.042, 0.034, len, 12, 1, true, -Math.PI * 0.75, Math.PI * 1.5);
+      const m = new THREE.Mesh(geo, brass);
+      m.castShadow = true;
+      m.position.copy(a).lerp(b, 0.5);
+      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), a.clone().sub(b).normalize());
+      m.rotateY(Math.PI); // l'ouverture vers l'arrière du mollet
+      acc.greaves.push(attach(B['calf_' + sd], m));
+    });
+    // sandales : semelle et lanières croisées
+    acc.sandals = [];
+    ['l', 'r'].forEach((sd) => {
+      const f = P(B['foot_' + sd]), t = P(B['ball_' + sd]);
+      const g = new THREE.Group();
+      const len = Math.hypot(t.x - f.x, t.z - f.z) * 1.9;
+      add(g, new THREE.BoxGeometry(0.07, 0.012, len), leather, 0, 0.006, len * 0.18);
+      [0.035, 0.07, 0.11].forEach((y, i) => {
+        const ring = new THREE.TorusGeometry(0.036 - i * 0.002, 0.005, 4, 14); ring.rotateX(Math.PI / 2);
+        add(g, ring, strap, 0, y + 0.01, 0);
+      });
+      g.position.set(f.x, 0, f.z);
+      g.lookAt(t.x, 0, t.z + 1e-4);
+      acc.sandals.push(attach(B['foot_' + sd], g));
+    });
+    // coiffes
+    const headC = new THREE.Vector3(headBone.x, headBone.y + headSize * 0.52, headBone.z + headSize * 0.04);
+    const hr = headSize * 0.62; // rayon approximatif du crâne
+    {
+      const g = new THREE.Group(); // couronne de laurier
+      const leaf = new THREE.SphereGeometry(1, 6, 4);
+      for (let k = 0; k < 26; k++) {
+        if (k === 12 || k === 13) continue; // ouverte sur la nuque
+        const a = (k / 26) * Math.PI * 2 + Math.PI / 2;
+        const l = add(g, leaf, k % 3 ? leafMat : gold, Math.cos(a) * hr * 1.06, (k % 2) * 0.008, Math.sin(a) * hr * 1.12);
+        l.scale.set(0.022, 0.008, 0.012);
+        l.rotation.set(0.5, -a, (k % 2 ? 0.6 : -0.6));
+      }
+      g.position.copy(headC).add(new THREE.Vector3(0, hr * 0.32, 0));
+      g.rotation.x = -0.18;
+      acc.laurel = attach(B.Head, g);
+    }
+    {
+      const ring = new THREE.TorusGeometry(1, 0.06, 6, 30); ring.rotateX(Math.PI / 2);
+      ring.scale(hr * 1.02, 0.35, hr * 1.1);
+      const g = new THREE.Group();
+      add(g, ring, bandMat);
+      g.position.copy(headC).add(new THREE.Vector3(0, hr * 0.18, 0));
+      g.rotation.x = -0.15;
+      acc.band = attach(B.Head, g);
+    }
+    {
+      const g = new THREE.Group(); // casque corinthien à crête
+      // porté relevé sur le front, à la manière des statues de Périclès : le visage reste lisible
+      const dome = new THREE.SphereGeometry(hr * 1.06, 20, 14, 0, Math.PI * 2, 0, Math.PI * 0.6);
+      dome.scale(0.95, 1.0, 1.1);
+      add(g, dome, brass);
+      // garde-joues et nasal, relevés au-dessus du front
+      const cheeks = new THREE.CylinderGeometry(hr * 1.0, hr * 0.95, hr * 0.45, 20, 1, true, Math.PI * 0.15, Math.PI * 1.7);
+      cheeks.scale(0.97, 1, 1.1);
+      add(g, cheeks, brass, 0, -hr * 0.18, 0);
+      add(g, new THREE.BoxGeometry(hr * 0.14, hr * 0.32, hr * 0.1), brass, 0, -hr * 0.2, hr * 1.06);
+      // crête de crin, d'avant en arrière
+      const crest = new THREE.CylinderGeometry(hr * 0.9, hr * 0.9, hr * 0.16, 18, 1, false, -Math.PI * 0.02, Math.PI * 1.04);
+      crest.rotateZ(Math.PI / 2);
+      add(g, crest, crestMat, 0, hr * 1.05, -hr * 0.12);
+      add(g, new THREE.BoxGeometry(hr * 0.1, hr * 0.3, hr * 0.9), bronzeDark, 0, hr * 1.0, -hr * 0.12);
+      g.position.copy(headC).add(new THREE.Vector3(0, hr * 0.42, -hr * 0.08));
+      g.rotation.x = -0.32;
+      acc.helmet = attach(B.Head, g);
+    }
+    {
+      const g = new THREE.Group(); // pétase : chapeau de voyageur à large bord
+      const brim = new THREE.CylinderGeometry(hr * 2.0, hr * 2.15, hr * 0.08, 26);
+      add(g, brim, toonMat({ color: '#b48a5a', roughness: 0.9 }), 0, 0, 0);
+      const crown = new THREE.SphereGeometry(hr * 0.98, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2);
+      add(g, crown, toonMat({ color: '#a37b4c', roughness: 0.9 }), 0, 0.01, 0);
+      g.position.copy(headC).add(new THREE.Vector3(0, hr * 0.45, -hr * 0.05));
+      g.rotation.x = -0.1;
+      acc.petasos = attach(B.Head, g);
+    }
+    // armes : tenues dans la main droite (position calculée dans la pose de repos)
+    const hand = P(B.hand_r), fing = P(B.middle_01_r);
+    const grip = hand.clone().lerp(fing, 0.6);
+    const holdUp = (obj, below) => { // tige verticale passant par la main
+      obj.position.set(grip.x, grip.y - below, grip.z);
+      return attach(B.hand_r, obj);
+    };
+    {
+      const g = new THREE.Group(); // lance : hampe de frêne, pointe de bronze
+      add(g, new THREE.CylinderGeometry(0.012, 0.014, 1.32, 6), wood, 0, 0.66, 0);
+      add(g, new THREE.ConeGeometry(0.028, 0.13, 8), brass, 0, 1.38, 0).scale.set(1, 1, 0.45);
+      add(g, new THREE.CylinderGeometry(0.018, 0.016, 0.04, 8), bronzeDark, 0, 1.31, 0);
+      add(g, new THREE.ConeGeometry(0.014, 0.06, 6), bronzeDark, 0, -0.02, 0).rotation.x = Math.PI;
+      acc.spear = holdUp(g, 0.42);
+    }
+    {
+      const g = new THREE.Group(); // bâton de pèlerin à crosse
+      add(g, new THREE.CylinderGeometry(0.016, 0.019, 1.15, 7), wood, 0, 0.575, 0);
+      const hook = new THREE.TorusGeometry(0.06, 0.016, 6, 12, Math.PI * 1.2);
+      add(g, hook, wood, -0.06, 1.15, 0).rotation.z = -0.1;
+      acc.staff = holdUp(g, 0.4);
+    }
+    {
+      const g = new THREE.Group(); // xiphos au côté (fourreau à la hanche gauche)
+      add(g, new THREE.BoxGeometry(0.04, 0.3, 0.018), leather, 0, -0.15, 0);
+      add(g, new THREE.BoxGeometry(0.1, 0.018, 0.03), gold, 0, 0.01, 0);
+      add(g, new THREE.CylinderGeometry(0.012, 0.012, 0.08, 6), wood, 0, 0.06, 0);
+      add(g, new THREE.SphereGeometry(0.018, 8, 6), gold, 0, 0.105, 0);
+      g.position.set(pelvis.x + waist.rx * 1.15, pelvis.y + 0.03, (waist.cz || 0) + 0.02);
+      g.rotation.z = 0.35;
+      acc.sword = attach(B.pelvis, g);
+    }
+    {
+      const g = new THREE.Group(); // arc et carquois dans le dos
+      const arc = new THREE.TorusGeometry(0.38, 0.011, 6, 26, Math.PI * 0.9);
+      const bow = add(g, arc, wood); bow.rotation.z = Math.PI * 0.55;
+      const str = new THREE.CylinderGeometry(0.002, 0.002, 0.72, 3);
+      add(g, str, linen, 0.06, 0, 0).rotation.z = 0.02;
+      const quiver = add(g, new THREE.CylinderGeometry(0.035, 0.03, 0.34, 10), leather, -0.07, 0.02, -0.02);
+      quiver.rotation.z = -0.5;
+      for (let k = 0; k < 3; k++) add(g, new THREE.ConeGeometry(0.015, 0.05, 4), crestMat, -0.15 - k * 0.012, 0.18 + k * 0.005, -0.02 + k * 0.01).rotation.z = -0.5;
+      g.position.set(0, chest.y + 0.02, -(ribs.rz + 0.06) + (ribs.cz || 0));
+      g.rotation.y = Math.PI;
+      g.scale.setScalar(0.72);
+      acc.bow = attach(B.spine_03, g);
+    }
+    // bouclier rond (aspis) dans le dos, motif peint
+    const shieldFace = toonMat({ color: '#ffffff', roughness: 0.6, map: shieldTexture('chouette') });
+    {
+      const g = new THREE.Group();
+      const R = 0.22;
+      const disc = new THREE.CylinderGeometry(R, R, 0.03, 32); disc.rotateX(Math.PI / 2);
+      add(g, disc, bronzeDark);
+      const face = new THREE.CircleGeometry(R * 0.96, 32);
+      add(g, face, shieldFace, 0, 0, -0.017).rotation.y = Math.PI;
+      const rim = new THREE.TorusGeometry(R, 0.022, 6, 32);
+      add(g, rim, brass);
+      g.position.set(0, chest.y - 0.02, -(ribs.rz + 0.07) + (ribs.cz || 0));
+      acc.shield = attach(B.spine_03, g);
+    }
+
     // cape : accrochée au torse, à hauteur d'épaules
     const holder = new THREE.Group();
     const sy = (ul.y + ur.y) / 2;
-    holder.position.set(0, sy - 0.01, -0.01);
+    holder.position.set(0, sy - 0.01, (ribs.cz || 0) - ribs.rz * 0.35);
     const k = Math.max(0.6, Math.min(1.8, width / 0.27));
-    holder.scale.set(k, sy / 0.88, k * 0.95);
+    holder.scale.set(k * 0.86, sy / 0.88 * 0.8, k * 0.92);
     hero.cape.position.set(0, 0, 0);
     holder.add(hero.cape);
-    rig.add(holder);
-    rig.updateMatrixWorld(true);
-    B.Torso.attach(holder);
-    // lance de voyageur, plantée à sa droite
-    hero.spear.position.set(-(width * 0.5 + 0.1), 0, 0.06);
-    hero.spear.rotation.z = 0.06;
-    rig.add(hero.spear);
+    attach(B.spine_03, holder);
     // repère au centre de la tête (caméra du mode concentration, lueur de la pensée)
-    const hp = P(B.Head), he = P(B.Head_end);
     const anchor = new THREE.Object3D();
-    anchor.position.copy(hp).lerp(he, 0.45);
-    rig.add(anchor);
-    rig.updateMatrixWorld(true);
-    B.Head.attach(anchor);
+    anchor.position.copy(headC);
+    attach(B.Head, anchor);
     rig.add(hero.mind);
     hero.mind.position.copy(anchor.position);
+    rig.traverse((o) => { if (o.isMesh) o.castShadow = true; });
 
     hero.group.remove(hero.body);
+    if (hero.spear.parent) hero.spear.parent.remove(hero.spear);
     hero.group.add(rig);
     _ik = { a: new THREE.Vector3(), b: new THREE.Vector3(), c: new THREE.Vector3(), t: new THREE.Vector3(), h: new THREE.Vector3(),
       q: new THREE.Quaternion(), w: new THREE.Quaternion(), p: new THREE.Quaternion() };
-    const arm = (side) => ({ upper: B['UpperArm.' + side], lower: B['LowerArm.' + side], end: B['MiddleHand.' + side], qa: [new THREE.Quaternion(), new THREE.Quaternion()] });
-    Object.assign(hero, { body: rig, head: anchor, rig: { mixer, acts, arms: [arm('L'), arm('R')], headBone: B.Head, headSize: hp.distanceTo(he) } });
+    const arm = (side) => ({ upper: B['upperarm_' + side], lower: B['lowerarm_' + side], end: B['middle_01_' + side], qa: [new THREE.Quaternion(), new THREE.Quaternion()] });
+    Object.assign(hero, { body: rig, head: anchor, rig: { mixer, acts, arms: [arm('l'), arm('r')], headBone: B.Head, headSize: headSize * 0.9 },
+      skin: { mats, parts, acc, tunicCloth, shieldFace, capeHolder: holder } });
+    applySkin();
+  }
+
+  // applique skinState au héros (modèle animé ou héros procédural de secours) : peu coûteux
+  const HAND_WEAPONS = ['spear', 'staff'];
+  function applySkin() {
+    if (!hero.group) return;
+    const st = skinState;
+    const col = (cat) => skinOpt(cat, st[cat]).color;
+    const capeId = skinOpt('cape', st.cape).id;
+    const capeHex = col('cape') || '#f4f1ea';
+    if (hero.capeMat) {
+      setLin(hero.capeMat.color, capeHex);
+      setLin(hero.scarf.color, '#' + new THREE.Color(capeHex).multiplyScalar(0.72).getHexString());
+    }
+    if (hero.cape) hero.cape.visible = capeId !== 'none';
+    const K = hero.skin;
+    if (!K) { // héros procédural : couleurs seulement
+      const pm = hero.procMats;
+      if (pm) {
+        setLin(pm.tunic.color, col('tunic')); setLin(pm.hair.color, col('hair')); setLin(pm.skin.color, col('skin'));
+      }
+      return;
+    }
+    const outfit = skinOpt('outfit', st.outfit).id;
+    const tunicHex = col('tunic');
+    // textures en niveaux de gris (moyenne ≈ 0,82) : la couleur choisie les teinte
+    if (K.mats.Tunic) setLin(K.mats.Tunic.color, tunicHex).multiplyScalar(1.2);
+    setLin(K.tunicCloth.color, tunicHex);
+    ['Hair', 'Beard', 'Brows'].forEach((n) => { if (K.mats[n]) setLin(K.mats[n].color, col('hair')).multiplyScalar(1.25); });
+    // peau : la texture est déjà hâlée (≈ #c98f66) ; on la multiplie vers le ton choisi
+    const ref = lin('#d29a72'), tgt = lin(col('skin'));
+    ['Skin', 'Hands', 'Legs'].forEach((n) => {
+      if (K.mats[n]) K.mats[n].color.setRGB(tgt.r / ref.r, tgt.g / ref.g, tgt.b / ref.b);
+    });
+    const A = K.acc, P = K.parts;
+    const greek = outfit !== 'voyageur';
+    if (P.Trousers) P.Trousers.visible = !greek;
+    if (P.Shoes) P.Shoes.visible = !greek;
+    if (P.Legs) P.Legs.visible = greek;
+    A.sandals.forEach((o) => { o.visible = greek; });
+    A.greaves.forEach((o) => { o.visible = outfit === 'hoplite'; });
+    A.cuirass.visible = outfit === 'hoplite';
+    A.pteruges.visible = outfit === 'hoplite';
+    A.skirtShort.visible = outfit === 'marin';
+    A.skirtLong.visible = outfit === 'roi' || outfit === 'pelerin';
+    // le roi porte un ourlet d'or, le pèlerin un simple lin
+    A.skirtLong.userData.hem.visible = outfit === 'roi';
+    const accId = skinOpt('accessory', st.accessory).id;
+    ['laurel', 'helmet', 'band', 'petasos'].forEach((n) => { A[n].visible = accId === n; });
+    setLin(A.band.children[0].material.color, capeId === 'none' || capeId === 'blanc' ? '#a63a30' : capeHex);
+    const w = skinOpt('weapon', st.weapon).id;
+    ['spear', 'staff', 'bow', 'sword'].forEach((n) => { A[n].visible = w === n; A[n].userData.hidden = false; });
+    const sh = skinOpt('shield', st.shield).id;
+    A.shield.visible = sh !== 'none';
+    if (sh !== 'none' && K.shieldFace.map !== shieldTexture(sh)) { K.shieldFace.map = shieldTexture(sh); K.shieldFace.needsUpdate = true; }
+    // carquois et bouclier se disputent le dos : le bouclier passe devant l'arc
+    if (A.bow.visible && A.shield.visible) A.shield.position.z -= 0; // (le bouclier, plus large, recouvre l'arc)
+    if (World.ok && !running) renderFrame();
   }
 
   // Mains sur la tête (mode concentration) : petite IK « CCD » sur bras + avant-bras,
@@ -1666,21 +2628,24 @@
       A.w += ((target[k] || 0) - A.w) * kk;
       A.a.setEffectiveWeight(A.w);
     });
-    if (r.acts.run) r.acts.run.a.timeScale = speed ? 1.0 : 0.7;
+    if (r.acts.run) r.acts.run.a.timeScale = speed ? 1.12 : 0.8;
     r.mixer.update(dt);
-    hero.cape.rotation.x = moving ? -0.38 + Math.sin(t * 7) * 0.06 : -0.06 + Math.sin(t * 1.2) * 0.03;
+    hero.cape.rotation.x = moving ? -0.42 + Math.sin(t * 7) * 0.07 : -0.06 + Math.sin(t * 1.2) * 0.03;
+    // en concentration, l'arme tenue en main s'efface (les mains montent vers la tête)
+    const A = hero.skin && hero.skin.acc;
+    if (A) HAND_WEAPONS.forEach((n) => { if (A[n].visible || A[n].userData.hidden) { const on = hero.focus < 0.3; A[n].visible = on; A[n].userData.hidden = !on; } });
     if (hero.focus > 0.01) handsOnHead(Math.min(1, hero.focus));
     hero.mind.position.copy(hero.body.worldToLocal(hero.head.getWorldPosition(_ik.h)));
   }
 
-  // point de passage → position vivante (les îles tanguent, les pierres flottent)
+  // point de passage → position vivante (les îles tanguent, le ponton sort de l'eau)
   function wpPos(wp) {
     if (wp.level != null) return nodePos(wp.level);
-    if (wp.stone) return new THREE.Vector3(wp.stone.position.x, wp.stone.position.y + 0.11, wp.stone.position.z);
+    if (wp.stone) return new THREE.Vector3(wp.stone.position.x, wp.stone.position.y + (wp.stone.userData.pier ? 0.03 : 0.11), wp.stone.position.z);
     return groundPos(wp.c, wp.at);
   }
 
-  // itinéraire de pierre en pierre ; entre deux îles on passe le portique puis le gué
+  // itinéraire le long du sentier ; entre deux îles : le portique, puis le ponton
   function routeBetween(a, b) {
     const route = [{ level: a }];
     const dir = b > a ? 1 : -1;
@@ -1688,10 +2653,12 @@
       const n = L + dir;
       if (chapterOf(n) !== chapterOf(L)) {
         const c = Math.min(chapterOf(n), chapterOf(L));
-        const leg = [{ c, at: exitOf(c, 0.86) }, { c, at: exitOf(c, 0.98) }]
+        const leg = curveWps(c, levelF(PER - 1), 1).concat([{ c, at: pathWorld(c, 1) }])
           .concat(chapters[c].stones.map((s) => ({ stone: s })))
-          .concat([{ c: c + 1, at: entryOf(c + 1, 0.98) }]);
+          .concat([{ c: c + 1, at: pathWorld(c + 1, 0) }]).concat(curveWps(c + 1, 0, levelF(0)));
         route.push(...(dir > 0 ? leg : leg.reverse()));
+      } else {
+        route.push(...curveWps(chapterOf(L), levelF(L % PER), levelF(n % PER)));
       }
       route.push({ level: n });
     }
@@ -1759,7 +2726,9 @@
     else if (hero.route) {
       const a = hero.route[hero.seg], b = hero.route[hero.seg + 1];
       const pa = wpPos(a), pb = wpPos(b);
-      const hop = !!(a.stone || b.stone); // on saute de pierre en pierre, on marche sur l'île
+      const pier = !!((a.stone && a.stone.userData.pier) || (b.stone && b.stone.userData.pier));
+      const hop = !pier && !!(a.stone || b.stone); // (anciennes pierres de gué : on sautait)
+      hero.crossing = pier;
       const dist = Math.hypot(pb.x - pa.x, pb.z - pa.z);
       const dur = hop ? 0.32 + dist * 0.05 : Math.max(0.1, dist / 2.4);
       hero.segT += dt / dur;
@@ -1795,9 +2764,12 @@
       }
     }
     if (!moving) {
+      hero.crossing = false;
       g.position.copy(hero.free ? groundPos(hero.free.c, hero.free.at) : nodePos(selected));
-      hero.facing = Math.atan2(camera.position.x - g.position.x, camera.position.z - g.position.z);
+      // au repos, il regarde vers la suite du voyage (la caméra est derrière lui)
+      if (!hero.free) { const d = pathDir(selected); hero.facing = Math.atan2(d.x, d.z); }
     }
+    hero.moving = moving;
     if (hero.celebrate > 0) {
       hero.celebrate = Math.max(0, hero.celebrate - dt * 1.6);
       const jump = Math.sin(Math.PI * (1 - hero.celebrate)) * 0.4;
@@ -1816,7 +2788,6 @@
     hero.mind.material.opacity = Math.max(0, f - 0.5) * 2 * (0.7 + Math.sin(t * 3) * 0.3);
     hero.mind.scale.setScalar(0.35 + f * 0.35 + Math.sin(t * 3) * 0.04);
     const accent = lin(opts.levelInfo(selected).accent);
-    hero.scarf.color.lerp(accent, 1 - Math.exp(-dt * 2));
     hero.emblem.material.color.lerp(accent, 1 - Math.exp(-dt * 2));
   }
 
@@ -1872,12 +2843,15 @@
 
     chapters.forEach((ch) => {
       if (!ch) return;
-      ch.group.position.y = Math.sin(t * 0.5 + ch.phase) * 0.03;
       const reached = done >= ch.c * PER;
       ch.fade += ((reached ? 1 : 0.22) - ch.fade) * (1 - Math.exp(-dt * 0.8));
+      // l'île suivante attend, enfoncée dans la brume ; atteinte, elle s'élève doucement
+      const rise = smooth(0.22, 0.95, ch.fade);
+      ch.group.position.y = Math.sin(t * 0.5 + ch.phase) * 0.03 - (1 - rise) * 0.7;
       ch.fadeMats.forEach((m) => { m.opacity = ch.fade; m.transparent = ch.fade < 0.995; });
       ch.nodes.forEach((n) => {
         n.mesh.material.opacity = Math.min(ch.fade, n.mesh.userData.alpha == null ? 1 : n.mesh.userData.alpha);
+        if (n.rings) n.rings.visible = ch.fade > 0.3;
       });
       ch.gate.visible = ch.fade > 0.3;
       if (ch.opened) ch.open = Math.min(1, ch.open + dt * 0.6);
@@ -1891,7 +2865,7 @@
         }
         u.dip = Math.max(0, u.dip - dt * 3);
         const ease = 1 - Math.pow(1 - u.raise, 3);
-        s.position.y = -1.3 + ease * 1.32 + Math.sin(t * 0.7 + u.phase) * 0.03 * ease - Math.sin(u.dip * Math.PI) * 0.06;
+        s.position.y = (u.base || 0) - (1 - ease) * 1.5 - Math.sin(u.dip * Math.PI) * 0.03;
         s.visible = u.raise > 0;
       });
       ch.ripples.forEach((ring) => {
@@ -1908,21 +2882,48 @@
         }
       });
       ch.sheep.forEach((s) => { s.visible = reached; if (reached) updateSheep(ch, s, dt, t); });
+      // vie de l'île : ailes du moulin, barques qui tanguent, feu du phare la nuit
+      const life = ch.life;
+      if (life) {
+        if (life.sails && !calm) life.sails.rotation.z -= dt * 0.6;
+        life.boats.forEach((b) => {
+          b.position.y = Math.sin(t * 1.3 + b.userData.phase) * 0.03 - 0.02;
+          b.rotation.z = Math.sin(t * 1.1 + b.userData.phase) * 0.05;
+          b.rotation.y = b.userData.base + Math.sin(t * 0.3 + b.userData.phase) * 0.08;
+        });
+        if (life.lamp) life.lamp.material.opacity = isDark && reached ? 0.75 + Math.sin(t * 2.2) * 0.15 : 0;
+      }
     });
+    // le sentier s'illumine jusqu'à Ulysse
+    pathU.value += ((pathU.target != null ? pathU.target : done) - pathU.value) * (1 - Math.exp(-dt * 1.2));
 
-    // la pierre du prochain niveau respire ; l'icône du mini-jeu flotte au-dessus de la pierre choisie
+    // la pierre du niveau en cours respire (anneau fixe + onde) ; la bulle du mini-jeu flotte
+    // au-dessus de la pierre choisie, à côté d'Ulysse, à taille constante à l'écran
     const cur = chapters[chapterOf(done)] && nodePos(done);
     pulse.visible = !!cur;
+    if (CUR_RING) CUR_RING.visible = !!cur && !cine;
     if (cur) {
       const k = (t * 0.6) % 1;
+      const big = chapters[chapterOf(done)].nodes[done % PER].boss ? 1.45 : 1;
       pulse.position.set(cur.x, cur.y - 0.03, cur.z);
-      pulse.scale.setScalar(0.45 + k * 0.75);
+      pulse.scale.setScalar((0.95 + k * 0.7) * big);
       pulse.material.opacity = (1 - k) * 0.7;
       setLin(pulse.material.color, opts.levelInfo(done).accent);
+      if (CUR_RING) {
+        CUR_RING.position.set(cur.x, cur.y - 0.02, cur.z);
+        CUR_RING.scale.setScalar(big * (1 + Math.sin(t * 2.4) * 0.04));
+        setLin(CUR_RING.material.color, opts.levelInfo(done).accent);
+      }
     }
     const sel = nodePos(selected);
-    marker.position.set(sel.x, sel.y + 1.75 + Math.sin(t * 1.6) * 0.08, sel.z);
-    marker.material.opacity += ((hero.route || hero.free || cine ? 0 : 1) - marker.material.opacity) * (1 - Math.exp(-dt * 5));
+    const camD = camera.position.distanceTo(sel);
+    const ms = Math.max(0.28, Math.min(1.15, camD * 0.075));
+    const aspect = (marker.material.map && marker.material.map.userData.aspect) || 2;
+    marker.scale.set(ms * aspect, ms, 1);
+    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+    right.y = 0; right.normalize();
+    marker.position.set(sel.x, sel.y + 1.38 + ms * 0.55 + Math.sin(t * 1.6) * 0.04, sel.z).addScaledVector(right, 0.35 + ms * 0.5);
+    marker.material.opacity += ((hero.route || hero.free || cine || lvlCam ? 0 : 1) - marker.material.opacity) * (1 - Math.exp(-dt * 5));
     if (cine) pulse.visible = false;
 
     clouds.forEach((c) => {
@@ -1935,7 +2936,7 @@
       const u = b.userData;
       u.a += dt * u.speed;
       b.position.set(focus.x + Math.cos(u.a) * u.rad, u.y + Math.sin(t * 0.7 + u.phase) * 0.4, focus.z + Math.sin(u.a) * u.rad);
-      b.rotation.y = -u.a;
+      b.rotation.y = -u.a + (u.speed < 0 ? Math.PI : 0);
       const flap = Math.sin(t * 6 + u.phase) * 0.5;
       u.l.rotation.z = flap; u.r.rotation.z = -flap;
     });
@@ -1946,18 +2947,21 @@
     boat.position.set(bx, Math.sin(t * 1.2) * 0.05, bz);
     boat.rotation.y = Math.atan2(nbx - bx, (Math.sin((nbx / SPACING) * 1.15) * 7 + 9.5) - bz) - Math.PI / 2;
     boat.rotation.z = Math.sin(t * 1.1) * 0.06;
+    seaLife(dt, t, focus);
     motes.position.set(focus.x, Math.sin(t * 0.2) * 0.3, focus.z);
     motes.rotation.y = t * 0.01;
 
     updateHero(dt, t);
 
-    // mode concentration : la caméra plonge vers le visage d'Ulysse
+    // mode concentration : la caméra plonge vers le visage d'Ulysse (de face, un peu de côté)
     if (cine) {
       cine.t += dt;
       const head = new THREE.Vector3();
       hero.head.getWorldPosition(head);
       goal.tx = head.x; goal.ty = head.y + 0.02; goal.tz = head.z;
       goal.radius = 1.25; goal.elev = 0.12;
+      const ry = hero.group.rotation.y;
+      goal.theta = Math.atan2(Math.cos(ry), Math.sin(ry)) + 0.35;
       setLin(hero.mind.material.color, cine.accent);
       if (cine.t > 2.3 && cine.done) { const cb = cine.done; cine.done = null; cb(); }
       const k = 1 - Math.exp(-dt * 2.4);
@@ -1969,28 +2973,64 @@
       return;
     }
 
-    // Caméra stable : centrée sur Ulysse (mode suivi) ou sur un point qu'on fait glisser
-    // (caméra libre). L'angle, l'inclinaison et le zoom ne changent que si le joueur les
-    // touche ; la hauteur suit en douceur pour ignorer le léger tangage des îles.
-    goal.theta = userTheta;
+    // Caméra « suivi » : toujours derrière Ulysse, un peu au-dessus de l'épaule, tournée vers
+    // la suite du sentier ; pendant une traversée elle s'élève pour montrer les deux îles.
+    // Caméra « libre » : on survole la carte (glisser, pincer, tourner à deux doigts).
+    let rate = 3;
     if (camMode === 'follow') {
-      goal.tx = focus.x; goal.tz = focus.z;
+      const ry = hero.group.rotation.y;
+      const fx = Math.sin(ry), fz = Math.cos(ry);
+      if (!drag) followYaw *= Math.exp(-dt * 1.4); // un coup d'œil de côté revient doucement
+      goal.theta = Math.atan2(-fz, -fx) + 0.3 + followYaw;
+      const cross = hero.crossing ? 1 : 0;
+      crossK += (cross - crossK) * (1 - Math.exp(-dt * 1.5));
+      goal.radius = followR * (1 + crossK * 0.9);
+      goal.elev = Math.min(1.25, followElev + crossK * 0.32);
       groundY += (focus.y - groundY) * (1 - Math.exp(-dt * 1.5));
-      goal.ty = groundY + 0.6;
+      goal.tx = focus.x + fx * 0.55; goal.tz = focus.z + fz * 0.55; // on regarde un peu devant lui
+      goal.ty = groundY + 0.72;
+      rate = hero.moving ? 2.2 : 3;
     } else {
+      goal.theta = userTheta;
       goal.tx = freeTarget.x; goal.ty = 0.9; goal.tz = freeTarget.z;
+      if (!drag && Math.abs(rotVel) > 1e-4) { userTheta += rotVel * dt; rotVel *= Math.exp(-dt * 4); } // inertie
+      else if (!drag) rotVel = 0;
     }
-    // après l'intro, la caméra descend du ciel plus lentement
+    // après l'intro, la caméra descend du ciel plus lentement ; au retour d'un niveau, elle recule en douceur
     if (swoopT > 0) swoopT -= dt;
-    const k = 1 - Math.exp(-dt * (swoopT > 0 ? 1.15 : 3));
+    if (lvlCam && lvlCam.kind === 'exit') {
+      lvlCam.t += dt;
+      if (lvlCam.t >= lvlCam.dur) lvlCam = null;
+    }
+    const k = 1 - Math.exp(-dt * (swoopT > 0 ? 1.15 : lvlCam && lvlCam.kind === 'exit' ? 2.4 : rate));
     let dth = goal.theta - cam.theta;
     dth = Math.atan2(Math.sin(dth), Math.cos(dth));
     cam.theta += dth * k;
     ['elev', 'radius', 'tx', 'ty', 'tz'].forEach((key) => { cam[key] += (goal[key] - cam[key]) * k; });
+    // entrée dans un niveau : plongée rapide par-dessus l'épaule vers la pierre devant lui
+    if (lvlCam && lvlCam.kind === 'enter') {
+      lvlCam.t += dt;
+      const e = Math.min(1, lvlCam.t / lvlCam.dur), ease = e * e * e;
+      const ry = hero.group.rotation.y, fx = Math.sin(ry), fz = Math.cos(ry);
+      const F = lvlCam.from;
+      const tx = focus.x + fx * 1.5, tz = focus.z + fz * 1.5, ty = focus.y + 0.15;
+      cam.tx = F.tx + (tx - F.tx) * ease; cam.ty = F.ty + (ty - F.ty) * ease; cam.tz = F.tz + (tz - F.tz) * ease;
+      cam.radius = F.radius + (0.9 - F.radius) * ease;
+      cam.elev = F.elev + (0.2 - F.elev) * ease;
+      camera.fov = baseFov + 12 * ease;
+      camera.updateProjectionMatrix();
+      if (e >= 1 && !lvlCam.hold) { const cb = lvlCam.cb; lvlCam.cb = null; lvlCam.hold = true; if (cb) { try { cb(); } catch (err) { console.warn(err); } } }
+      // (si personne ne nous rappelle, on revient seul derrière Ulysse)
+      if (lvlCam && lvlCam.hold && lvlCam.t > lvlCam.dur + 8) { lvlCam = null; camera.fov = baseFov; camera.updateProjectionMatrix(); }
+    }
     placeCamera();
   }
   let camMode = 'follow', groundY = 0.7;
   const freeTarget = { x: 0, z: 0 };
+  // caméra de suivi : distance, inclinaison (réglables au doigt), coup d'œil latéral temporaire
+  const FOLLOW_R = 4.6, FOLLOW_ELEV = 0.38;
+  let followR = FOLLOW_R, followElev = FOLLOW_ELEV, followYaw = 0, crossK = 0, rotVel = 0, baseFov = 55;
+  let lvlCam = null; // séquence d'entrée / de sortie de niveau
 
   function placeCamera() {
     const ce = Math.cos(cam.elev);
@@ -2024,18 +3064,24 @@
   // caméra libre ; deux doigts → pincer pour zoomer ; molette → zoom ; toucher bref → aller là.
   const pointers = new Map();
   let pinch = null;
-  const R_MIN = 5, R_MAX = 36;
+  const R_MIN = 5, R_MAX = 36, F_MIN = 2.6, F_MAX = 12;
+  const clampElev = (v) => Math.max(0.16, Math.min(1.35, v));
 
   function onDown(e) {
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    renderer.domElement.setPointerCapture(e.pointerId);
+    try { renderer.domElement.setPointerCapture(e.pointerId); } catch (err) { /* (pointeur déjà relâché) */ }
+    rotVel = 0;
     if (pointers.size === 2) {
       const [a, b] = [...pointers.values()];
-      pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y), radius: goal.radius };
+      pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y), radius: camMode === 'free' ? goal.radius : followR, ang: Math.atan2(b.y - a.y, b.x - a.x), lastT: performance.now() };
       if (drag) drag.moved = 999; // un pincement n'est jamais un toucher
       return;
     }
-    drag = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, t: performance.now(), moved: 0, theta: userTheta, elev: goal.elev };
+    const rect = renderer.domElement.getBoundingClientRect();
+    // tourner : clic droit, Maj + glisser, ou glisser horizontalement le long du bas de l'écran (caméra libre)
+    const rotate = camMode === 'free' && (e.button === 2 || e.shiftKey || (e.pointerType !== 'mouse' && e.clientY > rect.bottom - rect.height * 0.16));
+    drag = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, t: performance.now(), lt: performance.now(), moved: 0,
+      theta: userTheta, elev: camMode === 'free' ? goal.elev : followElev, yaw: followYaw, rotate };
   }
   function onMove(e) {
     if (!pointers.has(e.pointerId)) return;
@@ -2043,14 +3089,26 @@
     if (pinch && pointers.size >= 2) {
       const [a, b] = [...pointers.values()];
       const d = Math.max(10, Math.hypot(a.x - b.x, a.y - b.y));
-      goal.radius = Math.max(R_MIN, Math.min(R_MAX, pinch.radius * pinch.dist / d));
+      if (camMode === 'free') {
+        goal.radius = Math.max(R_MIN, Math.min(R_MAX, pinch.radius * pinch.dist / d));
+        // torsion à deux doigts : la vue tourne autour du point visé
+        const ang = Math.atan2(b.y - a.y, b.x - a.x);
+        let da = ang - pinch.ang;
+        da = Math.atan2(Math.sin(da), Math.cos(da));
+        pinch.ang = ang;
+        userTheta += da;
+        const now = performance.now();
+        rotVel = da / Math.max(0.008, (now - pinch.lastT) / 1000) * 0.5;
+        pinch.lastT = now;
+      } else followR = Math.max(F_MIN, Math.min(F_MAX, pinch.radius * pinch.dist / d));
       return;
     }
     if (!drag) return;
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
     drag.moved = Math.max(drag.moved, Math.abs(dx) + Math.abs(dy));
     if (drag.moved <= 8) return;
-    if (camMode === 'free') {
+    const now = performance.now();
+    if (camMode === 'free' && !drag.rotate) {
       // on fait glisser la carte sous le doigt
       const mx = e.clientX - drag.lx, my = e.clientY - drag.ly;
       const s = cam.radius * 0.0022;
@@ -2058,15 +3116,22 @@
       const rx = -fz, rz = fx;                                     // droite
       freeTarget.x += (-mx * rx + my * fx) * s;
       freeTarget.z += (-mx * rz + my * fz) * s;
+    } else if (camMode === 'free') {
+      const prev = userTheta;
+      userTheta = drag.theta + dx * 0.008;
+      goal.elev = clampElev(drag.elev + dy * 0.004);
+      rotVel = (userTheta - prev) / Math.max(0.008, (now - drag.lt) / 1000) * 0.5;
     } else {
-      userTheta = drag.theta + dx * 0.007;
-      goal.elev = Math.max(0.18, Math.min(1.3, drag.elev + dy * 0.004));
+      // suivi : un coup d'œil (il revient derrière Ulysse au relâchement) et l'inclinaison
+      followYaw = Math.max(-1.6, Math.min(1.6, drag.yaw + dx * 0.007));
+      followElev = Math.max(0.14, Math.min(1.1, drag.elev + dy * 0.004));
     }
-    drag.lx = e.clientX; drag.ly = e.clientY;
+    drag.lx = e.clientX; drag.ly = e.clientY; drag.lt = now;
   }
   function onWheel(e) {
     e.preventDefault();
-    goal.radius = Math.max(R_MIN, Math.min(R_MAX, goal.radius * (1 + e.deltaY * 0.0012)));
+    if (camMode === 'free') goal.radius = Math.max(R_MIN, Math.min(R_MAX, goal.radius * (1 + e.deltaY * 0.0012)));
+    else followR = Math.max(F_MIN, Math.min(F_MAX, followR * (1 + e.deltaY * 0.0012)));
   }
   function onUp(e) {
     pointers.delete(e.pointerId);
@@ -2171,7 +3236,8 @@
     renderer.setSize(w, h, false);
     resizePost(w, h);
     camera.aspect = w / h;
-    camera.fov = w < h ? 55 : 42;
+    baseFov = w < h ? 55 : 42;
+    if (!(lvlCam && lvlCam.kind === 'enter')) camera.fov = baseFov;
     camera.updateProjectionMatrix();
   }
 
@@ -2287,6 +3353,7 @@
     makeClouds();
     makeBirds();
     makeBoat();
+    makeSeaLife();
     makeMotes();
 
     pulse = new THREE.Mesh(new THREE.RingGeometry(0.38, 0.44, 40),
@@ -2299,6 +3366,7 @@
 
     done = options.done || 0;
     selected = Math.min(options.selected != null ? options.selected : done, done);
+    makeShared();
     refresh(false);
     makeHero();
     setMarker();
@@ -2309,9 +3377,11 @@
     el.addEventListener('pointerup', onUp);
     el.addEventListener('pointercancel', (e) => { pointers.delete(e.pointerId); pinch = null; drag = null; });
     el.addEventListener('wheel', onWheel, { passive: false });
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
     // angle de départ : derrière Ulysse, dans le sens du sentier
     const d0 = pathDir(selected);
-    userTheta = goal.theta = cam.theta = Math.atan2(-d0.z, -d0.x) + 0.55;
+    userTheta = goal.theta = cam.theta = Math.atan2(-d0.z, -d0.x) + 0.3;
+    cam.radius = goal.radius = followR; cam.elev = goal.elev = followElev;
     window.addEventListener('resize', resize);
     if (window.ResizeObserver) new ResizeObserver(resize).observe(host); // barre d'adresse, plein écran : la scène suit la vraie hauteur
     resize();
@@ -2342,14 +3412,66 @@
   World.isNight = (hour) => hour < 6 || hour >= 20.5;
   // caméra libre (on survole la carte) ou suivi d'Ulysse
   World.setCameraMode = (mode) => {
+    const was = camMode;
     camMode = mode === 'free' ? 'free' : 'follow';
-    if (camMode === 'free') { freeTarget.x = cam.tx; freeTarget.z = cam.tz; }
+    if (camMode === 'free' && was !== 'free') {
+      freeTarget.x = cam.tx; freeTarget.z = cam.tz;
+      userTheta = cam.theta; goal.radius = Math.max(R_MIN, Math.min(R_MAX, cam.radius * 1.6)); goal.elev = clampElev(Math.max(0.55, cam.elev));
+    }
+    if (camMode === 'follow') { followYaw = 0; rotVel = 0; }
     return camMode;
   };
   World.cameraMode = () => camMode;
+  // Îles du voyage (une par chapitre), dans l'ordre de l'Odyssée
+  const ISLAND_NAMES = ['Troie', 'Ismaros, chez les Cicones', 'Île des Lotophages', 'Île des Cyclopes', 'Éolie', 'Télépyle des Lestrygons',
+    'Île de Circé', 'Pays des Ombres', 'Île des Sirènes', 'Charybde et Scylla', 'Thrinacie, île du Soleil', 'Ogygie, île de Calypso',
+    'Schérie, chez les Phéaciens', 'Ithaque'];
+  const islandName = (i) => ISLAND_NAMES[i % ISLAND_NAMES.length] + (i >= ISLAND_NAMES.length ? ' (' + (Math.floor(i / ISLAND_NAMES.length) + 1) + 'e voyage)' : '');
+  World.islands = () => {
+    const here = hero.free ? hero.free.c : chapterOf(selected);
+    const out = [];
+    for (let c = 0; c < chapters.length; c++) if (chapters[c]) out.push({ index: c, name: islandName(c), unlocked: done >= c * PER, current: c === here });
+    return out;
+  };
+  // la caméra glisse jusqu'à l'île choisie (caméra libre) ; Ulysse reste où il est
+  World.viewIsland = (index) => {
+    if (!World.ok) return islandName(index | 0);
+    const c = Math.max(0, Math.min(chapters.length - 1, index | 0));
+    const ch = chapters[c];
+    if (!ch) return islandName(c);
+    cine = null; lvlCam = null;
+    World.setCameraMode('free');
+    freeTarget.x = ch.group.position.x; freeTarget.z = ch.group.position.z;
+    goal.radius = 15; goal.elev = 0.82;
+    return islandName(c);
+  };
+  World.viewHero = () => World.setCameraMode('follow');
+  // Plongée vers le niveau (bouton « Jouer ») : la caméra fonce par-dessus l'épaule d'Ulysse
+  // vers la pierre devant lui (≈ 0,7 s), puis cb(). Sans 3D (ou boucle à l'arrêt) : cb() tout de suite.
+  World.enterLevel = (cb) => {
+    if (!World.ok || !running || cine) { if (cb) cb(); return; }
+    if (lvlCam && lvlCam.kind === 'enter') { if (cb) lvlCam.cb = lvlCam.hold ? (cb(), null) : cb; return; } // (déjà en route)
+    if (camMode !== 'follow') World.setCameraMode('follow');
+    lvlCam = { kind: 'enter', t: 0, dur: 0.7, cb: cb || null, from: { tx: cam.tx, ty: cam.ty, tz: cam.tz, radius: cam.radius, elev: cam.elev } };
+  };
+  // Retour sur la carte : départ tout près, derrière Ulysse, puis recul en douceur (≈ 1,2 s)
+  World.exitLevel = (won) => {
+    if (!World.ok) return;
+    cine = null;
+    hero.focusTarget = 0;
+    camMode = 'follow'; followYaw = 0;
+    const ry = hero.group.rotation.y, fx = Math.sin(ry), fz = Math.cos(ry);
+    const p = hero.group.position;
+    cam.theta = Math.atan2(-fz, -fx) + 0.3;
+    cam.radius = 1.4; cam.elev = 0.22;
+    cam.tx = p.x + fx * 0.8; cam.ty = p.y + 0.6; cam.tz = p.z + fz * 0.8;
+    camera.fov = baseFov; camera.updateProjectionMatrix();
+    lvlCam = { kind: 'exit', t: 0, dur: 1.2, won: !!won };
+    if (!running) placeCamera();
+  };
   // plongée d'intro : la caméra part très haut dans le ciel et descend vers Ulysse
-  let swoopT = 0;
-  World.swoop = () => { cam.radius = 64; cam.elev = 1.38; cam.theta = userTheta + 1.7; swoopT = 3.2; };
+  let swoopT = 0, camSave = null;
+  World.swoop = () => { cam.radius = 64; cam.elev = 1.38; cam.theta = goal.theta + 1.7; swoopT = 3.2; };
   // Mode concentration : Ulysse pose les mains sur sa tête, la caméra plonge vers lui,
   // une lueur s'allume dans sa tête ; `done` est appelé à la fin de la séquence.
   World.concentrate = (accent, done) => {
@@ -2361,18 +3483,34 @@
       if (ch) hero.free = { c: ch.c, at: new THREE.Vector3(p.x, 0, p.z) };
     }
     hero.focusTarget = 1;
+    if (!camSave) camSave = { radius: goal.radius, elev: goal.elev };
+    lvlCam = null;
     cine = { t: 0, accent, done };
   };
   World.endConcentrate = () => {
     if (!World.ok) return;
     cine = null;
     hero.focusTarget = 0;
-    goal.radius = 12.5;
-    goal.elev = 0.62;
+    if (camSave) { goal.radius = camSave.radius; goal.elev = camSave.elev; camSave = null; }
   };
   // animations réduites : mer immobile, pas d'oiseaux ni de poussières
   World.setCalm = (on) => { if (!World.ok) return; calm = on; birds.forEach((b) => { b.visible = !on; }); motes.visible = !on; };
   World.selected = () => selected;
+  // Garde-robe : options (catégories → [{ id, name, color? }]), libellés, état courant
+  World.skinOptions = () => {
+    const out = {};
+    Object.keys(SKIN_OPTIONS).forEach((k) => { out[k] = SKIN_OPTIONS[k].map((o) => Object.assign({}, o)); });
+    return out;
+  };
+  World.skinLabels = () => Object.assign({}, SKIN_LABELS);
+  World.getSkin = () => Object.assign({}, skinState);
+  // setSkin({ outfit, tunic, cape, hair, skin, accessory, weapon, shield }) : immédiat, sans coût notable ;
+  // peut être appelé avant l'init ou avant le chargement du modèle (appliqué ensuite)
+  World.setSkin = (s) => {
+    if (s) Object.keys(SKIN_DEFAULT).forEach((k) => { if (s[k] != null && SKIN_OPTIONS[k].some((o) => o.id === s[k])) skinState[k] = s[k]; });
+    if (THREE && hero.group) applySkin();
+    return Object.assign({}, skinState);
+  };
   World.start = function () {
     if (!World.ok || running) return;
     running = true;
@@ -2384,6 +3522,8 @@
   // outils de test
   World.advance = function (sec) { for (let i = 0; i < sec * 30; i++) tick(1 / 30, simTime + 1 / 30); };
   World._scene = () => scene;
+  World._camera = () => camera;
+  World._render = () => renderFrame();
   World._gfx = () => ({ renderer, sun, hemi, stdMats, post, envMap, MOMENTS, applyLight, goal, freeTarget, chapters });
   World.wander = (c, dx, dz) => { const p = centerOf(c); wanderTo(c, new THREE.Vector3(p.x + dx, 0, p.z + dz)); };
   World.debug = () => ({ done, selected, free: !!hero.free, route: hero.route ? hero.route.length : 0, chapters: chapters.length,

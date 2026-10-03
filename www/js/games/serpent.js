@@ -194,15 +194,80 @@
       undo() { if (history.length) { path = history.pop(); draw(); api.onChange(); } },
       reset() { history.push(path.slice()); path = [startCell]; draw(); api.onChange(); },
       hint() {
-        // prolonge (ou corrige) le tracé de quelques cases selon la solution
         const sol = puzzle.solution[0] === startCell ? puzzle.solution : puzzle.solution.slice().reverse();
         let ok = 0;
         while (ok < path.length && path[ok] === sol[ok]) ok++;
+        const box = (c, kind, round) => {
+          const m = round ? cell * 0.14 : cell * 0.05;
+          return { x: (c % n) * cell + m, y: Math.floor(c / n) * cell + m, w: cell - 2 * m, h: cell - 2 * m, kind, round };
+        };
+        const finish = (text, boxes) => {
+          draw(); api.onChange();
+          if (path.length === n * n && num.get(path[path.length - 1]) === K) api.onWin();
+          return Object.assign({ text }, C.hintBoxes(canvas, boxes));
+        };
+        // 1. le tracé s'égare : on le ramène à sa dernière case juste
+        if (ok < path.length) {
+          history.push(path.slice());
+          const lost = path.slice(ok);
+          path = sol.slice(0, ok);
+          return finish('Le tracé s\'est égaré après la case dorée : les cases surlignées menaient à une impasse. Je l\'ai ramené là ; repars de cette case.',
+            lost.map((c) => box(c, 'why')).concat([box(path[path.length - 1], 'where', true)]));
+        }
+        // 2. passages forcés : on avance tant que la case suivante est imposée
+        const N = n * n;
+        const last = K; // numéro de l'arrivée
+        const endCell = [...num.entries()].find(([, v]) => v === last)[0];
+        const nbs = (c) => {
+          const r = Math.floor(c / n), k = c % n, out = [];
+          if (r > 0) out.push(c - n); if (r < n - 1) out.push(c + n); if (k > 0) out.push(c - 1); if (k < n - 1) out.push(c + 1);
+          return out.filter((d) => !blocked(c, d));
+        };
+        const steps = [];
+        let reason = null;
+        const used = new Set(path);
+        let need = nextNeeded();
+        for (let guard = 0; guard < 3 && path.length + steps.length < N; guard++) {
+          const head = steps.length ? steps[steps.length - 1] : path[path.length - 1];
+          // cases où l'on peut aller : libres, et pas un numéro hors de son tour
+          const lastStep = path.length + steps.length === N - 1;
+          const can = nbs(head).filter((d) => !used.has(d) && (!num.has(d) || num.get(d) === need) && (d !== endCell || lastStep));
+          let pick = -1, why = null;
+          if (can.length === 1) { pick = can[0]; why = { t: 'only', cells: nbs(head).filter((d) => d !== pick) }; }
+          else {
+            // une voisine qui n'aurait plus qu'une autre sortie : il faut y passer maintenant, sinon elle devient un cul-de-sac
+            for (const d of can) {
+              if (d === endCell) continue;
+              const exits = nbs(d).filter((e) => e !== head && !used.has(e));
+              if (exits.length === 1) { pick = d; why = { t: 'dead', cells: [d], exit: exits[0] }; break; }
+            }
+          }
+          if (pick < 0 || pick !== sol[path.length + steps.length]) break;
+          if (!reason) reason = why;
+          steps.push(pick); used.add(pick);
+          if (num.get(pick) === need) need++;
+        }
         history.push(path.slice());
-        path = sol.slice(0, Math.min(sol.length, ok + 3));
-        draw(); api.onChange();
-        if (path.length === n * n) api.onWin();
-        return 'Le chemin doit filer par ici pour rejoindre le prochain numéro sans s\'enfermer dans un coin.';
+        if (steps.length) {
+          const head = path[path.length - 1];
+          path = path.concat(steps);
+          const boxes = [box(head, 'why', true)];
+          let text;
+          if (reason.t === 'only') {
+            text = 'Depuis le bout du chemin, une seule case est encore possible : les autres sont déjà parcourues, murées ou ce sont des numéros pas encore à leur tour.';
+          } else {
+            boxes.push(box(reason.exit, 'why'));
+            text = 'La case dorée n\'a plus qu\'une autre sortie (surlignée) : si le chemin ne la prend pas maintenant, elle deviendra un cul-de-sac.';
+          }
+          if (steps.length > 1) text += ' La suite (' + (steps.length - 1) + ' case' + (steps.length > 2 ? 's' : '') + ' de plus) est forcée elle aussi.';
+          return finish(text, boxes.concat(steps.map((c, i) => box(c, 'where', i === 0))));
+        }
+        // 3. aucun passage forcé : coup de pouce vers le prochain numéro
+        const add = sol.slice(path.length, path.length + 2);
+        path = path.concat(add);
+        const target = puzzle.variant === 'laby' ? 'l\'arrivée' : 'le ' + need;
+        return finish('Coup de pouce : le chemin continue par ici. Rien n\'est encore forcé ; pense à ne pas laisser de case isolée en route vers ' + target + '.',
+          add.map((c, i) => box(c, 'where', i === 0)));
       },
       redraw: draw,
       destroy() { window.removeEventListener('resize', resize); }

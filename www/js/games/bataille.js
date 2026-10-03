@@ -530,24 +530,29 @@
           if (marks[i] && owner[i] >= 0) {
             history.push(marks.slice());
             marks[i] = 0; render(); api.onChange();
-            return 'Ce repère d\'eau est de trop : rien n\'interdit encore un navire à cet endroit.';
+            return { text: 'Ce repère d\'eau est de trop : rien n\'interdit encore un navire à cet endroit. Je l\'enlève.', where: [cells[i]], why: [] };
           }
         }
+        const ord = (k) => k + (k === 1 ? 're' : 'e');
         const a = analyze(n, sea.rows, sea.cols, lens, know, sunkLensOf(sea, sunk));
         for (const i of a.order) {
           if (a.k[i] !== 3 || know[i] !== 0) continue;
           const w = a.why.get(i);
-          let txt;
+          let txt, why = [];
           if (w.t === 'row' || w.t === 'col') {
-            const line = w.t === 'row' ? 'cette ligne' : 'cette colonne';
+            const r = (i / n) | 0, c = i % n;
+            const line = w.t === 'row' ? 'la ' + ord(r + 1) + ' ligne' : 'la ' + ord(c + 1) + ' colonne';
             txt = w.need === 1
-              ? 'Il manque encore 1 case de navire dans ' + line + ', et il ne reste qu\'une seule place possible : tire ici.'
-              : 'Il manque encore ' + w.need + ' cases de navire dans ' + line + ', et il ne reste que ' + w.need + ' places possibles : tire ici.';
+              ? 'Le nombre qui brille dit qu\'il manque encore 1 case de navire dans ' + line + ', et une seule place y est encore possible : la case dorée. Tire !'
+              : 'Le nombre qui brille dit qu\'il manque encore ' + w.need + ' cases de navire dans ' + line + ', et il ne reste que ' + w.need + ' places possibles : tire sur la case dorée.';
+            why = [w.t === 'row' ? rowClues[r] : colClues[c]];
+            for (let k = 0; k < n; k++) { const j = w.t === 'row' ? r * n + k : k * n + c; if (j !== i) why.push(cells[j]); }
           } else {
-            txt = 'Ce navire touché n\'est pas coulé : il continue forcément ' + dirText(i, w.from) + ', il n\'a pas la place de l\'autre côté.';
+            txt = 'Le navire touché (en surbrillance) n\'est pas coulé : il continue forcément ' + dirText(i, w.from) + ', il n\'a pas la place de l\'autre côté. Tire sur la case dorée.';
+            why = w.from.map((j) => cells[j]);
           }
           fire(i);
-          return txt;
+          return { text: txt, where: [cells[i]], why };
         }
         // pas de certitude : on prolonge un navire touché, sinon la case la plus probable
         let pick = -1, best = -1, ext = false;
@@ -560,9 +565,12 @@
         }
         if (pick < 0) return false;
         fire(pick);
-        return ext
-          ? 'Ce navire touché n\'est pas coulé : prolonge-le, ici. Plusieurs sens étaient possibles, celui-ci était le bon.'
-          : 'Pas de certitude pour l\'instant : c\'est la case où les navires restants ont le plus de façons de passer. Une bonne hypothèse.';
+        return {
+          text: ext
+            ? 'Coup de pouce : le navire touché n\'est pas coulé, il se prolonge par la case dorée. Plusieurs sens étaient possibles, celui-ci était le bon.'
+            : 'Coup de pouce : pas de certitude pour l\'instant. La case dorée est celle où les navires restants ont le plus de façons de passer.',
+          where: [cells[pick]], why: []
+        };
       },
       destroy() {}
     };

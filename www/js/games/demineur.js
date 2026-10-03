@@ -345,7 +345,7 @@
           if (state[i] === 1 && !mine[i]) {
             history.push(state.slice());
             state[i] = 0; render(); api.onChange();
-            return 'Ce fanion est mal placé : aucun nombre n\'oblige à mettre un écueil ici.';
+            return { text: 'Ce fanion est mal placé : aucun nombre n\'oblige à mettre un écueil ici. Je le retire.', where: [cells[i]], why: [] };
           }
         }
         const st = new Uint8Array(N);
@@ -354,27 +354,28 @@
         if (!mv) return false;
         const target = mv.cells[0];
         history.push(state.slice());
-        showWhy(mv.src);
         const ka = num[mv.src[0]], kb = mv.src[1] != null ? num[mv.src[1]] : 0;
+        // les deux nombres d'une déduction croisée : celui qui « place » et celui qui conclut
         let why;
         if (mv.kind === 'safe') {
           open([target]);
           why = mv.rule === 'single'
-            ? (ka === 1 ? 'Ce 1 touche déjà son écueil : les autres cases autour sont sûres.' : 'Ce ' + ka + ' touche déjà ses ' + ka + ' écueils : les autres cases autour sont sûres.')
-            : 'Ce ' + ka + ' place ' + plural(mv.ra, 'écueil') + ' parmi des cases que son voisin ' + kb + ' touche aussi, et ce ' + kb + ' n\'en attend pas d\'autre : ' +
-              (mv.cells.length > 1 ? 'ses autres cases cachées sont sûres.' : 'sa dernière case cachée est sûre.');
+            ? (ka === 1 ? 'Le 1 qui brille touche déjà son écueil (fanion) : ses autres cases cachées sont sûres. J\'ouvre la case dorée.'
+              : 'Le ' + ka + ' qui brille touche déjà ses ' + ka + ' écueils : ses autres cases cachées sont sûres. J\'ouvre la case dorée.')
+            : 'Regarde les deux nombres qui brillent : le ' + ka + ' a ' + plural(mv.ra, 'écueil') + ' dans des cases que le ' + kb + ' touche aussi, et le ' + kb + ' n\'en attend pas d\'autre. ' +
+              (mv.cells.length > 1 ? 'Ses autres cases cachées, comme la case dorée, sont donc sûres.' : 'Sa dernière case cachée, la dorée, est donc sûre.');
         } else {
           state[target] = 1;
           render(); C.sfx.place();
           why = mv.rule === 'single'
-            ? (mv.cells.length === 1 ? 'Ce ' + ka + ' n\'a plus qu\'une case cachée pour son dernier écueil : c\'est elle.'
-              : 'Ce ' + ka + ' n\'a plus que ' + mv.cells.length + ' cases cachées, autant que d\'écueils manquants : ce sont tous des écueils.')
-            : 'Ce ' + ka + ' place ' + plural(mv.ra, 'écueil') + ' parmi des cases que son voisin ' + kb + ' touche aussi ; il manque encore ' +
-              plural(mv.rd, 'écueil') + ' au ' + kb + ', forcément dans ' + (mv.cells.length > 1 ? 'ses autres cases cachées.' : 'sa dernière case cachée.');
+            ? (mv.cells.length === 1 ? 'Le ' + ka + ' qui brille n\'a plus qu\'une case cachée pour son dernier écueil : c\'est la case dorée. J\'y plante un fanion.'
+              : 'Le ' + ka + ' qui brille a autant de cases cachées que d\'écueils manquants : ce sont tous des écueils. Je marque la case dorée.')
+            : 'Regarde les deux nombres qui brillent : le ' + ka + ' a ' + plural(mv.ra, 'écueil') + ' dans des cases que le ' + kb + ' touche aussi ; il manque encore ' +
+              plural(mv.rd, 'écueil') + ' au ' + kb + ', forcément ' + (mv.cells.length > 1 ? 'dans ses autres cases cachées, dont la dorée.' : 'dans sa dernière case cachée, la dorée.');
         }
         api.onChange();
         check();
-        return why;
+        return { text: why, where: [cells[target]], why: mv.src.map((s) => cells[s]) };
       },
       destroy() { if (press) clearTimeout(press.timer); }
     };

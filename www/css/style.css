@@ -1702,7 +1702,7 @@ svg.ic.ic-solid { --duo-o: 1; }
 
 /* le coup joué : anneau doré bien visible, qui pulse trois fois puis reste allumé */
 .hint-where {
-  position: relative; z-index: 4;
+  z-index: 4;
   box-shadow: inset 0 0 0 3px var(--hint), 0 0 0 2px var(--hint), 0 0 16px 4px var(--hint-glow) !important;
   animation: hint-pulse .85s ease-in-out 3 !important;
 }
@@ -1712,12 +1712,13 @@ svg.ic.ic-solid { --duo-o: 1; }
 }
 /* la raison : voile doré léger et liseré, sans masquer la case */
 .hint-why {
-  position: relative; z-index: 3;
-  background-image: linear-gradient(var(--hint-soft), var(--hint-soft)) !important;
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--hint) 70%, transparent) !important;
+  z-index: 3;
+  /* voile en ombre intérieure : il teinte la case sans toucher à son fond (couleurs, ampoules…) */
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--hint) 75%, transparent), inset 0 0 0 999px var(--hint-soft) !important;
   animation: hint-why-in .5s ease-out both !important;
 }
-@keyframes hint-why-in { from { box-shadow: inset 0 0 0 0 transparent; } }
+@keyframes hint-why-in { from { box-shadow: inset 0 0 0 0 transparent, inset 0 0 0 999px transparent; } }
+.paves .hint-area { border-radius: 12px; pointer-events: none; }
 
 /* nombres et indices du bord (Pixels, Bataille, Pavés) : le chiffre lui-même s'illumine */
 .nono-row.hint-why, .nono-col.hint-why, .bn-rows > span.hint-why, .bn-cols > span.hint-why {
@@ -1730,10 +1731,10 @@ svg.ic.ic-solid { --duo-o: 1; }
 .astres .edge-mark.hint-why svg { stroke: #fff !important; }
 
 /* Port : le bateau garde sa position (transform) ; la lueur suit sa silhouette */
-.rh-boat.hint-where, .rh-boat.hint-why { box-shadow: none !important; background-image: none !important; border-radius: 10px; }
+.rh-boat.hint-where, .rh-boat.hint-why { box-shadow: none !important; border-radius: 10px; }
 .rh-boat.hint-where { animation: hint-boat .85s ease-in-out 3 !important; filter: drop-shadow(0 0 2px var(--hint)) drop-shadow(0 0 8px var(--hint)); }
 .rh-boat.hint-why { animation: none !important; filter: drop-shadow(0 0 1.5px var(--hint)) drop-shadow(0 0 5px var(--hint-glow)); }
-.rh-exit.hint-why { background-image: linear-gradient(var(--hint-glow), var(--hint-glow)) !important; box-shadow: 0 0 12px 2px var(--hint-glow) !important; }
+.rh-exit.hint-why { box-shadow: inset 0 0 0 999px var(--hint-glow), 0 0 12px 2px var(--hint-glow) !important; }
 @keyframes hint-boat {
   0%, 100% { filter: drop-shadow(0 0 2px var(--hint)) drop-shadow(0 0 8px var(--hint)); }
   50% { filter: drop-shadow(0 0 3px var(--hint)) drop-shadow(0 0 18px var(--hint)); }
@@ -1768,6 +1769,7 @@ svg.ic.ic-solid { --duo-o: 1; }
 .coffre-reveal .slots { padding: 4px 10px; box-sizing: content-box; margin-right: 34px; }
 .coffre-reveal .slots .slot, .coffre-reveal .slots .chip { width: var(--slot, 30px); height: var(--slot, 30px); }
 .coffre-reveal .slots { gap: 6px; }
+
 
 /* titres du joueur et phrase complice de fin de niveau */
 .lb-rank { display: block; font-style: italic; font-size: 0.72em; opacity: 0.7; font-weight: 400; letter-spacing: 0.02em; }

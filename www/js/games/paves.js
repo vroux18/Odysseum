@@ -261,13 +261,102 @@
       reset() { history.push(rects.slice()); rects = []; render(); api.onChange(); },
       hint() {
         const same = (a, b) => a.r === b.r && a.c === b.c && a.w === b.w && a.h === b.h;
-        const target = puzzle.solution.find((s) => !rects.some((x) => same(x, s)));
-        if (!target) return false;
-        history.push(rects.slice());
-        rects = rects.filter((x) => !overlap(x, target));
-        rects.push(Object.assign({}, target));
-        render(); api.onChange(); check();
-        return 'Ce ' + (target.w * target.h) + ' tient en ' + target.w + ' × ' + target.h + ' : c\'est la seule forme qui ne déborde ni sur un autre chiffre ni hors de la grille.';
+        const inside = (rc, cell) => { const r = Math.floor(cell / n), c = cell % n; return r >= rc.r && r < rc.r + rc.h && c >= rc.c && c < rc.c + rc.w; };
+        const clueEl = (cell) => clueLayer.querySelector('.clue[data-cell="' + cell + '"]');
+        const cellEl = (i) => grid.children[i];
+        const label = (k) => (k.hidden ? 'Le ?' : 'Le ' + k.value);
+        // zone surlignée : un cadre posé dans le calque des rectangles, sous les nombres
+        const areas = [];
+        const area = (rc) => {
+          const d = document.createElement('div');
+          d.className = 'hint-area';
+          d.style.gridRow = (rc.r + 1) + ' / span ' + rc.h;
+          d.style.gridColumn = (rc.c + 1) + ' / span ' + rc.w;
+          layer.appendChild(d);
+          areas.push(d);
+          return d;
+        };
+        const clear = () => areas.forEach((d) => d.remove());
+        const solFor = (k) => puzzle.solution.find((s) => inside(s, k.cell));
+
+        // 1. un rectangle qui ne fait pas partie de la solution : on l'enlève
+        const wrong = rects.find((x) => !puzzle.solution.some((s) => same(s, x)));
+        if (wrong) {
+          history.push(rects.slice());
+          rects = rects.filter((x) => x !== wrong);
+          render(); api.onChange();
+          const nums = puzzle.clues.filter((k) => inside(wrong, k.cell));
+          let text;
+          if (!nums.length) text = 'Ce rectangle ne contient aucun nombre : chaque rectangle doit en contenir un. Je l\'enlève.';
+          else if (nums.length > 1) text = 'Ce rectangle contient ' + nums.length + ' nombres : un seul par rectangle. Je l\'enlève.';
+          else if (!nums[0].hidden && nums[0].value !== wrong.w * wrong.h) text = 'Ce rectangle fait ' + (wrong.w * wrong.h) + ' cases, mais son nombre dit ' + nums[0].value + '. Je l\'enlève.';
+          else text = 'Bonne taille, mais pas la bonne forme : elle prend la place d\'un autre nombre. Je l\'enlève.';
+          return { text, where: [area(wrong)], why: nums.map((k) => clueEl(k.cell)), clear };
+        }
+
+        // 2. déductions : pour chaque nombre, les rectangles encore possibles (comme le solveur)
+        const known = rects.slice(); // tous justes à ce stade
+        const takenBy = new Int16Array(n * n).fill(-1);
+        known.forEach((rc, k) => cellsOf(rc).forEach((c) => { takenBy[c] = k; }));
+        const open = puzzle.clues.filter((k) => !known.some((rc) => inside(rc, k.cell)));
+        const cands = new Map();
+        open.forEach((k) => {
+          const kr = Math.floor(k.cell / n), kc = k.cell % n, list = [];
+          for (let w = 1; w <= n; w++) for (let h = 1; h <= n; h++) {
+            if (k.hidden ? w * h > 16 || w * h < 2 : w * h !== k.value) continue;
+            for (let r = kr - h + 1; r <= kr; r++) for (let c = kc - w + 1; c <= kc; c++) {
+              if (r < 0 || c < 0 || r + h > n || c + w > n) continue;
+              const rc = { r, c, w, h };
+              const cs = cellsOf(rc);
+              if (cs.some((x) => takenBy[x] >= 0 || (x !== k.cell && clueAt.has(x)))) continue;
+              list.push(rc);
+            }
+          }
+          cands.set(k, list);
+        });
+        const place = (k, rc, text, why) => {
+          history.push(rects.slice());
+          rects = rects.filter((x) => !overlap(x, rc));
+          rects.push(Object.assign({}, rc));
+          render(); api.onChange(); check();
+          return { text, where: [area(rc)], why: [clueEl(k.cell)].concat(why || []), clear };
+        };
+        // 2a. un nombre qui n'a plus qu'une forme possible
+        for (const k of open) {
+          const list = cands.get(k), sol = solFor(k);
+          if (list.length !== 1 || !same(list[0], sol)) continue;
+          const rc = list[0];
+          // les nombres et rectangles voisins qui interdisent les autres formes
+          const blockers = [];
+          for (let w = 1; w <= n; w++) for (let h = 1; h <= n; h++) {
+            if (k.hidden || w * h !== k.value) continue;
+            const kr = Math.floor(k.cell / n), kc = k.cell % n;
+            for (let r = kr - h + 1; r <= kr; r++) for (let c = kc - w + 1; c <= kc; c++) {
+              if (r < 0 || c < 0 || r + h > n || c + w > n) continue;
+              cellsOf({ r, c, w, h }).forEach((x) => { if (x !== k.cell && clueAt.has(x) && !blockers.includes(x)) blockers.push(x); });
+            }
+          }
+          const why = blockers.slice(0, 6).map(clueEl);
+          const shape = rc.w === rc.h ? 'un carré ' + rc.w + ' × ' + rc.h : 'un rectangle ' + rc.w + ' × ' + rc.h;
+          return place(k, rc, label(k) + ' n\'a qu\'une forme possible : ' + shape + ' (le cadre doré). Toute autre forme sortirait de la grille' +
+            (blockers.length ? ', engloberait un autre nombre (ceux qui brillent)' : '') + ' ou mordrait sur un rectangle déjà posé.', why);
+        }
+        // 2b. une case vide qu'un seul nombre peut atteindre : ce nombre doit la couvrir
+        for (let x = 0; x < n * n; x++) {
+          if (takenBy[x] >= 0) continue;
+          const who = open.filter((k) => cands.get(k).some((rc) => inside(rc, x)));
+          if (who.length !== 1) continue;
+          const k = who[0];
+          const list = cands.get(k).filter((rc) => inside(rc, x));
+          if (list.length !== 1 || !same(list[0], solFor(k))) continue;
+          return place(k, list[0], 'La case surlignée ne peut être couverte que par ' + label(k).toLowerCase() + ' : aucun autre nombre ne l\'atteint. Une seule de ses formes passe par elle : le cadre doré.', [cellEl(x)]);
+        }
+
+        // 3. pas de déduction simple : coup de pouce sur le nombre le moins libre
+        const k = open.slice().sort((a, b) => cands.get(a).length - cands.get(b).length)[0];
+        if (!k) return false;
+        const rc = solFor(k);
+        return place(k, rc, 'Coup de pouce : ' + label(k).toLowerCase() + ' prend cette forme (' + rc.w + ' × ' + rc.h + ', cadre doré). Il avait encore ' + cands.get(k).length + ' formes possibles ; cherche ensuite les nombres très serrés.', []);
       },
       destroy() {}
     };

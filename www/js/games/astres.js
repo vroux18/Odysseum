@@ -227,39 +227,73 @@
           else if (!v) empty.push(i);
         });
         const name = (v, pl) => (v === SUN ? 'soleil' : 'lune') + (pl ? 's' : '');
-        if (wrong.length) {
-          const i = wrong[0];
+        const un = (v) => (v === SUN ? 'un soleil' : 'une lune');
+        const ord = (k) => k + (k === 1 ? 're' : 'e');
+        const rowOf = (i) => Math.floor(i / n), colOf = (i) => i % n;
+        const rowCells = (r) => [...Array(n)].map((_, k) => r * n + k), colCells = (c) => [...Array(n)].map((_, k) => k * n + c);
+        const put = (i, v, text, why) => {
           history.push(state.slice());
-          state[i] = puzzle.solution[i];
+          state[i] = v;
           render(); api.onChange(); check();
-          return 'Cette case était fausse : c\'est un' + (puzzle.solution[i] === SUN ? ' soleil' : 'e lune') + ' qui permet de tout équilibrer.';
-        }
-        // une case qui se déduit d'une règle simple, avec sa raison
-        const half = n / 2;
-        const reason = (i) => {
-          const v = puzzle.solution[i], o = v === SUN ? MOON : SUN;
-          const r = Math.floor(i / n), c = i % n;
-          const row = [...Array(n)].map((_, k) => r * n + k), col = [...Array(n)].map((_, k) => k * n + c);
-          if (row.filter((j) => state[j] === o).length === half) return 'Cette ligne a déjà ses ' + half + ' ' + name(o, true) + ' : le reste ne peut être que des ' + name(v, true) + '.';
-          if (col.filter((j) => state[j] === o).length === half) return 'Cette colonne a déjà ses ' + half + ' ' + name(o, true) + ' : il ne reste que des ' + name(v, true) + '.';
-          for (const line of [row, col]) {
-            const k = line.indexOf(i), at = (d) => state[line[k + d]];
-            if ((at(-1) === o && at(-2) === o) || (at(1) === o && at(2) === o) || (at(-1) === o && at(1) === o)) return 'Trois ' + name(o, true) + ' à la suite, c\'est interdit : ici il faut un' + (v === SUN ? ' soleil' : 'e lune') + '.';
-          }
-          for (const e of puzzle.edges) {
-            const other = e.a === i ? e.b : e.b === i ? e.a : -1;
-            if (other >= 0 && state[other]) return e.same ? 'Le signe = impose le même symbole que sa voisine.' : 'Le × impose le symbole inverse de sa voisine.';
-          }
-          return '';
+          return { text, where: [cells[i]], why: why.map((x) => (typeof x === 'number' ? cells[x] : x)) };
         };
-        let i = empty.find((j) => reason(j));
-        const why = i !== undefined ? reason(i) : 'Pose ce' + (puzzle.solution[empty[0]] === SUN ? ' soleil' : 'tte lune') + ' : chaque ligne et colonne a autant de soleils que de lunes.';
-        if (i === undefined) i = empty[0];
+        if (wrong.length) {
+          const i = wrong[0], v = puzzle.solution[i];
+          const { bad } = errors();
+          if (bad.has(i)) {
+            // on montre ce qui coince autour de cette case
+            const r = rowOf(i), c = colOf(i);
+            const near = [...bad].filter((j) => j !== i && (rowOf(j) === r || colOf(j) === c));
+            return put(i, v, 'Cette case enfreint une règle (trois pareils, trop de ' + name(state[i], true) + ' ou un signe) : c\'est ' + un(v) + ' qu\'il faut.', near);
+          }
+          return put(i, v, 'Cette case mène à une impasse plus loin : c\'est ' + un(v) + '. Je la corrige.', []);
+        }
+        // une case qui se déduit d'une règle simple, avec sa raison et ce qui la justifie
+        const half = n / 2;
+        const reason = (i, rule) => {
+          const v = puzzle.solution[i], o = v === SUN ? MOON : SUN;
+          const r = rowOf(i), c = colOf(i);
+          if (rule === 'three') {
+            const lines = [[rowCells(r), 'ligne'], [colCells(c), 'colonne']];
+            if (puzzle.variant === 'diagonales') {
+              diagTriples(n, i).forEach((t) => lines.push([t, 'diagonale']));
+            }
+            for (const [line, word] of lines) {
+              const k = line.indexOf(i), at = (d) => (k + d >= 0 && k + d < line.length ? state[line[k + d]] : 0);
+              let pair = null;
+              if (at(-1) === o && at(-2) === o) pair = [line[k - 1], line[k - 2]];
+              else if (at(1) === o && at(2) === o) pair = [line[k + 1], line[k + 2]];
+              else if (at(-1) === o && at(1) === o) pair = [line[k - 1], line[k + 1]];
+              if (pair) return {
+                text: (pair[0] === line[k - 1] && pair[1] === line[k + 1] ? 'Cette case est coincée entre deux ' : 'Cette case est collée à deux ') + name(o, true) +
+                  ' (en ' + word + ') : un troisième ferait trois à la suite, interdit. Ici, c\'est ' + un(v) + '.', why: pair };
+            }
+          }
+          if (rule === 'sign') {
+            for (let k = 0; k < puzzle.edges.length; k++) {
+              const e = puzzle.edges[k];
+              const other = e.a === i ? e.b : e.b === i ? e.a : -1;
+              if (other < 0 || !state[other]) continue;
+              return { text: e.same ? 'Le signe = qui brille veut deux symboles identiques : sa voisine est ' + un(state[other]) + ', donc ici aussi.'
+                : 'Le × qui brille veut deux symboles différents : sa voisine est ' + un(state[other]) + ', donc ici c\'est ' + un(v) + '.', why: [other, markers[k]] };
+            }
+          }
+          if (rule === 'count') {
+            const row = rowCells(r), col = colCells(c);
+            if (row.filter((j) => state[j] === o).length === half) return { text: 'La ' + ord(r + 1) + ' ligne a déjà ses ' + half + ' ' + name(o, true) + ' (la moitié) : les cases vides restantes sont des ' + name(v, true) + '.', why: row.filter((j) => state[j] === o) };
+            if (col.filter((j) => state[j] === o).length === half) return { text: 'La ' + ord(c + 1) + ' colonne a déjà ses ' + half + ' ' + name(o, true) + ' (la moitié) : les cases vides restantes sont des ' + name(v, true) + '.', why: col.filter((j) => state[j] === o) };
+          }
+          return null;
+        };
+        for (const rule of ['three', 'sign', 'count']) {
+          for (const i of empty) {
+            const res = reason(i, rule);
+            if (res) return put(i, puzzle.solution[i], res.text, res.why);
+          }
+        }
+        const i = empty[0];
         if (i === undefined) return false;
-        history.push(state.slice());
-        state[i] = puzzle.solution[i];
-        render(); api.onChange(); check();
-        return why;
+        return put(i, puzzle.solution[i], 'Coup de pouce : ici c\'est ' + un(puzzle.solution[i]) + '. Pas de règle simple pour l\'instant ; pense que chaque ligne et colonne a autant de soleils que de lunes.', []);
       },
       destroy() {}
     };

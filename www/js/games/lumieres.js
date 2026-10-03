@@ -104,14 +104,26 @@
         // les appuis restants = appuis du puzzle XOR appuis du joueur
         const need = new Uint8Array(n * n);
         puzzle.presses.forEach((i) => { need[i] ^= 1; });
+        const area = (i) => {
+          const r = Math.floor(i / n), c = i % n, out = [];
+          pattern.forEach(([dr, dc]) => { const y = r + dr, x = c + dc; if (y >= 0 && x >= 0 && y < n && x < n) out.push(y * n + x); });
+          return out;
+        };
+        // parmi les appuis encore utiles, celui qui éteint le plus d'ampoules d'un coup
+        let best = -1, bestScore = -Infinity;
         for (let i = 0; i < n * n; i++) {
-          if (need[i] ^ mine[i]) {
-            cells[i].classList.add('hinted');
-            setTimeout(() => cells[i].classList.remove('hinted'), 1600);
-            return 'Appuie sur la case qui scintille : elle fait partie de la combinaison qui éteint tout.';
-          }
+          if (!(need[i] ^ mine[i])) continue;
+          const a = area(i), off = a.filter((j) => state[j]).length, on = a.length - off;
+          if (off - on > bestScore) { bestScore = off - on; best = i; }
         }
-        return false;
+        if (best < 0) return false;
+        const a = area(best), off = a.filter((j) => state[j]).length, on = a.length - off;
+        const what = puzzle.variant === 'croix' ? 'elle et ses voisines en diagonale' : 'elle et ses voisines (haut, bas, gauche, droite)';
+        let text = 'Appuie sur la case dorée : ' + what + ', surlignées, vont s\'inverser. ';
+        text += off && !on ? (off > 1 ? 'Elles sont toutes allumées : ' + off + ' ampoules s\'éteignent d\'un coup.' : 'L\'ampoule allumée s\'éteint.')
+          : off > on ? off + ' s\'éteignent, ' + on + ' s\'allume' + (on > 1 ? 'nt' : '') + ' : c\'est un pas vers la combinaison qui éteint tout.'
+          : 'Ça rallume des ampoules, mais cet appui fait partie de la combinaison qui éteint tout.';
+        return { text, where: [cells[best]], why: a.filter((j) => j !== best).map((j) => cells[j]) };
       },
       destroy() {}
     };

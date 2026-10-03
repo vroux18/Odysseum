@@ -349,7 +349,7 @@
         later(() => {
           phase = 'turn'; pos = keep; hinted = seq[pos]; render(); api.onChange();
         }, 500 + (len - 1) * slow + slow * 0.7);
-        return 'Écoute encore : le chant reprend plus lentement, puis la prochaine note est la coquille qui brille.';
+        return 'Écoute bien : le chant reprend au ralenti. Ensuite, la coquille qui scintille est ta prochaine note (la ' + (keep + 1) + (keep ? 'e' : 're') + ' du chant).';
       },
       redraw() { fit(); },
       destroy() {

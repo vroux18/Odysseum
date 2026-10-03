@@ -227,17 +227,77 @@
       undo() { if (history.length) { state = history.pop(); render(); api.onChange(); } },
       reset() { history.push(state.slice()); state = new Uint8Array(n * n); render(); api.onChange(); },
       hint() {
+        if (won) return false;
+        const ord = (k) => k + (k === 1 ? 're' : 'e');
+        const lineCells = (axis, k) => [...Array(n)].map((_, j) => (axis === 'row' ? k * n + j : j * n + k));
+        const lineName = (axis, k) => 'la ' + ord(k + 1) + (axis === 'row' ? ' ligne' : ' colonne');
+        const clueEl = (axis, k) => (axis === 'row' ? rowEls[k] : colEls[k]);
+        const apply = (list) => {
+          history.push(state.slice());
+          list.forEach(([i, v]) => { state[i] = v ? 1 : 2; if (mirror) state[twin(i)] = state[i]; });
+          render(); api.onChange(); check();
+        };
+        // 1. une case fausse (pleine au lieu de vide, ou croix sur une case pleine) : on la corrige
         for (let i = 0; i < n * n; i++) {
           const want = puzzle.solution[i];
-          const have = state[i] === 1 ? 1 : 0;
-          if (want !== have || (want === 0 && state[i] === 0)) {
-            if (want === 0 && state[i] === 2) continue;
-            history.push(state.slice());
-            state[i] = want ? 1 : 2;
-            if (mirror) state[twin(i)] = state[i];
-            render(); api.onChange(); check();
-            return want ? 'Les indices de cette ligne et de cette colonne obligent cette case à être pleine.' : 'Cette case reste vide : remplie, elle dépasserait les indices de sa ligne ou de sa colonne.';
+          if ((state[i] === 1 && !want) || (state[i] === 2 && want)) {
+            apply([[i, want]]);
+            const r = Math.floor(i / n), c = i % n;
+            return { text: want ? 'Cette croix était de trop : les indices de sa ligne et de sa colonne (en surbrillance) demandent une case pleine ici.'
+              : 'Cette case ne doit pas être pleine : elle ferait dépasser les blocs demandés par sa ligne ou sa colonne (en surbrillance).',
+              where: [cells[i]], why: [rowEls[r], colEls[mirror && c >= Math.ceil(n / 2) ? n - 1 - c : c]] };
           }
+        }
+        // 2. résolution ligne par ligne : on cherche la ligne (ou colonne) dont les indices forcent des cases
+        const known = (i) => (state[i] === 1 ? 1 : state[i] === 2 ? 0 : -1);
+        const lines = [];
+        for (let k = 0; k < n; k++) lines.push(['row', k]);
+        for (let k = 0; k < (mirror ? Math.ceil(n / 2) : n); k++) lines.push(['col', k]);
+        const found = [];
+        lines.forEach(([axis, k]) => {
+          const idx = lineCells(axis, k);
+          const clues = axis === 'row' ? puzzle.rows[k] : puzzle.cols[k];
+          const cur = idx.map(known);
+          const res = solveLine(clues, cur);
+          if (!res) return;
+          const forced = [];
+          res.forEach((v, j) => { if (cur[j] === -1 && v !== -1 && v === puzzle.solution[idx[j]]) forced.push([idx[j], v]); });
+          if (!forced.length) return;
+          const sum = clues.reduce((a, b) => a + b, 0);
+          const fresh = cur.every((v) => v === -1);
+          const filled = cur.filter((v) => v === 1).length;
+          let kind, score;
+          if (sum === 0) { kind = 'zero'; score = 0; }
+          else if (filled === sum) { kind = 'done'; score = 1; }
+          else if (fresh && sum + clues.length - 1 === n) { kind = 'full'; score = 2; }
+          else if (fresh) { kind = 'overlap'; score = 3; }
+          else { kind = 'mixed'; score = 4; }
+          found.push({ axis, k, idx, clues, forced, kind, score: score * 100 - forced.length });
+        });
+        if (found.length) {
+          found.sort((a, b) => a.score - b.score);
+          const f = found[0];
+          const name = lineName(f.axis, f.k), Name = name.charAt(0).toUpperCase() + name.slice(1);
+          const cl = f.clues.join(' ');
+          const nFill = f.forced.filter(([, v]) => v).length, nEmpty = f.forced.length - nFill;
+          const what = nFill && nEmpty ? 'les cases dorées (pleines et croix)' : nFill ? (nFill > 1 ? 'les cases dorées sont pleines' : 'la case dorée est pleine') : (nEmpty > 1 ? 'les cases dorées sont vides' : 'la case dorée est vide');
+          let text;
+          if (f.kind === 'zero') text = Name + ' a pour indice 0 : aucune case pleine, tout est vide.';
+          else if (f.kind === 'done') text = Name + ' a déjà tous ses blocs (' + cl + ') : le reste de ses cases est vide.';
+          else if (f.kind === 'full') text = f.clues.length === 1 ? 'Le bloc de ' + cl + ' de ' + name + ' remplit toute la ' + (f.axis === 'row' ? 'largeur' : 'hauteur') + ' : toutes ses cases sont pleines.' : 'Les blocs ' + cl + ' de ' + name + ', avec un vide entre chacun, prennent exactement toute la ' + (f.axis === 'row' ? 'largeur' : 'hauteur') + ' : tout est imposé.';
+          else if (f.kind === 'overlap') text = f.clues.length === 1
+            ? 'Le bloc de ' + cl + ' de ' + name + ' est si long que, où qu\'on le place, il recouvre toujours ' + (nFill > 1 ? 'les cases dorées' : 'la case dorée') + '.'
+            : 'Les blocs ' + cl + ' de ' + name + ' laissent peu de jeu : quelle que soit leur position, ' + what + '.';
+          else text = 'Avec les cases déjà trouvées, les blocs ' + cl + ' de ' + name + ' ne peuvent se placer que d\'une façon ici : ' + what + '.';
+          apply(f.forced.map(([i, v]) => [i, v]));
+          return { text, where: f.forced.map(([i]) => cells[i]), why: [clueEl(f.axis, f.k)].concat(f.idx.filter((i) => !f.forced.some(([j]) => j === i)).map((i) => cells[i])) };
+        }
+        // 3. rien de simple : coup de pouce sur la première case encore inconnue
+        for (let i = 0; i < n * n; i++) {
+          if (known(i) !== -1) continue;
+          const want = puzzle.solution[i];
+          apply([[i, want]]);
+          return { text: 'Coup de pouce : cette case est ' + (want ? 'pleine' : 'vide') + '. Croise ensuite les indices de sa ligne et de sa colonne.', where: [cells[i]], why: [] };
         }
         return false;
       },

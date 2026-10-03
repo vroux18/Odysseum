@@ -8,7 +8,10 @@
   const COLORS = ['#d0714a', '#4f8fd0', '#d9a441', '#7f9a46', '#8f7fc8', '#e08a3c',
     '#3d9d90', '#c06474', '#a9b85a', '#5f7fd0', '#c9a23a', '#9c7a5c'];
 
-  const GLYPHS = ['●', '▲', '■', '◆', '★', '✚', '♥', '✿', '◐', '✕', '☾', '◇'];
+  // noms des couleurs, pour les explications d'indice (« le point bleu »)
+  const COLOR_ADJ = ['rouille', 'bleus', 'jaunes', 'verts', 'violets', 'orange', 'turquoise', 'roses', 'vert pomme', 'indigo', 'moutarde', 'bruns'];
+  const COLOR_NAMES = ['rouille', 'bleu', 'jaune', 'vert', 'violet', 'orange', 'turquoise', 'rose', 'vert pomme', 'indigo', 'moutarde', 'brun'];
+  const GLYPHS =['●', '▲', '■', '◆', '★', '✚', '♥', '✿', '◐', '✕', '☾', '◇'];
   const DIRS =[[-1, 0], [1, 0], [0, -1], [0, 1]]; // haut, bas, gauche, droite
 
   // --- Graphe : une case normale = 1 nœud, une case pont = 2 nœuds (h et v). ---
@@ -503,21 +506,83 @@
         draw(); api.onChange();
       },
       hint() {
-        // Pose le premier tuyau qui ne correspond pas à la solution.
-        for (let k = 0; k < K; k++) {
-          const sol = puzzle.solution[k];
-          const same = JSON.stringify(paths[k]) === JSON.stringify(sol) ||
-            JSON.stringify(paths[k]) === JSON.stringify(sol.slice().reverse());
-          if (same) continue;
+        const solOf = (k) => puzzle.solution[k];
+        const done = (k) => { const s = JSON.stringify(paths[k]); return s === JSON.stringify(solOf(k)) || s === JSON.stringify(solOf(k).slice().reverse()); };
+        const todo = [...Array(K).keys()].filter((k) => !done(k));
+        if (!todo.length) return false;
+        // nœuds sûrement pris : les tuyaux déjà justes et toutes les extrémités
+        const solColor = new Int16Array(g.nodeCount).fill(-1);
+        puzzle.solution.forEach((s, k) => s.forEach((v) => { solColor[v] = k; }));
+        const taken = (v, k) => {
+          if (endpointColor[v] >= 0 && endpointColor[v] !== k) return true;
+          return paths.some((p, q) => q !== k && p.includes(v) && solColor[v] === q);
+        };
+        const cellBox = (node, kind, round) => {
+          const c = g.cellOf(node), m = round ? cell * 0.12 : cell * 0.04;
+          return { x: (c % n) * cell + m, y: Math.floor(c / n) * cell + m, w: cell - 2 * m, h: cell - 2 * m, kind, round };
+        };
+        const apply = (k, list) => {
           history.push(paths.map((p) => p.slice()));
           drag = { color: k, snapshot: paths.map((p) => p.slice()) };
-          paths[k] = sol.slice();
+          paths[k] = list.slice();
           applyCuts();
           drag = null;
           draw(); api.onChange(); checkWin();
-          return 'Cette couleur ne peut passer que par là sans barrer la route aux autres.';
+        };
+        const name = (k) => 'le tuyau ' + COLOR_NAMES[k % COLOR_NAMES.length];
+        // 1. deux points voisins : on les relie directement
+        for (const k of todo) {
+          if (solOf(k).length !== 2) continue;
+          apply(k, solOf(k));
+          return Object.assign({ text: 'Les deux points ' + COLOR_ADJ[k % COLOR_ADJ.length] + ' se touchent : ils se relient directement, d\'une case à l\'autre.' },
+            C.hintBoxes(canvas, solOf(k).map((v) => cellBox(v, 'where', true))));
         }
-        return false;
+        // 2. un point qui n'a qu'une sortie libre : on suit le chemin tant qu'il est forcé
+        let best = null;
+        for (const k of todo) {
+          const sol = solOf(k);
+          for (const start of puzzle.endpoints[k]) {
+            const ref = sol[0] === start ? sol : sol.slice().reverse();
+            // on repart du bout déjà juste du tuyau tracé par le joueur, s'il y en a un
+            const p = paths[k];
+            let pre = [start];
+            if (p[0] === start) { let m = 0; while (m < p.length && p[m] === ref[m]) m++; if (m > 0) pre = p.slice(0, m); }
+            const chain = pre.slice(), seen = new Set(pre);
+            let blockers = null;
+            if (endpointColor[chain[chain.length - 1]] === k && chain.length > 1) continue;
+            for (;;) {
+              const v = chain[chain.length - 1];
+              const free = g.adj[v].filter((w) => !seen.has(w) && !taken(w, k));
+              if (chain.length === pre.length) blockers = g.adj[v].filter((w) => !free.includes(w) && !seen.has(w));
+              if (free.length !== 1) break;
+              const w = free[0];
+              chain.push(w); seen.add(w);
+              if (endpointColor[w] === k) break;
+            }
+            if (chain.length <= pre.length || chain.some((v, i) => ref[i] !== v)) continue;
+            const gain = chain.length - pre.length;
+            if (!best || gain > best.gain) best = { k, chain, blockers, head: pre[pre.length - 1], fresh: pre.length === 1, gain, pre: pre.length };
+          }
+        }
+        if (best) {
+          const { k, chain, blockers, head, fresh, gain } = best;
+          const full = endpointColor[chain[chain.length - 1]] === k;
+          apply(k, chain);
+          const where = chain.slice(best.pre).map((v) => cellBox(v, 'where'));
+          where.push(cellBox(head, 'where', true));
+          const why = (blockers || []).map((v) => cellBox(v, 'why'));
+          const corner = fresh && g.adj[head].length < 4 && !wrap;
+          const who = fresh ? 'Le point ' + COLOR_NAMES[k % COLOR_NAMES.length] : 'Le bout du tuyau ' + COLOR_NAMES[k % COLOR_NAMES.length];
+          const text = who + ' n\'a qu\'une sortie libre' + (corner ? ' (il est contre le bord' + (why.length ? ', et ses autres voisines, surlignées, sont prises)' : ')') : why.length ? ' : ses autres voisines, surlignées, sont prises' : '') +
+            '. ' + (full ? 'En suivant les passages forcés, ' + name(k) + ' rejoint son autre point.' : 'Le tuyau avance donc ' + (gain > 1 ? 'de ' + gain + ' cases, toutes forcées.' : 'd\'une case, la seule possible.'));
+          return Object.assign({ text }, C.hintBoxes(canvas, why.concat(where)));
+        }
+        // 3. pas de passage forcé : coup de pouce, le tuyau le plus court
+        const k = todo.slice().sort((a, b) => solOf(a).length - solOf(b).length)[0];
+        apply(k, solOf(k));
+        const ends = puzzle.endpoints[k];
+        return Object.assign({ text: 'Coup de pouce : voici le chemin ' + COLOR_NAMES[k % COLOR_NAMES.length] + ', le plus court qui reste. Relier d\'abord les couleurs proches libère la place pour les autres.' },
+          C.hintBoxes(canvas, solOf(k).filter((v) => !ends.includes(v)).map((v) => cellBox(v, 'why')).concat(ends.map((v) => cellBox(v, 'where', true)))));
       },
       redraw: draw,
       destroy() { window.removeEventListener('resize', resize); }

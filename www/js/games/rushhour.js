@@ -596,8 +596,11 @@
         if (!path || path.length < 2) return false;
         const text = explain(path);
         const i = diff(path[0], path[1]);
+        // pourquoi : le bateau qu'il fallait dégager (coup suivant), ou la passe
+        const j = path[2] ? diff(path[1], path[2]) : -1;
+        const why = i === 0 || blocks(path[0], i) ? [gap] : j >= 0 && j !== i ? [els[j]] : [];
         commit(i, path[1][i]);
-        return text;
+        return { text, where: [els[i]], why };
       },
       // outil de test : on joue d'un coup toute la solution la plus courte
       solve() {

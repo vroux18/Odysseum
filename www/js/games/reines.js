@@ -9,6 +9,11 @@
   // céramique grecque : terre cuite, bleu égéen, or, olive, vert de mer, lie-de-vin, marbre…
   const REGION_COLORS = ['#e08a62', '#7fa8cf', '#e3b65a', '#a8b46a', '#6cb8ae',
     '#c97b85', '#ece6d6', '#a39dcb', '#d4b48a', '#9cc4d8'];
+  // noms des teintes, pour que l'astuce parle de « la région bleue »
+  const COLOR_NAME = { '#e08a62': 'orange', '#7fa8cf': 'bleue', '#e3b65a': 'jaune', '#a8b46a': 'verte', '#6cb8ae': 'turquoise',
+    '#c97b85': 'rose', '#ece6d6': 'blanche', '#a39dcb': 'mauve', '#d4b48a': 'beige', '#9cc4d8': 'bleu ciel' };
+  const ord = (k) => k + (k === 1 ? 're' : 'e');
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
   // couronne pleine, bien lisible sur toutes les couleurs
   const CROWN = '<svg class="crown" viewBox="0 0 24 24"><path d="M3 8.5 7.2 12 12 5l4.8 7L21 8.5 19.2 18H4.8z" fill="#15191e" stroke="#15191e" stroke-width="1.2" stroke-linejoin="round"/></svg>';
 
@@ -225,45 +230,111 @@
       undo() { if (history.length) { state = history.pop(); render(); api.onChange(); } },
       reset() { history.push(state.slice()); state = new Uint8Array(n * n); render(); api.onChange(); },
       hint() {
-        history.push(state.slice());
-        // retire d'abord une couronne mal placée, sinon en pose une juste
-        for (let i = 0; i < n * n; i++) {
-          if (state[i] === 2 && puzzle.solution[Math.floor(i / n)] !== i % n) {
-            state[i] = 0; render(); api.onChange();
-            return 'Cette couronne empêche de compléter une autre région : retire-la.';
+        const N = n * n;
+        const rowOf = (i) => Math.floor(i / n), colOf = (i) => i % n;
+        const isSol = (i) => puzzle.solution[rowOf(i)] === colOf(i);
+        const regName = (g) => 'la région ' + (COLOR_NAME[palette[g % palette.length]] || 'surlignée');
+        const units = [];
+        for (let g = 0; g < n; g++) units.push({ kind: 'reg', id: g, cells: [...Array(N).keys()].filter((i) => puzzle.region[i] === g) });
+        for (let r = 0; r < n; r++) units.push({ kind: 'row', id: r, cells: [...Array(n)].map((_, c) => r * n + c) });
+        for (let c = 0; c < n; c++) units.push({ kind: 'col', id: c, cells: [...Array(n)].map((_, r) => r * n + c) });
+        const uName = (u) => u.kind === 'reg' ? regName(u.id) : u.kind === 'row' ? 'la ' + ord(u.id + 1) + ' ligne' : 'la ' + ord(u.id + 1) + ' colonne';
+        const crownsOn = () => { const q = []; state.forEach((v, i) => { if (v === 2) q.push(i); }); return q; };
+        const done = () => { render(); api.onChange(); const { bad, queens } = conflicts(); if (queens === n && bad.size === 0) api.onWin(); };
+
+        // 1. une couronne fausse : on la retire, en montrant ce qu'elle empêche si possible
+        for (let i = 0; i < N; i++) {
+          if (state[i] !== 2 || isSol(i)) continue;
+          const { bad } = conflicts();
+          history.push(state.slice());
+          let why = [], text;
+          if (bad.has(i)) {
+            why = crownsOn().filter((j) => j !== i && bad.has(j));
+            text = 'Cette couronne en gêne une autre (même ligne, colonne, région, ou elles se touchent) : je la retire.';
+          } else {
+            const blk = blocked();
+            const dead = units.find((u) => !u.cells.some((j) => state[j] === 2) && u.cells.every((j) => blk[j]));
+            if (dead) { why = dead.cells; text = 'Avec cette couronne, ' + uName(dead) + ' (surlignée) n\'a plus aucune case libre : je la retire.'; }
+            else text = 'Cette couronne mène à une impasse un peu plus loin : je la retire.';
+          }
+          state[i] = 0; cleared[i] = 1;
+          done();
+          return { text, where: [cells[i]], why: why.map((j) => cells[j]) };
+        }
+
+        // cases encore possibles : ni bloquées par une couronne, ni écartées (par une astuce ou une croix juste)
+        const blk = blocked();
+        const free = (i) => state[i] !== 2 && !blk[i] && !(state[i] === 1 && !isSol(i));
+        const freeIn = (u) => u.cells.filter(free);
+        const open = units.filter((u) => !u.cells.some((j) => state[j] === 2));
+
+        // 2. une ligne, une colonne ou une région n'a plus qu'une case possible : la couronne y va
+        const order = ['reg', 'row', 'col'];
+        for (const kind of order) {
+          for (const u of open) {
+            if (u.kind !== kind) continue;
+            const f = freeIn(u);
+            if (f.length !== 1 || !isSol(f[0])) continue;
+            const i = f[0];
+            history.push(state.slice());
+            state[i] = 2;
+            done();
+            const text = u.kind === 'reg'
+              ? cap(uName(u)) + ' n\'a plus qu\'une case possible : les autres touchent une couronne ou partagent sa ligne ou sa colonne. La couronne va là.'
+              : 'Sur ' + uName(u) + ', une seule case reste possible : les autres sont barrées par les couronnes déjà posées. La couronne va là.';
+            return { text, where: [cells[i]], why: u.cells.filter((j) => j !== i).map((j) => cells[j]) };
           }
         }
-        // on cherche une couronne qui se déduit : seule case libre de sa région, de sa ligne ou de sa colonne
-        const block = blocked();
-        const free = (i) => state[i] !== 2 && !block[i];
-        let pick = -1, why = '';
-        for (let r = 0; r < n && pick < 0; r++) {
+
+        // 3. une région tient toute dans une seule ligne (ou colonne) : le reste de cette ligne est barré
+        const mark = (list, text, why) => {
+          history.push(state.slice());
+          list.forEach((j) => { state[j] = 1; cleared[j] = 0; });
+          render(); api.onChange();
+          return { text, where: list.map((j) => cells[j]), why: why.map((j) => cells[j]) };
+        };
+        for (const u of open) {
+          const f = freeIn(u);
+          if (!f.length) continue;
+          for (const [axis, of, word] of [['row', rowOf, 'ligne'], ['col', colOf, 'colonne']]) {
+            if (u.kind === axis) continue;
+            const k = of(f[0]);
+            if (!f.every((j) => of(j) === k)) continue;
+            const line = units.find((v) => v.kind === axis && v.id === k);
+            const out = line.cells.filter((j) => free(j) && !u.cells.includes(j) && state[j] !== 1);
+            if (u.kind === 'reg' && out.length) {
+              return mark(out, cap(regName(u.id)) + ' ne peut avoir sa couronne que sur la ' + ord(k + 1) + ' ' + word + ' : les autres cases de cette ' + word + ' sont donc barrées.', f);
+            }
+          }
+          // une ligne dont toutes les cases possibles sont dans une seule région : le reste de la région est barré
+          if (u.kind !== 'reg') {
+            const g = puzzle.region[f[0]];
+            if (f.every((j) => puzzle.region[j] === g)) {
+              const out = units[g].cells.filter((j) => free(j) && !u.cells.includes(j) && state[j] !== 1);
+              if (out.length) return mark(out, 'Sur ' + uName(u) + ', la couronne tombera forcément dans ' + regName(g) + ' : le reste de cette région est donc barré.', f);
+            }
+          }
+        }
+
+        // 4. une case qui viderait une ligne, une colonne ou une région si on y posait une couronne
+        for (let i = 0; i < N; i++) {
+          if (!free(i) || state[i] === 1) continue;
+          const ri = rowOf(i), ci = colOf(i);
+          const hits = (j) => j === i || rowOf(j) === ri || colOf(j) === ci || puzzle.region[j] === puzzle.region[i] || forbidden(puzzle.variant, Math.abs(rowOf(j) - ri), colOf(j) - ci);
+          const dead = open.find((u) => !u.cells.includes(i) && freeIn(u).length && freeIn(u).every(hits));
+          if (dead && !isSol(i)) {
+            return mark([i], 'Une couronne ici barrerait toutes les cases possibles de ' + uName(dead) + ' (surlignée) : cette case est donc exclue.', freeIn(dead));
+          }
+        }
+
+        // 5. pas de déduction simple : un coup de pouce honnête
+        for (let r = 0; r < n; r++) {
           const i = r * n + puzzle.solution[r];
           if (state[i] === 2) continue;
-          const reg = puzzle.region[i], c = i % n;
-          let inReg = 0, inRow = 0, inCol = 0;
-          for (let j = 0; j < n * n; j++) {
-            if (!free(j)) continue;
-            if (puzzle.region[j] === reg) inReg++;
-            if (Math.floor(j / n) === r) inRow++;
-            if (j % n === c) inCol++;
-          }
-          if (inReg === 1) { pick = i; why = 'Dans cette région, c\'est la seule case que les autres couronnes laissent libre.'; }
-          else if (inRow === 1) { pick = i; why = 'Sur cette ligne, toutes les autres cases sont déjà prises par une colonne, une région ou un voisinage.'; }
-          else if (inCol === 1) { pick = i; why = 'Dans cette colonne, c\'est la seule case encore possible.'; }
-        }
-        if (pick < 0) {
-          for (let r = 0; r < n && pick < 0; r++) { const i = r * n + puzzle.solution[r]; if (state[i] !== 2) pick = i; }
-          why = 'Essaie cette couronne : regarde ensuite quelles cases elle rend impossibles autour d\'elle.';
-        }
-        if (pick >= 0) {
-          const i = pick;
-          {
-            state[i] = 2; render(); api.onChange();
-            const { bad, queens } = conflicts();
-            if (queens === n && bad.size === 0) api.onWin();
-            return why;
-          }
+          history.push(state.slice());
+          state[i] = 2;
+          done();
+          return { text: 'Coup de pouce : la couronne de la ' + ord(r + 1) + ' ligne va ici. Regarde les cases qu\'elle barre autour d\'elle.', where: [cells[i]], why: [] };
         }
         return false;
       },

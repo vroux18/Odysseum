@@ -225,10 +225,91 @@
       },
       hint() {
         if (over) return false;
-        for (let i = 0; i < L; i++) {
-          if (!locked.has(i)) { locked.set(i, code[i]); cur[i] = undefined; render(); api.onChange(); return 'Le jeton n°' + (i + 1) + ' est révélé : garde-le et sers-toi des témoins pour trouver les autres.'; }
+        const free = [...Array(L).keys()].filter((i) => !locked.has(i));
+        if (!free.length) return false;
+        const ord = (k) => k + (k === 1 ? 're' : 'e'), ordM = (k) => k + (k === 1 ? 'er' : 'e');
+        const nameOf = (v) => (isLock ? String(v) : SYMBOLS[v].ch);
+        const rowEls = () => [...board.querySelectorAll('.coffre-row')];
+        const reveal = (i) => { locked.set(i, code[i]); cur[i] = undefined; render(); api.onChange(); };
+        const slotEl = (i) => { const row = board.querySelector('.coffre-row.current'); return row ? row.querySelectorAll('.slot')[i] : null; };
+
+        if (isLock) {
+          // Cadenas : chaque flèche borne le chiffre de sa position
+          let best = null;
+          free.forEach((i) => {
+            let lo = 0, hi = 9, loR = -1, hiR = -1;
+            rows.forEach((g, r) => {
+              if (code[i] > g[i] && g[i] + 1 > lo) { lo = g[i] + 1; loR = r; }
+              if (code[i] < g[i] && g[i] - 1 < hi) { hi = g[i] - 1; hiR = r; }
+              if (code[i] === g[i]) { lo = hi = code[i]; loR = hiR = r; }
+            });
+            const used = [loR, hiR].filter((r) => r >= 0);
+            const span = hi - lo;
+            if (!best || span < best.span) best = { i, lo, hi, span, used };
+          });
+          const { i, lo, hi, span, used } = best;
+          reveal(i);
+          const els = rowEls();
+          const why = used.map((r) => els[r] && els[r].querySelectorAll('.arrow')[i]).filter(Boolean);
+          let text;
+          if (!rows.length) text = 'Coup de pouce : le ' + ordM(i + 1) + ' chiffre est ' + code[i] + '. Ensuite, chaque flèche te dira « plus haut » ou « plus bas » pour sa position.';
+          else if (span === 0) text = 'Les flèches surlignées ne laissent qu\'un seul choix pour le ' + ordM(i + 1) + ' chiffre' + (lo > 0 ? ' : plus que ' + (lo - 1) : '') + (hi < 9 ? (lo > 0 ? ', ' : ' : ') + 'moins que ' + (hi + 1) : '') + '. C\'est donc ' + code[i] + '.';
+          else if (!used.length) text = 'Coup de pouce : le ' + ordM(i + 1) + ' chiffre est ' + code[i] + '.';
+          else text ='Les flèches surlignées disent que le ' + ordM(i + 1) + ' chiffre est entre ' + lo + ' et ' + hi + '. C\'est ' + code[i] + ' ; astuce : vise toujours le milieu de l\'intervalle.';
+          return { text, where: [slotEl(i)], why };
         }
-        return false;
+
+        // Classique : codes encore compatibles avec tous les témoins
+        const S = puzzle.symbols;
+        const total = Math.pow(S, L);
+        const fits = (c, rs) => rs.every((r) => { const s = score(c, rows[r]), t = score(code, rows[r]); return s.exact === t.exact && s.near === t.near; });
+        const all = [...Array(rows.length).keys()];
+        const poss = [];
+        if (rows.length && total <= 20000) {
+          const c = new Array(L).fill(0);
+          for (let k = 0; k < total; k++) {
+            let x = k;
+            for (let i = 0; i < L; i++) { c[i] = x % S; x = Math.floor(x / S); }
+            if (!puzzle.repeats && new Set(c).size < L) continue;
+            if ([...locked].some(([i, v]) => c[i] !== v)) continue;
+            if (fits(c, all)) poss.push(c.slice());
+          }
+        }
+        // 1. une position où tous les codes possibles ont le même symbole : c'est une vraie déduction
+        const forced = free.find((i) => poss.length && poss.every((c) => c[i] === code[i]));
+        if (forced !== undefined) {
+          // les essais vraiment utiles à cette déduction (on retire ceux dont on peut se passer)
+          let need = all.slice();
+          for (const r of all) {
+            const keep = need.filter((x) => x !== r);
+            const ok = poss.length < 4000 && keep.length && (() => {
+              const c = new Array(L).fill(0);
+              for (let k = 0; k < total; k++) {
+                let x = k;
+                for (let i = 0; i < L; i++) { c[i] = x % S; x = Math.floor(x / S); }
+                if (!puzzle.repeats && new Set(c).size < L) continue;
+                if ([...locked].some(([i, v]) => c[i] !== v)) continue;
+                if (c[forced] !== code[forced] && fits(c, keep)) return false;
+              }
+              return true;
+            })();
+            if (ok) need = keep;
+          }
+          reveal(forced);
+          const els = rowEls();
+          const text = (need.length > 1 ? 'Les témoins des essais surlignés' : 'Les témoins de l\'essai surligné') + ' ne laissent qu\'une possibilité pour la ' + ord(forced + 1) + ' case : ' + nameOf(code[forced]) + '. Je le pose.';
+          return { text, where: [slotEl(forced)], why: need.map((r) => els[r]).filter(Boolean) };
+        }
+        // 2. pas de certitude : on révèle une case et on rappelle ce que disent les témoins
+        const i = free[0];
+        reveal(i);
+        const els = rowEls();
+        const blank = rows.findIndex((g) => { const s = score(code, g); return s.exact + s.near === 0; });
+        let text = 'Coup de pouce : la ' + ord(i + 1) + ' case est ' + nameOf(code[i]) + '. ';
+        if (blank >= 0) text += 'Regarde l\'essai surligné : aucun témoin allumé, donc aucun de ses symboles n\'est dans le code.';
+        else if (rows.length) text += 'Compare tes essais : un témoin plein = bon symbole bien placé, un creux = bon symbole mal placé.';
+        else text += 'Fais un premier essai avec des symboles variés : les témoins te guideront.';
+        return { text, where: [slotEl(i)], why: blank >= 0 && els[blank] ? [els[blank]] : [] };
       },
       destroy() {}
     };
