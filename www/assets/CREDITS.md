@@ -52,6 +52,7 @@ Une ligne « Crédits » figure dans les réglages (`index.html`), comme l'exige
 | `fonts/marcellus-latin-400.woff2` | Marcellus (titres) | Brian J. Bonislawsky (Astigmatic) | SIL OFL 1.1 (texte : `fonts/OFL-Marcellus.txt`) | https://fonts.google.com/specimen/Marcellus via https://cdn.jsdelivr.net/npm/@fontsource/marcellus@5 |
 | `fonts/cinzel-latin-500.woff2`, `fonts/cinzel-latin-600.woff2` | Cinzel (capitales : intro, étiquettes) | Natanael Gama | SIL OFL 1.1 (texte : `fonts/OFL-Cinzel.txt`) | https://fonts.google.com/specimen/Cinzel via https://cdn.jsdelivr.net/npm/@fontsource/cinzel@5 |
 | `fonts/jost-latin-300/400/500/600.woff2` | Jost (texte courant) | Owen Earl (indestructible type*) | SIL OFL 1.1 (texte : `fonts/OFL-Jost.txt`) | https://fonts.google.com/specimen/Jost via https://cdn.jsdelivr.net/npm/@fontsource/jost@5 |
+| `fonts/fredoka-latin-500/600/700.woff2` | Fredoka (police arrondie de toute l'interface cartoon, `css/cartoon.css`) | Milena Brandão (The Fredoka Project Authors) | SIL OFL 1.1 (texte : `fonts/OFL-Fredoka.txt`) | https://fonts.google.com/specimen/Fredoka via https://cdn.jsdelivr.net/npm/@fontsource/fredoka@5 |
 
 Le grain et les veines de marbre des feuilles sont générés en CSS (filtres SVG `feTurbulence` dans `css/style.css`) : aucune image tierce.
 Kenney UI Pack (CC0) a été examiné mais pas retenu : son style « jeu mobile » cadre mal avec l'esthétique grecque calme.

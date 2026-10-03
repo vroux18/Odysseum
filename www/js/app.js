@@ -5,11 +5,12 @@
   const C = window.Carnet;
   const $ = (sel) => document.querySelector(sel);
 
-  // Teintes douces propres à chaque jeu.
+  // Teintes vives propres à chaque jeu (palette cartoon, reprise dans css/cartoon.css) ;
+  // une famille de couleur par capacité : déduction orangés, espace vert/rose, anticipation bleus, hypothèses jaune/violet/bleu, mémoire rose.
   const ACCENT = {
-    flux: '#4f8fd0', reines: '#d0714a', astres: '#d9a441', paves: '#8fa457',
-    pixels: '#5fae9f', serpent: '#3d9d90', lumieres: '#e0b04a', coffre: '#958fc4',
-    tuyaux: '#c06474'
+    flux: '#3d8ee8', reines: '#f2773f', astres: '#ffb21f', paves: '#5cc93b',
+    pixels: '#ff5d8f', serpent: '#1fc2ae', lumieres: '#ffc81f', coffre: '#8f7cf0',
+    tuyaux: '#c86fd6', demineur: '#ff5d5d', bataille: '#1d9be0', rushhour: '#e0953a', simon: '#ff7ac8'
   };
   // Icônes au trait, toutes sur la même grille 24×24.
   const ICON = {
@@ -96,6 +97,51 @@
     return { L, c, k, boss, id: steps[0].id, accent: ACCENT[steps[0].id], steps };
   }
 
+  // ------------------------------------------------------------------
+  // Événements spéciaux : une grille « méga » par île, facultative, bien plus grande et plus
+  // dure qu'à l'ordinaire. Le jeu tourne parmi ceux déjà découverts sur l'île, la taille
+  // grandit d'île en île (bornée pour rester jouable sur un téléphone de 375 px).
+  // Hors quête : pas de progression du sentier ; XP doublée ; une coupe dorée sur la carte.
+  // ------------------------------------------------------------------
+  const MEGA = [
+    { id: 'tuyaux', n: [10, 12] },
+    { id: 'flux', n: [9, 11], tune: (p, n) => { p.colors = Math.min(12, n); } },
+    { id: 'reines', n: [9, 10] },  // (10 teintes de zones au plus)
+    { id: 'paves', n: [10, 12] },
+    { id: 'pixels', n: [11, 12] }, // (colonne d'indices en plus : au-delà, cases < 24 px)
+    { id: 'demineur', n: [10, 12], tune: (p, n) => { p.mines = Math.round(n * n * 0.19); p.subtle = 2; } }
+  ].filter((m) => C.games.some((g) => g.id === m.id));
+  const EV = (C.store.events = C.store.events || {});
+  function eventInfo(c) {
+    const cands = MEGA.filter((m) => poolOf(c).includes(m.id));
+    const m = (cands.length ? cands : MEGA)[c % (cands.length || MEGA.length)];
+    const n = Math.round(m.n[0] + (m.n[1] - m.n[0]) * Math.min(1, c / 8));
+    const params = Object.assign(game(m.id).params(40, 'classic'), { n });
+    if (m.tune) m.tune(params, n);
+    const seed = 'event:' + c;
+    return { L: -1, c, free: true, event: c, id: m.id, n, accent: ACCENT[m.id], seed,
+      steps: [{ id: m.id, variant: 'classic', level: 20 + c * 3, params, seed }] };
+  }
+  const eventOpen = (c) => J.done >= c * PER;
+  // les événements des îles atteintes, et celui de l'île suivante (grisé)
+  function eventList() {
+    const out = [];
+    for (let c = 0; c <= Math.floor(J.done / PER) + 1; c++) {
+      const e = eventInfo(c);
+      out.push({ c, id: e.id, n: e.n, accent: e.accent, open: eventOpen(c), done: !!(EV[c] && EV[c].done) });
+    }
+    return out;
+  }
+  function refreshEvents() { if (worldReady && C.world.setEvents) C.world.setEvents(eventList()); }
+  function startEvent(c) {
+    if (!eventOpen(c)) return;
+    const info = eventInfo(c);
+    info.xpStart = Object.assign({}, C.store.xp);
+    info.tStart = performance.now();
+    ['#library', '#levels', '#brain'].forEach((s) => { const el = $(s); if (el) el.hidden = true; });
+    playStep(info, 0);
+  }
+
   const J = (C.store.journey = C.store.journey || { done: 0, selected: 0 });
   let selected = J.done; // Ulysse se tient toujours sur le niveau en cours
   let standing = true; // le voyageur est sur une pierre (sinon il se promène)
@@ -108,6 +154,7 @@
       levelInfo,
       iconSvg: (id) => ICON[id],
       accentOf: (id) => ACCENT[id],
+      onEvent: (c) => startEvent(c), // totem d'un événement spécial touché sur la carte
       onSelect: (L) => {
         standing = L != null;
         if (standing) { selected = L; J.selected = L; C.save(); }
@@ -234,8 +281,9 @@
     show('play');
     $('#play').style.setProperty('--game', ACCENT[g.id]);
     $('#play').classList.remove('done');
+    $('#play').classList.toggle('mega', info.event != null); // grande grille : cases plus serrées
     $('#play-icon').innerHTML = icon(g.id);
-    $('#play-level').textContent = info.tier ? info.tier.name.toLowerCase() + ' · ' + info.tier.k : info.free ? (info.focus ? 'concentration' : 'jeu libre') : (info.boss ? 'épreuve · niveau ' : 'niveau ') + (info.L + 1);
+    $('#play-level').textContent = info.event != null ? 'méga' : info.tier ? info.tier.name.toLowerCase() + ' · ' + info.tier.k : info.free ? (info.focus ? 'concentration' : 'jeu libre') : (info.boss ? 'épreuve · niveau ' : 'niveau ') + (info.L + 1);
     // passage d'un mini-jeu au suivant dans une série : la grille arrive par la droite
     $('#board').classList.toggle('next-step', stepIndex > 0 || !!info.chain || !!info.focus);
     $('#board').classList.remove('leaving');
@@ -262,14 +310,14 @@
     }
 
     setTimeout(() => {
-      let seed = (info.seed || 'odysseum:' + info.L) + ':' + stepIndex, genLevel = step.level, mark = null;
+      let seed = step.seed || (info.seed || 'odysseum:' + info.L) + ':' + stepIndex, genLevel = step.level, mark = null;
       // quête et liste des mini-jeux partagent la même progression : une grille de la quête
       // est le prochain niveau du palier en cours de ce jeu (même grille que dans la liste), et la réussir l'y coche
       if (!info.free && variant === 'classic') {
         const nx = nextTier(g.id);
         if (nx) { mark = nx; genLevel = tierLevel(nx.tier, nx.k); seed = 'palier:' + g.id + ':' + nx.tier.id + ':' + nx.k; }
       }
-      const puzzle = g.generate(C.makeRng(seed), g.params(genLevel, variant));
+      const puzzle = g.generate(C.makeRng(seed), step.params || g.params(genLevel, variant)); // (événement : paramètres « méga »)
       host.innerHTML = '';
       let elapsed = 0, won = false, tool = 'fill', hints = 0, auto = false;
       const tick = setInterval(() => {
@@ -288,7 +336,7 @@
           const d = C.gameData(dataKey(g, variant));
           d.solved++;
           d.totalTime += elapsed;
-          gainXp(g, step.level, !!info.boss, elapsed, hints, auto);
+          gainXp(g, step.level, info.event != null ? 2 : info.boss ? 1.5 : 1, elapsed, hints, auto);
           if (mark) tierMark(g.id, mark.tier.id, mark.k);
           C.save();
           host.classList.add('solved');
@@ -367,6 +415,16 @@
   // Niveau réussi : la grille s'illumine, puis le niveau suivant s'enchaîne tout seul.
   // La carte rattrapera la progression au retour (Ulysse avancera jusqu'à la bonne pierre).
   function finishLevel(info) {
+    if (info.event != null) { // événement spécial : la coupe est gagnée, récapitulatif puis retour à la carte
+      const t = Math.round((performance.now() - (info.tStart || performance.now())) / 1000);
+      const prev = EV[info.event];
+      EV[info.event] = { done: true, time: prev && prev.time ? Math.min(prev.time, t) : t };
+      C.save();
+      $('#play').classList.add('done');
+      clearTimeout(finishLevel.timer);
+      finishLevel.timer = setTimeout(() => { if (!screens.play.hidden) showLevelDone(info); }, 1400);
+      return;
+    }
     if (info.tier) { // niveau d'un palier : on le coche et on enchaîne sur le suivant
       const s = info.steps[0];
       tierMark(s.id, info.tier.id, info.tier.k);
@@ -456,7 +514,7 @@
     }
     const before = info.xpStart || {};
     const rows = SKILLS.filter((sk) => (C.store.xp[sk.id] || 0) > (before[sk.id] || 0));
-    $('#ld-title').textContent = info.boss ? 'Épreuve réussie' : 'Niveau ' + (info.L + 1);
+    $('#ld-title').textContent = info.event != null ? 'Méga ' + game(info.id).name : info.boss ? 'Épreuve réussie' : 'Niveau ' + (info.L + 1);
     box.innerHTML = rows.map((sk, i) => {
       const was = levelFrom(before[sk.id] || 0, 40), now = skillStats(sk);
       const gain = (C.store.xp[sk.id] || 0) - (before[sk.id] || 0);
@@ -528,14 +586,15 @@
 
   // ------------------------------ Expérience ------------------------------
   // L'XP dépend de la façon de jouer : rapidité, indices utilisés. Pas de notification : le récapitulatif de fin de niveau la montre.
-  function gainXp(g, level, boss, elapsed, hints) {
+  // mult : 1 niveau ordinaire, 1,5 boss, 2 événement spécial
+  function gainXp(g, level, mult, elapsed, hints) {
     const sk = SKILLS.find((s) => s.games.includes(g.id));
     if (!sk) return;
     const base = 10 + Math.floor(level / 2);
     const par = 25 + level * 5;                                   // temps « attendu » en secondes
     const speed = Math.max(0.6, Math.min(1.4, 1.4 - 0.6 * (elapsed / par)));
     const help = Math.max(0.25, 1 - 0.25 * hints);
-    const gain = Math.max(1, Math.round(base * speed * help * (boss ? 1.5 : 1)));
+    const gain = Math.max(1, Math.round(base * speed * help * (+mult || 1)));
     C.store.xp[sk.id] = (C.store.xp[sk.id] || 0) + gain;
   }
   function showXp(html, accent) {
@@ -570,6 +629,8 @@
       selected = J.done;
     }
     pendingProgress = false;
+    $('#play').classList.remove('mega');
+    refreshEvents(); // une île atteinte ouvre son totem ; un événement réussi devient une coupe
     renderPlay();
     renderBadge();
   }
@@ -608,6 +669,36 @@
       b.innerHTML = '<span class="tile-icon">' + icon(g.id) + '</span><span class="tile-name">' + g.name + '</span>' +
         '<span class="tile-lvl">niv. ' + gameLvl(g.id) + '</span>';
       b.addEventListener('click', () => openLevels(g.id));
+      group.appendChild(b);
+    });
+    renderEventsLib(gl);
+  }
+
+  // Catégorie « Événements » en fin de liste : une carte par île (la suivante grisée, verrouillée),
+  // icône du jeu dans sa teinte, petite étiquette MÉGA, coupe dorée une fois réussi.
+  const CUP = '<svg viewBox="0 0 24 24"><path d="M7 4h10v4a5 5 0 0 1-10 0z" class="f"/><path d="M7 5.5H4.5a3 3 0 0 0 3 4M17 5.5h2.5a3 3 0 0 1-3 4M12 13v4M8.5 20h7M10 17h4"/></svg>';
+  function renderEventsLib(gl) {
+    const list = eventList();
+    if (!list.length) return;
+    const h = document.createElement('h3');
+    h.className = 'lib-cat lib-cat-mega';
+    h.style.setProperty('--game', '#e2a21f');
+    h.textContent = 'Événements';
+    gl.appendChild(h);
+    const group = document.createElement('div');
+    group.className = 'lib-group lib-mega';
+    gl.appendChild(group);
+    list.forEach((e) => {
+      const b = document.createElement('button');
+      b.className = 'tile mega-tile' + (e.open ? '' : ' locked') + (e.done ? ' won' : '');
+      b.style.setProperty('--game', e.open ? e.accent : '#aab2bb');
+      b.disabled = !e.open;
+      b.setAttribute('aria-label', 'Méga ' + game(e.id).name);
+      b.innerHTML = '<span class="tile-icon">' + icon(e.id) + '<i class="mega-badge">méga</i>' +
+        (e.done ? '<i class="mega-cup">' + CUP + '</i>' : '') + '</span>' +
+        '<span class="tile-name">' + game(e.id).name + '</span>' +
+        '<span class="tile-lvl">' + (e.open ? e.n + '×' + e.n : LOCK) + '</span>';
+      b.addEventListener('click', () => startEvent(e.c));
       group.appendChild(b);
     });
   }
@@ -787,8 +878,8 @@
     const RIGHT = 'M121 30C160 22 202 46 210 100C218 160 212 236 188 278C168 310 140 320 121 316Z';
     let html = '<defs><clipPath id="brain-clip"><path d="' + LEFT + '"/><path d="' + RIGHT + '"/></clipPath>';
     SKILLS.forEach((sk) => {
-      html += '<radialGradient id="zg-' + sk.id + '"><stop offset="0" stop-color="' + ACCENT[sk.games[0]] + '" stop-opacity=".55"/>' +
-        '<stop offset=".7" stop-color="' + ACCENT[sk.games[0]] + '" stop-opacity=".18"/><stop offset="1" stop-color="' + ACCENT[sk.games[0]] + '" stop-opacity="0"/></radialGradient>';
+      html += '<radialGradient id="zg-' + sk.id + '"><stop offset="0" stop-color="' + ACCENT[sk.games[0]] + '" stop-opacity=".9"/>' +
+        '<stop offset=".7" stop-color="' + ACCENT[sk.games[0]] + '" stop-opacity=".5"/><stop offset="1" stop-color="' + ACCENT[sk.games[0]] + '" stop-opacity="0"/></radialGradient>';
     });
     html += '</defs><path class="hemi" d="' + LEFT + '"/><path class="hemi" d="' + RIGHT + '"/><g clip-path="url(#brain-clip)">';
     // chaque capacité colore sa région, d'autant plus fort que son niveau monte
@@ -827,7 +918,23 @@
       });
       html += '<g class="zone" data-skill="' + sk.id + '" style="color:' + accent + '">' + inner + '</g></g>';
     });
-    svg.innerHTML = html;    zoomBrain(null, true);
+    svg.innerHTML = html;
+    // contour cartoon : le bord extérieur de chaque hémisphère devient une suite de bosses arrondies (la scissure reste droite)
+    svg.querySelectorAll('.hemi').forEach((h) => {
+      try {
+        const outer = h.getTotalLength() - 286; // longueur sans la scissure du milieu (30 → 316)
+        const n = Math.max(8, Math.round(outer / 30));
+        const pts = [];
+        for (let i = 0; i <= n; i++) { const p = h.getPointAtLength(outer * i / n); pts.push([p.x.toFixed(1), p.y.toFixed(1)]); }
+        let d = 'M' + pts[0].join(' ');
+        for (let i = 1; i <= n; i++) {
+          const r = (Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]) * 0.58).toFixed(1);
+          d += 'A' + r + ' ' + r + ' 0 0 ' + (h === svg.querySelector('.hemi') ? 0 : 1) + ' ' + pts[i].join(' ');
+        }
+        h.setAttribute('d', d + 'Z');
+      } catch (e) { /* géométrie indisponible : on garde le contour lisse */ }
+    });
+    zoomBrain(null, true);
     // capacités : nom, niveau et barre, sans description
     $('#skills').innerHTML = SKILLS.map((sk) => {
       const st = skillStats(sk);
@@ -972,8 +1079,8 @@
     return s === 'auto' ? (isNightHour(hourNow()) ? 'dark' : 'light') : s;
   }
   function applyTheme() {
-    const t = resolvedTheme();
-    document.documentElement.dataset.theme = t;
+    // interface cartoon : toujours claire, même la nuit ou en mode sombre (seule la 3D suit l'heure)
+    document.documentElement.dataset.theme = 'light';
     // la 3D suit l'heure réelle ; le mode sombre choisi force la nuit
     if (worldReady && C.world.setTime) C.world.setTime(hourNow(), (C.store.settings.theme || 'auto') === 'dark');
     if (session && session.inst.redraw) session.inst.redraw();
@@ -1183,6 +1290,11 @@
     $('#wardrobe').hidden = false;
     C.sfx.tap();
   });
+  // pendant l'essayage, la caméra montre Ulysse de face, au-dessus de la feuille ; quelle que soit
+  // la façon de la refermer (bouton, croix, fond, Échap, retour), la caméra de suivi reprend
+  if (window.MutationObserver) new MutationObserver(() => {
+    if (worldReady && C.world.showcase) C.world.showcase(!$('#wardrobe').hidden);
+  }).observe($('#wardrobe'), { attributes: true, attributeFilter: ['hidden'] });
   $('#wardrobe').addEventListener('click', (e) => {
     if (e.target.id === 'wardrobe' || e.target.id === 'wd-done') { $('#wardrobe').hidden = true; return; }
     const tab = e.target.closest('#wd-tabs button');
@@ -1261,7 +1373,7 @@
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const o = openSheet(); if (o) o.hidden = true; } });
 
   // exposé pour les tests
-  window.Odysseum = { levelInfo, journey: J };
+  window.Odysseum = { levelInfo, journey: J, eventInfo, eventList, startEvent };
 
   // appli installée depuis Chrome : toujours à jour (voir sw.js) ; inutile dans l'APK
   if ('serviceWorker' in navigator && location.protocol === 'https:' && !window.Capacitor) {
@@ -1269,6 +1381,7 @@
   }
 
   initWorld();
+  refreshEvents();
   applyTheme();
   applyA11y();
   show('home');

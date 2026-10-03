@@ -1792,3 +1792,32 @@ svg.ic.ic-solid { --duo-o: 1; }
   width: 74px; height: 12px !important; border-radius: 6px !important; background: #efe9f7 !important; box-shadow: inset 0 2px 0 rgba(80, 60, 140, .12); overflow: hidden; }
 #home #open-brain .brain-xp b { height: 100%; border-radius: 6px !important; background: linear-gradient(90deg, #ff7eb0, #ffc93d) !important;
   box-shadow: inset 0 3px 0 rgba(255, 255, 255, .45) !important; min-width: 12px; }
+
+/* Événements spéciaux « méga » : grandes grilles, cases plus serrées pour tenir sur un téléphone */
+#play.mega .cell-grid { gap: 3px !important; max-width: min(520px, 100%, calc(100dvh - 230px)) !important; }
+#play.mega .cell-grid .cell { border-width: 2px !important; border-radius: 6px !important; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .14) !important; }
+#play.mega .cell-grid.reines, #play.mega .cell-grid.paves { gap: 0 !important; }
+#play.mega .cell-grid.reines .cell { border-radius: 0 !important; }
+#play.mega .nono { gap: 1px !important; max-width: min(520px, 100%, calc(100dvh - 230px)) !important; }
+#play.mega .nono-col span, #play.mega .nono-row span { font-size: 9.5px; }
+#play.mega #play-level { display: inline-block; padding: 1px 9px; border-radius: 999px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+  color: #7a4a00; background: linear-gradient(#ffe07a, #ffbd2e); box-shadow: 0 2px 0 #e08f00; }
+
+/* liste des mini-jeux : catégorie « Événements » */
+.lib-cat-mega { color: #d68a00; }
+.mega-tile { position: relative; }
+.mega-tile .tile-icon { position: relative; overflow: visible !important;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--game) 70%, #fff), var(--game) 75%) !important; border: 3px solid #fff !important;
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--game) 60%, #000), 0 6px 14px -6px color-mix(in srgb, var(--game) 70%, transparent) !important; }
+.mega-tile .tile-icon > svg { stroke: #fff !important; }
+.mega-tile .tile-icon > svg .f { fill: #fff !important; stroke: none; }
+.mega-badge { position: absolute; top: -7px; left: 50%; transform: translateX(-50%) rotate(-4deg); padding: 1px 6px; border-radius: 999px;
+  font: 800 8.5px/1.35 Jost, system-ui, sans-serif; font-style: normal; letter-spacing: .1em; text-transform: uppercase; white-space: nowrap;
+  color: #fff; background: var(--game); border: 2px solid #fff; box-shadow: 0 2px 0 rgba(0, 0, 0, .12); }
+.mega-cup { position: absolute; right: -9px; bottom: -6px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  background: linear-gradient(#ffe07a, #ffb31f); border: 2px solid #fff; box-shadow: 0 2px 0 #e08f00; }
+#library .mega-cup svg { width: 15px !important; height: 15px !important; fill: none; stroke: #8a5200; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.mega-cup svg .f { fill: #fff3b0; stroke: #8a5200; }
+.mega-tile.won .tile-lvl { color: #8a5200 !important; background: #ffe9a8 !important; }
+.mega-tile.locked { opacity: .5; filter: grayscale(.85); cursor: default; }
+.mega-tile.locked .tile-lvl svg { width: 12px; height: 12px; vertical-align: -2px; }

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Odysseus</title>
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#161b22">
+<meta name="theme-color" content="#5ec3f2">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <!-- polices embarquées (assets/fonts, SIL OFL) : Jost, Marcellus, Cinzel ; voir css/style.css (UI v4) -->
@@ -16,34 +16,68 @@
 <link rel="stylesheet" href="css/games/bataille.css">
 <link rel="stylesheet" href="css/games/rushhour.css">
 <link rel="stylesheet" href="css/games/simon.css">
+<!-- peau cartoon de toute l'interface (police Fredoka, SIL OFL) : TOUJOURS la dernière feuille -->
+<link rel="preload" href="assets/fonts/fredoka-latin-700.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/cartoon.css">
 </head>
 <body>
-<!-- Intro : lever de soleil sur la mer, voilier, frise, titre ; un toucher pour embarquer -->
+<!-- Intro cartoon : ciel bleu, soleil, nuages joufflus, lagon, voilier dodu, titre arrondi ; un toucher pour embarquer.
+     Styles dans css/cartoon.css. app.js déplace .intro-boat (translate x 179) : son groupe parent le pose sur l'eau. -->
 <div id="intro" class="intro" role="button" tabindex="0" aria-label="Toucher pour embarquer">
-  <svg class="intro-scene" viewBox="0 0 360 260" aria-hidden="true">
+  <svg class="intro-scene" viewBox="0 0 360 640" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
     <defs>
-      <radialGradient id="introSun" cx="50%" cy="50%" r="50%">
-        <stop offset="0" stop-color="#ffe6a3"/><stop offset=".6" stop-color="#e9b452"/><stop offset="1" stop-color="#e9b452" stop-opacity="0"/>
-      </radialGradient>
-      <linearGradient id="introSea" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#2d5f8f"/><stop offset="1" stop-color="#0e1a26"/>
+      <linearGradient id="kSea" x1="0" y1="440" x2="0" y2="640" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stop-color="#3fe0d0"/><stop offset=".45" stop-color="#22b8e0"/><stop offset="1" stop-color="#1d9be0"/>
       </linearGradient>
-      <clipPath id="introHorizon"><rect x="0" y="0" width="360" height="160"/></clipPath>
+      <!-- pas d'attribut transform hors du voilier : style.css les annule en mode « animations réduites » -->
+      <symbol id="kCloud" viewBox="-20 -35 92 62" overflow="visible">
+        <g fill="#cfeafa"><circle cx="0" cy="5" r="18"/><circle cx="24" cy="-5" r="23"/><circle cx="50" cy="5" r="17"/><rect x="-18" y="5" width="86" height="17" rx="8.5"/></g>
+        <g fill="#ffffff"><circle cx="0" cy="0" r="18"/><circle cx="24" cy="-10" r="23"/><circle cx="50" cy="0" r="17"/><rect x="-18" y="0" width="86" height="17" rx="8.5"/></g>
+      </symbol>
     </defs>
-    <g clip-path="url(#introHorizon)"><circle class="intro-sun" cx="180" cy="160" r="70" fill="url(#introSun)"/></g>
-    <rect x="0" y="158" width="360" height="102" fill="url(#introSea)"/>
-    <g class="intro-waves" fill="none" stroke="#f1ead9" stroke-linecap="round" opacity=".5">
-      <path class="w1" d="M-40 182q20-6 40 0t40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0"/>
-      <path class="w2" d="M-40 206q20-6 40 0t40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0" opacity=".6"/>
-      <path class="w3" d="M-40 232q20-6 40 0t40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0" opacity=".35"/>
+    <!-- soleil : disque doré, rayons arrondis qui tournent lentement -->
+    <g class="intro-sun">
+      <circle class="k-rays" cx="292" cy="84" r="54" fill="none" style="stroke:#ffe27a;stroke-width:12;stroke-linecap:round;stroke-dasharray:6 22.3"/>
+      <circle cx="292" cy="84" r="38" fill="#ffc93d"/>
+      <circle cx="292" cy="84" r="30" fill="#ffd84d"/>
+      <path d="M276 70a20 20 0 0 1 14-8" style="fill:none;stroke:#fff;stroke-width:5;stroke-linecap:round;opacity:.7"/>
     </g>
-    <g class="intro-boat" transform="translate(-40 180)">
-      <path d="M-22 0h44l-8 9h-28z" fill="#c4622d"/>
-      <path d="M0-2v-40" stroke="#f1ead9" stroke-width="1.6"/>
-      <path d="M2-40q20 18 4 36h-4z" fill="#f1ead9"/>
-      <path d="M-2-34q-14 14-2 30h2z" fill="#e2d6bd"/>
+    <!-- nuages qui dérivent -->
+    <g class="k-cloud"><use href="#kCloud" x="20" y="200" width="101" height="68"/></g>
+    <g class="k-cloud c2"><use href="#kCloud" x="200" y="300" width="74" height="50"/></g>
+    <g class="k-cloud c3"><use href="#kCloud" x="60" y="370" width="55" height="37"/></g>
+    <!-- îlot au loin -->
+    <g class="k-isle">
+      <ellipse cx="62" cy="442" rx="46" ry="14" fill="#ffe3a1"/>
+      <ellipse cx="62" cy="438" rx="36" ry="13" fill="#5cc93b"/>
+      <path d="M70 430c-1-10 1-20 6-26" style="fill:none;stroke:#b77a45;stroke-width:4;stroke-linecap:round"/>
+      <path d="M76 404c-8-4-16-2-20 4M76 404c8-5 16-3 20 2M76 404c-3-7-10-10-16-9M76 404c4-6 11-8 16-6" style="fill:none;stroke:#27a862;stroke-width:5;stroke-linecap:round"/>
     </g>
-    <path class="intro-meander" d="M20 250h16v-12h12v8h-6v-4M54 250h16v-12h12v8h-6v-4M88 250h16v-12h12v8h-6v-4M122 250h16v-12h12v8h-6v-4M156 250h16v-12h12v8h-6v-4M190 250h16v-12h12v8h-6v-4M224 250h16v-12h12v8h-6v-4M258 250h16v-12h12v8h-6v-4M292 250h16v-12h12v8h-6v-4M326 250h14" fill="none" stroke="#d9a441" stroke-width="1.6"/>
+    <!-- la mer : lagon turquoise, houle en festons blancs -->
+    <rect x="-60" y="440" width="520" height="220" fill="url(#kSea)"/>
+    <g class="k-swell s2"><path class="k-line" d="M-60 444q10-7 20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0" opacity=".8"/></g>
+    <!-- le voilier : coque ronde orangée, voile bombée, fanion rose (déplacé par app.js) -->
+    <svg x="0" y="262" width="360" height="200" overflow="visible">
+      <g class="intro-boat" transform="translate(-40 179)">
+        <path class="k-out" d="M3-12V-60" style="stroke:#8a5a30;stroke-width:4;stroke-linecap:round"/>
+        <path class="k-out" d="M4-62l14 5-14 5z" fill="#ff5d8f"/>
+        <path class="k-out" d="M-2-52C-22-40-26-24-18-14H-2Z" fill="#fff1cf"/>
+        <path class="k-out" d="M6-58C38-46 44-24 32-14H6Z" fill="#ffffff"/>
+        <path d="M14-50C32-38 36-26 30-18" style="fill:none;stroke:#ff7eb0;stroke-width:5;stroke-linecap:round"/>
+        <path class="k-out" d="M-36-8H36Q33 12 18 15H-18Q-33 12-36-8Z" fill="#ee7a4d"/>
+        <path d="M-33 0H33" style="fill:none;stroke:#fffaf0;stroke-width:4;stroke-linecap:round"/>
+        <circle cx="-16" cy="5" r="2.6" fill="#fffaf0"/><circle cx="0" cy="6" r="2.6" fill="#fffaf0"/><circle cx="16" cy="5" r="2.6" fill="#fffaf0"/>
+      </g>
+    </svg>
+    <!-- houle de devant : elle passe sur le bas de la coque -->
+    <g class="k-swell">
+      <path d="M-60 452q10-8 20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0V660H-60Z" fill="url(#kSea)"/>
+      <path class="k-line" d="M-60 452q10-8 20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0"/>
+    </g>
+    <g class="k-swell s3" opacity=".55">
+      <path class="k-line" d="M-60 500q10-6 20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0" style="stroke-dasharray:30 50"/>
+      <path class="k-line" d="M-60 560q10-6 20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0t20 0" style="stroke-dasharray:22 70"/>
+    </g>
   </svg>
   <h1 class="intro-title" aria-label="Odysseus"><span>O</span><span>D</span><span>Y</span><span>S</span><span>S</span><span>E</span><span>U</span><span>S</span></h1>
   <p class="intro-tap">toucher pour embarquer</p>
@@ -251,7 +285,7 @@
       <label class="toggle"><span><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-sparkle"/></svg>Animations réduites</span><input type="checkbox" class="opt-a11y" data-a11y="motion"><i></i></label>
       <label class="toggle"><span><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-eye"/></svg>Symboles sur les couleurs</span><input type="checkbox" class="opt-a11y" data-a11y="cb"><i></i></label>
       <!-- attribution exigée par la licence CC BY 3.0 de game-icons.net ; détail dans assets/CREDITS.md -->
-      <p class="credits">Crédits · icônes <b>Phosphor</b> (MIT) et <b>game-icons.net</b> par Lorc &amp; Delapouite (CC BY 3.0) · polices Marcellus, Cinzel, Jost (SIL OFL) · 3D et textures Quaternius, Kenney, Kay Lousberg, Poly Haven (CC0) · lottie-web (MIT)</p>
+      <p class="credits">Crédits · icônes <b>Phosphor</b> (MIT) et <b>game-icons.net</b> par Lorc &amp; Delapouite (CC BY 3.0) · polices Fredoka, Marcellus, Cinzel, Jost (SIL OFL) · 3D et textures Quaternius, Kenney, Kay Lousberg, Poly Haven (CC0) · lottie-web (MIT)</p>
     </div>
   </div>
 
