@@ -369,3 +369,16 @@
 
 /* écran de jeu : un peu d'air au-dessus de l'en-tête */
 #play .topbar { margin-top: 18px !important; }
+
+/* carte du niveau plus compacte */
+#home { --lc-h: 132px; }
+.lvcard { grid-template-rows: auto auto auto 46px !important; padding: 9px 14px 10px !important; row-gap: 2px !important; border-radius: 26px !important; }
+.lvcard .lc-isle { font-size: 10px !important; }
+.lvcard .lc-title { font-size: 18px !important; }
+.lvcard .lc-nav { width: 26px !important; height: 26px !important; font-size: 19px !important; }
+.lc-chip i { width: 24px !important; height: 24px !important; }
+.lc-chip svg { width: 14px !important; height: 14px !important; }
+.lvcard .lc-st svg { width: 11px !important; height: 11px !important; }
+#home #go { height: 44px !important; border-radius: 22px !important; bottom: calc(var(--lc-b) + 11px) !important; }
+#home #go::after { font-size: 17px !important; }
+#home #go svg.ic, #home #go svg { width: 19px !important; height: 19px !important; }
