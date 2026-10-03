@@ -13,8 +13,8 @@
     reines: SK_COL.logique, astres: '#f7a046', demineur: '#e25a3a',
     paves: SK_COL.espace, pixels: '#7ccc3f', tuyaux: '#2f9e5a',
     flux: SK_COL.anticipation, serpent: '#38b3e0', rushhour: '#3466c9',
-    lumieres: SK_COL.raisonnement, coffre: '#a98ff5', bataille: '#6f5fd6',
-    simon: SK_COL.memoire
+    lumieres: SK_COL.raisonnement, coffre: '#a98ff5', bataille: '#6f5fd6', oracle: '#7a63e0',
+    simon: SK_COL.memoire, amphores: '#e4579f', mosaique: '#ff94cb'
   };
   // Icônes au trait, toutes sur la même grille 24×24.
   const ICON = {
@@ -26,7 +26,11 @@
     serpent: '<circle cx="5" cy="5" r="1.6" class="f"/><path d="M5 5h14v4.7H5v4.6h14V19H6.5"/>',
     lumieres: '<circle cx="12" cy="12" r="4" class="f"/><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4M16.6 16.6 18 18M6 18l1.4-1.4M16.6 7.4 18 6"/>',
     tuyaux: '<path d="M4 8h6v8h10M14 4v4h6"/><circle cx="10" cy="8" r="2.2" class="f"/>',
-    coffre: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.4"/><path d="M12 4v3M4 12h1.5M18.5 12H20"/>'
+    coffre: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.4"/><path d="M12 4v3M4 12h1.5M18.5 12H20"/>',
+    // amphore, quatre tesselles, grille logique cochée
+    amphores: '<path d="M9.5 3.5h5v1.8c2.8 1.3 4.3 3.8 4.3 7 0 3.8-2.6 6.4-5 7.4v.8h-4.6v-.8c-2.4-1-5-3.6-5-7.4 0-3.2 1.5-5.7 4.3-7z"/><path d="M7.5 11h9M8 14.5h8"/>',
+    mosaique: '<rect x="4" y="4" width="7" height="7" rx="1.6" class="f"/><rect x="13" y="4" width="7" height="7" rx="1.6"/><rect x="4" y="13" width="7" height="7" rx="1.6"/><rect x="13" y="13" width="7" height="7" rx="1.6" class="f"/>',
+    oracle: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M4 10h16M10 4v16"/><path d="M12.5 15.2l1.6 1.6 3.2-3.4"/><path d="M6.2 12.2l1.8 1.8M8 12.2 6.2 14"/>'
   };
   // les mini-jeux ajoutés plus tard apportent leur teinte et leur icône (24×24) en s'enregistrant
   C.games.forEach((g) => {
@@ -71,7 +75,13 @@
       let t = 4;
       for (let l = 2; l <= (p.target || 6); l++) t += l * ((p.step || 600) / 1000 + 0.55) + 1.2;
       return t;
-    }
+    },
+    // paires : ~3,4 s par paire (+ aperçu), un peu plus avec les motifs cousins ; 6 paires ≈ 28 s, 18 paires ≈ 79 s
+    amphores: (p) => 6 + 3.4 * (p.pairs || 8) + 1.2 * (p.similar || 0) + (p.peek || 0) / 1000,
+    // mosaïque : temps d'affichage + ~1,2 s par tesselle ; 3×3 ≈ 19 s, 6×6 ≈ 59 s
+    mosaique: (p) => (p.show || 4000) / 1000 + 4 + 1.2 * sq(p.n) + 1.5 * (p.colors || 3),
+    // grille logique : ~1,4 s par case de la grille ; 3×3 ≈ 53 s, 4×4 ≈ 149 s
+    oracle: (p) => 15 + 1.4 * (p.n || 4) * (p.n || 4) * (p.k || 3) * ((p.k || 3) - 1) / 2
   };
   const targetTime = (id, p) => Math.max(12, Math.round(TARGET[id] && p ? TARGET[id](p) : 45));
   function starsFor(time, target, hints) {
@@ -103,8 +113,10 @@
   const VARIANTS_ON = false; // variantes mises de côté pour l'instant (le code reste prêt)
   // ordre d'apparition des mini-jeux dans la quête (un jeu absent est ignoré)
   const ORDER = ['flux', 'reines', 'tuyaux', 'astres', 'paves', 'pixels', 'serpent', 'lumieres', 'coffre',
-    'demineur', 'simon', 'rushhour', 'bataille'].filter((id) => C.games.some((g) => g.id === id));
-  const POOL_SIZE = [3, 5, 7, 9, 11, 13]; // jeux disponibles dans les mondes 1, 2, 3, 4, 5, 6 et suivants
+    'demineur', 'simon', 'amphores', 'mosaique', 'oracle', 'rushhour', 'bataille'].filter((id) => C.games.some((g) => g.id === id));
+  // jeux disponibles dans les mondes 1, 2, 3… (les derniers venus — Amphores, Mosaïque, Oracle — et ceux
+  // qu'ils décalent restent atteignables grâce aux mondes 7 et 8)
+  const POOL_SIZE = [3, 5, 7, 9, 11, 13, 15, 16];
   const poolOf = (c) => ORDER.slice(0, POOL_SIZE[Math.min(c, POOL_SIZE.length - 1)]);
 
   function levelInfo(L) {
@@ -1328,8 +1340,8 @@
     { id: 'logique', name: 'Déduction', games: ['reines', 'astres', 'demineur'], at: [72, 160], r: [50, 56] },
     { id: 'espace', name: 'Espace', games: ['paves', 'pixels', 'tuyaux'], at: [168, 160], r: [50, 56] },
     { id: 'anticipation', name: 'Anticipation', games: ['flux', 'serpent', 'rushhour'], at: [120, 84], r: [80, 48] },
-    { id: 'raisonnement', name: 'Hypothèses', games: ['lumieres', 'coffre', 'bataille'], at: [80, 252], r: [52, 48] },
-    { id: 'memoire', name: 'Mémoire', games: ['simon'], at: [164, 254], r: [46, 46] }
+    { id: 'raisonnement', name: 'Hypothèses', games: ['lumieres', 'coffre', 'oracle'], at: [80, 252], r: [52, 48] },
+    { id: 'memoire', name: 'Mémoire', games: ['simon', 'amphores', 'mosaique'], at: [164, 254], r: [46, 46] }
   ];
   SKILLS.forEach((sk) => { sk.games = sk.games.filter((id) => C.games.some((g) => g.id === id)); });
   const NODES = 10;
@@ -1597,6 +1609,8 @@
     if (worldReady && C.world.setTime) C.world.setTime(hourNow(), C.store.settings.dayLock ? 'day' : false);
     if (session && session.inst.redraw) session.inst.redraw();
     document.querySelectorAll('.theme-mode button').forEach((b) => b.classList.toggle('on', b.dataset.themeChoice === (C.store.settings.theme || 'auto')));
+    const dl = document.getElementById('opt-daylock');
+    if (dl) dl.checked = !!C.store.settings.dayLock;
   }
   if (osDark) { const onOs = () => { if ((C.store.settings.theme || 'auto') === 'auto') applyTheme(); }; if (osDark.addEventListener) osDark.addEventListener('change', onOs); else if (osDark.addListener) osDark.addListener(onOs); }
   { const dl = document.getElementById('opt-daylock'); if (dl) dl.addEventListener('change', (e) => { C.store.settings.dayLock = e.target.checked; C.save(); applyTheme(); }); }
@@ -1611,8 +1625,6 @@
     C.sfx.tap();
   }));
   renderPlayMode();
-    const dl = document.getElementById('opt-daylock');
-    if (dl) dl.checked = !!C.store.settings.dayLock;
   function stepLevel(d) {
     const L = Math.max(0, Math.min(J.done, selected + d));
     if (L === selected) return;

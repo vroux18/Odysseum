@@ -1,0 +1,74 @@
+/* Mosaïque : un cadre de pierre claire, des tesselles bombées, une palette de galets */
+.mos {
+  --side: 300px; --sw: 54px;
+  display: flex; flex-direction: column; align-items: center; gap: 14px; flex: 0 0 auto;
+  user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+}
+/* sablier : barre arrondie qui se vide pendant l'affichage du modèle */
+.mos-bar {
+  width: calc(var(--side) * .6); height: 10px; border-radius: 99px; overflow: hidden;
+  background: var(--k-well, #f1ecf8); box-shadow: inset 0 2px 0 rgba(80, 60, 140, .1);
+  opacity: 0; transition: opacity .3s ease;
+}
+.mos.showing .mos-bar { opacity: 1; }
+.mos-bar i { display: block; height: 100%; border-radius: 99px; background: var(--game); transform-origin: left center; transform: scaleX(0); }
+
+/* le cadre : joints de pierre crème, bord épais dessous */
+.mos-board {
+  width: var(--side); height: var(--side); box-sizing: border-box;
+  display: grid; grid-template-columns: repeat(var(--n), 1fr); grid-template-rows: repeat(var(--n), 1fr);
+  gap: calc(var(--side) / var(--n) * .08); padding: calc(var(--side) / var(--n) * .12);
+  border-radius: 24px; background: var(--tile, #efe6d6); border: 4px solid var(--k-rim, #fff);
+  box-shadow: 0 6px 0 var(--k-edge, #d9cfe8), var(--k-drop, 0 8px 18px rgba(80, 60, 140, .18));
+  touch-action: none;
+}
+.mos-cell {
+  position: relative; padding: 0; border: 0; cursor: pointer; outline: none;
+  border-radius: 24%; background: var(--k-cream, #fffaf0);
+  box-shadow: inset 0 -3px 0 rgba(120, 90, 50, .1);
+  transition: background-color .25s ease, box-shadow .25s ease, opacity .3s ease, transform .3s var(--k-ease, ease);
+  animation: mos-in .45s var(--k-ease, ease) both; animation-delay: calc(var(--k, 0) * 28ms);
+}
+.mos-cell.on {
+  background: var(--c);
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .16), inset 0 3px 0 rgba(255, 255, 255, .35);
+}
+.mos-cell.pop { animation: mos-pop .32s var(--k-ease, ease); }
+/* fin de l'affichage : les tesselles s'effacent en vague */
+.mos.wipe .mos-cell { animation: mos-wipe .5s ease both; animation-delay: calc(var(--k, 0) * 22ms); }
+/* astuce : le modèle revient, en transparence */
+.mos-cell.ghost { opacity: .55; }
+/* tesselle fausse : liseré pointillé corail et petit frisson, jamais criard */
+/* tesselle fausse : elle se « descelle » (penchée, plus petite, liseré blanc et corail), sans rien de criard */
+.mos-cell.off {
+  transform: scale(.8) rotate(-8deg);
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, .9), 0 0 0 2.5px var(--bad, #ff6b5d), 0 4px 8px rgba(80, 60, 140, .25);
+  animation: mos-shiver .5s ease;
+}
+.mos-board.nudge { animation: mos-nudge .45s ease; }
+.mos-board.done .mos-cell { animation: mos-shine .9s ease both; animation-delay: calc(var(--k, 0) * 40ms); }
+
+/* palette : gros galets ronds, celui choisi se soulève */
+.mos-pal { display: flex; gap: 12px; justify-content: center; }
+.mos-sw {
+  width: var(--sw); height: var(--sw); border-radius: 50%; padding: 0; cursor: pointer;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--c) 60%, #fff), var(--c) 70%);
+  border: 4px solid var(--k-rim, #fff);
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--c) 65%, #3a3550), var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14));
+  transition: transform .2s var(--k-ease, ease), box-shadow .2s ease;
+}
+.mos-sw.sel { transform: translateY(-6px) scale(1.08); box-shadow: 0 9px 0 color-mix(in srgb, var(--c) 65%, #3a3550), 0 0 0 4px color-mix(in srgb, var(--c) 30%, transparent), var(--k-drop, 0 8px 18px rgba(80, 60, 140, .18)); }
+.mos.showing .mos-pal { opacity: .35; pointer-events: none; }
+.mos-pal { transition: opacity .3s ease; }
+
+.mos-cell.hint-where { border-radius: 24%; }
+
+@keyframes mos-in { from { opacity: 0; transform: scale(.4); } }
+@keyframes mos-pop { 40% { transform: scale(1.14); } }
+@keyframes mos-wipe { 0% { transform: scale(1); } 45% { transform: scale(.7); } 100% { transform: none; } }
+@keyframes mos-shiver { 25% { transform: rotate(-4deg); } 50% { transform: rotate(3deg); } 75% { transform: rotate(-1.5deg); } }
+@keyframes mos-nudge { 25% { transform: translateX(-4px); } 50% { transform: translateX(3px); } 75% { transform: translateX(-1px); } }
+@keyframes mos-shine { 50% { transform: scale(1.08); filter: brightness(1.15); } }
+
+:root.a11y-motion .mos-cell, :root.a11y-motion .mos-board { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .mos-cell, .mos-board { animation: none !important; } }

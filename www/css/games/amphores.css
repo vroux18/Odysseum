@@ -1,0 +1,66 @@
+/* Amphores : jeu des paires. Tuiles bombées qui se retournent (dos : amphore ; face : motif grec) */
+.amph {
+  --t: 64px; --gap: 10px;
+  display: grid; grid-template-columns: repeat(var(--cols), var(--t)); grid-auto-rows: var(--t);
+  gap: var(--gap); padding: 4px; flex: 0 0 auto;
+  touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+}
+.amph-tile {
+  position: relative; width: var(--t); height: var(--t); padding: 0; border: 0; background: none;
+  border-radius: calc(var(--t) * .24); perspective: 600px; cursor: pointer; outline: none;
+  animation: amph-in .5s var(--k-ease, ease) both; animation-delay: calc(var(--k, 0) * 22ms);
+}
+.amph-in {
+  position: absolute; inset: 0; display: block; transform-style: preserve-3d;
+  transition: transform .42s cubic-bezier(.3, 1.35, .5, 1);
+}
+.amph-tile.open .amph-in { transform: rotateY(180deg); }
+.amph-back, .amph-face {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  border-radius: calc(var(--t) * .24); backface-visibility: hidden; -webkit-backface-visibility: hidden;
+}
+/* dos : bulle couleur du jeu, bord épais dessous, amphore claire */
+.amph-back {
+  background: radial-gradient(circle at 35% 28%, color-mix(in srgb, var(--game) 70%, #fff), var(--game) 72%);
+  border: 3px solid var(--k-rim, #fff);
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--game) 70%, #4a2040), var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14));
+}
+.amph-back svg { width: 62%; height: 62%; }
+.amph-back .am-body { fill: #fff; opacity: .9; }
+.amph-back .am-line { fill: none; stroke: color-mix(in srgb, var(--game) 80%, #fff); stroke-width: 2.2; stroke-linecap: round; }
+.amph-back .am-line:first-of-type { stroke: #fff; opacity: .9; }
+/* face : crème, liseré lilas, motif coloré */
+.amph-face {
+  transform: rotateY(180deg);
+  background: var(--k-cream, #fffaf0);
+  border: 3px solid var(--k-rim, #fff);
+  box-shadow: 0 5px 0 var(--k-edge, #d9cfe8), var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14));
+}
+.amph-face svg { width: 72%; height: 72%; overflow: visible; }
+
+/* style des motifs (tuiles et tutoriel) */
+.amph-mot path, .amph-mot circle, .amph-mot ellipse, .amph-mot rect { fill: currentColor; }
+.amph-mot .s { fill: none; stroke: currentColor; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+.amph-mot .s.t { stroke-width: 2.4; }
+.amph-mot .s.b { stroke-width: 4.4; }
+.amph-mot .w { fill: #fff; }
+.amph-mot .s.w2 { stroke: #fff; stroke-opacity: .7; }
+
+/* appui : la tuile s'enfonce un peu */
+.amph-tile:active .amph-in { scale: .95; }
+/* paire trouvée : petit bond, puis la tuile reste posée, un peu plus calme */
+.amph-tile.found .amph-face { background: color-mix(in srgb, var(--game) 10%, var(--k-cream, #fffaf0)); box-shadow: 0 3px 0 color-mix(in srgb, var(--game) 35%, var(--k-edge, #d9cfe8)); }
+.amph-tile.found { cursor: default; }
+.amph-tile.match { animation: amph-match .55s var(--k-ease, ease); }
+.amph.peeking .amph-tile .amph-in { transition-duration: .55s; }
+
+/* astuce : l'anneau doré suit l'arrondi de la tuile */
+.amph-tile.hint-where { border-radius: calc(var(--t) * .24); }
+
+@keyframes amph-in { from { opacity: 0; transform: scale(.5); } }
+@keyframes amph-match { 0% { transform: scale(1); } 40% { transform: scale(1.12) translateY(-4px); } 100% { transform: none; } }
+
+:root.a11y-motion .amph-tile, :root.a11y-motion .amph-in { animation: none !important; transition-duration: .01s !important; }
+@media (prefers-reduced-motion: reduce) {
+  .amph-tile, .amph-in { animation: none !important; transition-duration: .01s !important; }
+}

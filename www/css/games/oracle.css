@@ -1,0 +1,83 @@
+/* L'Oracle : cartes-indices en bulles blanches, grille logique en escalier */
+.orc {
+  --cs: 30px; --bs: 26px; --gw: 300px;
+  display: flex; flex-direction: column; align-items: center; gap: 14px; flex: 0 0 auto;
+  user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* --- icônes : pastille teintée de la catégorie, trait de sa couleur --- */
+.orc-b {
+  display: grid; place-items: center; width: var(--bs); height: var(--bs); flex: none;
+  border-radius: 28%; background: var(--bb); color: var(--bc);
+}
+.orc-b svg { width: 80%; height: 80%; }
+.orc-b svg *, .orc-tg * { fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
+.orc-b svg .f, .orc-tg .f { fill: currentColor; stroke: none; }
+
+/* --- cartes de l'Oracle --- */
+.orc-clues { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: max(calc(var(--gw) + 12px), 300px); }
+.orc-clue {
+  display: flex; align-items: center; gap: 2px; padding: 4px 5px; cursor: pointer;
+  border-radius: 14px; background: var(--k-bubble, #fff); border: 2px solid var(--k-rim, #fff);
+  box-shadow: 0 4px 0 var(--k-edge, #d9cfe8), var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14));
+  transition: opacity .25s ease, transform .15s ease, box-shadow .15s ease, filter .25s ease;
+  animation: orc-in .45s var(--k-ease, ease) both;
+}
+.orc-clue:active { transform: translateY(2px); box-shadow: 0 2px 0 var(--k-edge, #d9cfe8); }
+.orc-clue.used { opacity: .38; filter: saturate(.3); box-shadow: 0 2px 0 var(--k-edge, #d9cfe8); }
+.orc-sym { width: calc(var(--bs) * .72); height: calc(var(--bs) * .72); flex: none; }
+.orc-sym * { fill: none; stroke: var(--k-ink, #3a3550); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.orc-sym .f { fill: var(--k-ink, #3a3550); stroke: none; }
+.orc-sym.neq * { stroke: #e0463a; }
+.orc-sym.eq * { stroke: #3a9a26; }
+.orc-sym.next *, .orc-sym.left * { stroke: var(--game); }
+.orc-sym.left .f { fill: var(--game); }
+.orc-clue.hint-why { border-radius: 14px; }
+
+/* --- grille --- */
+.orc-grid { position: relative; flex: none; }
+.orc-grid > * { position: absolute; box-sizing: border-box; }
+.orc-block {
+  border-radius: 10px; background: var(--k-bubble, #fff); border: 2px solid var(--k-rim, #fff);
+  box-shadow: 0 4px 0 var(--k-edge, #d9cfe8), var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14));
+}
+.orc-h { display: grid; place-items: center; pointer-events: none; }
+.orc-h .orc-b { --bs: calc(var(--cs) * .84); }
+.orc-cell {
+  padding: 0; border: 0; background: transparent; cursor: pointer; outline: none; border-radius: 6px;
+  display: grid; place-items: center;
+}
+.orc-cell.r { box-shadow: inset -1.5px 0 0 var(--k-well, #f1ecf8); }
+.orc-cell.d { box-shadow: inset 0 -1.5px 0 var(--k-well, #f1ecf8); }
+.orc-cell.r.d { box-shadow: inset -1.5px 0 0 var(--k-well, #f1ecf8), inset 0 -1.5px 0 var(--k-well, #f1ecf8); }
+.orc-m { width: 72%; height: 72%; }
+.orc-m path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.orc-cell.no .orc-m path { stroke: #a79fc0; stroke-width: 2.6; }
+.orc-cell.auto .orc-m path { stroke: #d3cde3; stroke-width: 2.2; }
+.orc-cell.yes { background: color-mix(in srgb, var(--game) 18%, transparent); }
+.orc-cell.yes .orc-m { width: 82%; height: 82%; }
+.orc-cell.yes .orc-m path { stroke: var(--game); stroke-width: 3.4; }
+.orc-cell.pop .orc-m { animation: orc-pop .3s var(--k-ease, ease); }
+.orc-cell.hint-where { border-radius: 6px; }
+
+/* bascule des ✗ automatiques (coin vide de la grille) */
+.orc-auto {
+  padding: 0; border-radius: 30%; cursor: pointer; display: grid; place-items: center;
+  background: var(--k-well, #f1ecf8); border: 2px solid var(--k-rim, #fff);
+  box-shadow: 0 3px 0 var(--k-edge, #d9cfe8); color: #b9b0cf;
+  transition: background .2s ease, color .2s ease;
+}
+.orc-auto svg { width: 76%; height: 76%; }
+.orc-auto svg path { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.orc-auto svg path.ok { stroke-width: 2.8; }
+.orc-auto.on { background: var(--game); color: #fff; box-shadow: 0 3px 0 color-mix(in srgb, var(--game) 65%, #2a1f3d); }
+
+.orc.won .orc-cell.yes { animation: orc-glow 1s ease both; }
+
+@keyframes orc-in { from { opacity: 0; transform: scale(.7); } }
+@keyframes orc-pop { 0% { transform: scale(.4); } 60% { transform: scale(1.2); } 100% { transform: none; } }
+@keyframes orc-glow { 50% { background: color-mix(in srgb, var(--game) 40%, transparent); } }
+
+:root.a11y-motion .orc-clue, :root.a11y-motion .orc-m { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .orc-clue, .orc-m { animation: none !important; } }
