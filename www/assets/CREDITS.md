@@ -36,3 +36,21 @@ géométrie, UV et occlusion des sommets conservées, images retirées (chargée
 |---|---|---|---|
 | `../vendor/GLTFLoader.js` | auteurs de three.js (r128, examples/js) | MIT | https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js |
 | `../vendor/RGBELoader.js` | auteurs de three.js (r128, examples/js) | MIT | https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/RGBELoader.js |
+| `../vendor/lottie_light.min.js` | lottie-web 5.12.2, build « light » (rendu SVG seul), © 2015 Bodymovin / Airbnb | MIT (texte : `../vendor/lottie-web.LICENSE.txt`) | https://cdn.jsdelivr.net/npm/lottie-web@5.12.2/build/player/lottie_light.min.js |
+
+## Interface (UI v4)
+
+Une ligne « Crédits » figure dans les réglages (`index.html`), comme l'exige la licence CC BY de game-icons.net.
+
+| Fichier | Contenu | Auteur | Licence | Source |
+|---|---|---|---|---|
+| `ui/phosphor/*-duotone.svg`, assemblés dans `ui/icons.svg` (symboles `i-*`) | Phosphor Icons 2.1.1, style duotone : brain, gear-six, squares-four, compass, crosshair, caret-left/right, play, question, arrow-counter-clockwise, eraser, lightbulb, arrow-right, share-network, lock-simple, square, x, star, speaker-high, music-notes, vibrate, text-aa, circle-half, sparkle, eye, check, arrow-clockwise | © 2023 Phosphor Icons (Helena Zhang, Tobias Fried) | MIT (texte : `ui/phosphor/LICENSE.txt`) | https://unpkg.com/@phosphor-icons/core@2/assets/duotone/ — https://phosphoricons.com |
+| `ui/game-icons/laurels.svg` (symbole `g-laurels`) | Laurels (couronne de laurier, fin de niveau) | Lorc | CC BY 3.0 — https://creativecommons.org/licenses/by/3.0/ | https://game-icons.net/1x1/lorc/laurels.html |
+| `ui/game-icons/greek-temple.svg` (symbole `g-greek-temple`) | Greek temple (en-tête de la liste des mini-jeux) | Delapouite | CC BY 3.0 | https://game-icons.net/1x1/delapouite/greek-temple.html |
+| `ui/lottie/success-burst.json` | Éclat doré de fin de niveau (anneau, rayons, étincelles) | animation créée pour Odysseus (fichier généré, aucune source tierce) | même licence que le jeu | — |
+| `fonts/marcellus-latin-400.woff2` | Marcellus (titres) | Brian J. Bonislawsky (Astigmatic) | SIL OFL 1.1 (texte : `fonts/OFL-Marcellus.txt`) | https://fonts.google.com/specimen/Marcellus via https://cdn.jsdelivr.net/npm/@fontsource/marcellus@5 |
+| `fonts/cinzel-latin-500.woff2`, `fonts/cinzel-latin-600.woff2` | Cinzel (capitales : intro, étiquettes) | Natanael Gama | SIL OFL 1.1 (texte : `fonts/OFL-Cinzel.txt`) | https://fonts.google.com/specimen/Cinzel via https://cdn.jsdelivr.net/npm/@fontsource/cinzel@5 |
+| `fonts/jost-latin-300/400/500/600.woff2` | Jost (texte courant) | Owen Earl (indestructible type*) | SIL OFL 1.1 (texte : `fonts/OFL-Jost.txt`) | https://fonts.google.com/specimen/Jost via https://cdn.jsdelivr.net/npm/@fontsource/jost@5 |
+
+Le grain et les veines de marbre des feuilles sont générés en CSS (filtres SVG `feTurbulence` dans `css/style.css`) : aucune image tierce.
+Kenney UI Pack (CC0) a été examiné mais pas retenu : son style « jeu mobile » cadre mal avec l'esthétique grecque calme.

@@ -8,8 +8,9 @@
 <meta name="theme-color" content="#161b22">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500&display=swap">
+<!-- polices embarquées (assets/fonts, SIL OFL) : Jost, Marcellus, Cinzel ; voir css/style.css (UI v4) -->
+<link rel="preload" href="assets/fonts/jost-latin-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/marcellus-latin-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/games/demineur.css">
 <link rel="stylesheet" href="css/games/bataille.css">
@@ -61,26 +62,28 @@
         <circle id="level-ring" cx="26" cy="26" r="23" stroke="var(--p2)" stroke-width="2" stroke-dasharray="144.5" stroke-dashoffset="144.5"/>
       </svg>
       <!-- petit cerveau dessiné : on comprend que ce bouton ouvre la carte des capacités -->
-      <span class="brain-glyph"><svg viewBox="0 0 24 24"><path d="M11.4 4.2C9.6 3 6.6 3.6 6 6c-2.2.4-3.2 2.8-2.2 4.6-1.4 1.6-.8 4.2 1.2 4.9.2 2.4 2.6 3.8 4.6 3 .8 1.2 1.8 1.6 1.8 1.6zM12.6 4.2c1.8-1.2 4.8-.6 5.4 1.8 2.2.4 3.2 2.8 2.2 4.6 1.4 1.6.8 4.2-1.2 4.9-.2 2.4-2.6 3.8-4.6 3-.8 1.2-1.8 1.6-1.8 1.6z"/><path d="M8.2 8.6c1 .2 1.6 1 1.6 2M7 13.4c1.2-.4 2.4.2 2.8 1.2M15.8 8.6c-1 .2-1.6 1-1.6 2M17 13.4c-1.2-.4-2.4.2-2.8 1.2"/></svg></span>
+      <!-- icônes : Phosphor duotone (MIT) en sprite, assets/ui/icons.svg -->
+      <span class="brain-glyph"><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-brain"/></svg></span>
       <span class="brain-txt"><small>niveau</small><span id="level-num">1</span></span>
       <i class="brain-xp"><b id="brain-xp-mini"></b></i>
     </button>
     <button id="open-settings" class="ghost-icon corner" aria-label="Réglages">
-      <svg viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg>
+      <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-gear-six"/></svg>
     </button>
     <button id="open-library" class="ghost-icon corner corner-2" aria-label="Liste des mini-jeux">
-      <svg viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></svg>
+      <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-squares-four"/></svg>
     </button>
 
     <!-- caméra libre : survoler la carte ; un nouvel appui recentre sur Ulysse -->
     <button id="cam-mode" class="ghost-icon cam-btn" aria-label="Caméra libre" aria-pressed="false">
-      <svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><path d="M12 3l-2 2M12 3l2 2M12 21l-2-2M12 21l2-2M3 12l2-2M3 12l2 2M21 12l-2-2M21 12l-2 2"/><circle cx="12" cy="12" r="2.2"/></svg>
+      <svg class="ic cam-free" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-compass"/></svg>
+      <svg class="ic cam-follow" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-crosshair"/></svg>
     </button>
     <!-- un seul bouton : le mini-jeu qui attend sur la pierre choisie -->
     <!-- niveau précédent / suivant autour du bouton play -->
-    <button id="prev-level" class="ghost-icon level-arrow prev" aria-label="Niveau précédent"><svg viewBox="0 0 24 24"><path d="M14.5 6 8.5 12l6 6"/></svg></button>
+    <button id="prev-level" class="ghost-icon level-arrow prev" aria-label="Niveau précédent"><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-caret-left"/></svg></button>
     <button id="go" class="go" aria-label="Jouer"></button>
-    <button id="next-level" class="ghost-icon level-arrow next" aria-label="Niveau suivant"><svg viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></svg></button>
+    <button id="next-level" class="ghost-icon level-arrow next" aria-label="Niveau suivant"><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-caret-right"/></svg></button>
     <span id="go-label" class="go-label"></span>
   </main>
 
@@ -88,7 +91,7 @@
   <main id="play" class="screen" hidden>
     <header class="topbar">
       <button id="back" class="ghost-icon" aria-label="Retour">
-        <svg viewBox="0 0 24 24"><path d="M14.5 6 8.5 12l6 6"/></svg>
+        <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-caret-left"/></svg>
       </button>
       <!-- en-tête : le niveau, puis le mini-jeu, puis l'étape de la série -->
       <div class="play-mid">
@@ -101,7 +104,7 @@
         <span id="play-timer" class="play-timer" hidden>0:00</span>
       </div>
       <button id="btn-rules" class="ghost-icon" aria-label="Règles">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9.8 9.6a2.3 2.3 0 1 1 3.2 2.1c-.6.3-1 .8-1 1.5v.4"/><circle cx="12" cy="16.6" r=".4"/></svg>
+        <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-question"/></svg>
       </button>
     </header>
 
@@ -111,13 +114,13 @@
     <p id="hint-tip" class="hint-tip" role="status" hidden></p>
     <nav class="actions">
       <button id="btn-undo" class="ghost-icon" aria-label="Annuler">
-        <svg viewBox="0 0 24 24"><path d="M9 8 5 12l4 4"/><path d="M5 12h9a5 5 0 0 1 0 10"/></svg>
+        <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-arrow-counter-clockwise"/></svg>
       </button>
       <button id="btn-reset" class="ghost-icon" aria-label="Effacer">
-        <svg viewBox="0 0 24 24"><path d="M5 12a7 7 0 1 0 2-4.9"/><path d="M5 4v4h4"/></svg>
+        <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-eraser"/></svg>
       </button>
       <button id="btn-hint" class="ghost-icon" aria-label="Indice">
-        <svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M6 6l1.4 1.4M16.6 16.6 18 18M6 18l1.4-1.4M16.6 7.4 18 6"/><circle cx="12" cy="12" r="3"/></svg>
+        <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-lightbulb"/></svg>
         <span id="hint-left" class="hint-left">3</span>
       </button>
     </nav>
@@ -130,7 +133,7 @@
         <div class="bloom" aria-hidden="true"></div>
         <div class="calm-actions">
           <button id="win-next" class="next-btn" aria-label="Continuer le voyage">
-            <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-arrow-right"/></svg>
           </button>
         </div>
       </div>
@@ -145,7 +148,7 @@
       <p id="tuto-text" class="tuto-text"></p>
       <div id="tuto-dots" class="tuto-dots"></div>
       <button id="rules-close" class="next-btn" aria-label="Suivant">
-        <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-arrow-right"/></svg>
       </button>
     </div>
   </div>
@@ -153,6 +156,7 @@
   <!-- liste des mini-jeux, en jeu libre -->
   <div id="library" class="overlay library" hidden>
     <div class="sheet">
+      <header class="sheet-head"><svg class="ic sheet-glyph" viewBox="0 0 512 512" aria-hidden="true"><use href="assets/ui/icons.svg#g-greek-temple"/></svg><h2>Mini-jeux</h2></header>
       <div class="switch-mode lib-mode" role="tablist" aria-label="Règles">
         <button class="on" data-mode="classic" role="tab">classique</button>
         <button data-mode="variant" role="tab">variante</button>
@@ -173,7 +177,7 @@
       <div id="games-detail" class="games-detail" hidden></div>
       <div class="brain-wrap">
         <button id="brain-back" class="ghost-icon brain-back" aria-label="Vue d'ensemble" hidden>
-          <svg viewBox="0 0 24 24"><path d="M14.5 6 8.5 12l6 6"/></svg>
+          <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-caret-left"/></svg>
         </button>
         <svg id="brain-svg" class="brain" viewBox="0 0 320 250" role="img" aria-label="Carte du cerveau"></svg>
       </div>
@@ -195,7 +199,8 @@
   </div>
 
   <div id="settings" class="overlay" hidden>
-    <div class="sheet">
+    <div class="sheet settings-sheet">
+      <header class="sheet-head"><svg class="ic sheet-glyph" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-gear-six"/></svg><h2>Réglages</h2></header>
       <div class="theme-row">
         <span>Thème</span>
         <div class="switch-mode theme-mode" role="tablist" aria-label="Thème">
@@ -204,31 +209,39 @@
           <button data-theme-choice="dark" role="tab">sombre</button>
         </div>
       </div>
-      <label class="toggle"><span>Sons</span><input type="checkbox" id="opt-sound"><i></i></label>
-      <label class="toggle"><span>Musique</span><input type="checkbox" id="opt-music"><i></i></label>
+      <label class="toggle"><span><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-speaker-high"/></svg>Sons</span><input type="checkbox" id="opt-sound"><i></i></label>
+      <label class="toggle"><span><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-music-notes"/></svg>Musique</span><input type="checkbox" id="opt-music"><i></i></label>
       <div class="mix">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/></svg>
+        <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-speaker-high"/></svg>
         <input type="range" id="opt-mix" min="0" max="100" step="1" value="50" aria-label="Équilibre entre sons et musique">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17V6l10-2v11"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="15" r="2"/></svg>
+        <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-music-notes"/></svg>
       </div>
-      <label class="toggle"><span>Vibrations</span><input type="checkbox" id="opt-vibrate"><i></i></label>
+      <label class="toggle"><span><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-vibrate"/></svg>Vibrations</span><input type="checkbox" id="opt-vibrate"><i></i></label>
       <p class="sheet-label">Accessibilité</p>
-      <label class="toggle"><span>Texte agrandi</span><input type="checkbox" class="opt-a11y" data-a11y="text"><i></i></label>
-      <label class="toggle"><span>Contraste renforcé</span><input type="checkbox" class="opt-a11y" data-a11y="contrast"><i></i></label>
-      <label class="toggle"><span>Animations réduites</span><input type="checkbox" class="opt-a11y" data-a11y="motion"><i></i></label>
-      <label class="toggle"><span>Symboles sur les couleurs</span><input type="checkbox" class="opt-a11y" data-a11y="cb"><i></i></label>
+      <label class="toggle"><span><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-text-aa"/></svg>Texte agrandi</span><input type="checkbox" class="opt-a11y" data-a11y="text"><i></i></label>
+      <label class="toggle"><span><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-circle-half"/></svg>Contraste renforcé</span><input type="checkbox" class="opt-a11y" data-a11y="contrast"><i></i></label>
+      <label class="toggle"><span><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-sparkle"/></svg>Animations réduites</span><input type="checkbox" class="opt-a11y" data-a11y="motion"><i></i></label>
+      <label class="toggle"><span><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-eye"/></svg>Symboles sur les couleurs</span><input type="checkbox" class="opt-a11y" data-a11y="cb"><i></i></label>
+      <!-- attribution exigée par la licence CC BY 3.0 de game-icons.net ; détail dans assets/CREDITS.md -->
+      <p class="credits">Crédits · icônes <b>Phosphor</b> (MIT) et <b>game-icons.net</b> par Lorc &amp; Delapouite (CC BY 3.0) · polices Marcellus, Cinzel, Jost (SIL OFL) · 3D et textures Quaternius, Kenney, Kay Lousberg, Poly Haven (CC0) · lottie-web (MIT)</p>
     </div>
   </div>
 
   <!-- fin de niveau : XP gagnée par capacité, puis retour sur la carte -->
   <div id="level-done" class="overlay level-done" hidden>
     <div class="sheet">
+      <!-- blason : couronne de laurier (game-icons.net, CC BY 3.0) + éclat Lottie (assets/ui/lottie) -->
+      <div class="ld-crest" aria-hidden="true">
+        <div id="ld-burst" class="ld-burst"></div>
+        <svg class="ic ld-laurel" viewBox="0 0 512 512"><use href="assets/ui/icons.svg#g-laurels"/></svg>
+        <svg class="ic ld-star" viewBox="0 0 256 256"><use href="assets/ui/icons.svg#i-star"/></svg>
+      </div>
       <p id="ld-title" class="ld-title">Niveau</p>
       <div id="ld-time" class="ld-time" hidden></div>
       <div id="ld-skills" class="ld-skills"></div>
-      <button id="ld-share" class="ld-share" hidden>partager mon temps</button>
+      <button id="ld-share" class="ld-share" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-share-network"/></svg>partager mon temps</button>
       <button id="ld-next" class="next-btn" aria-label="Niveau suivant">
-        <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-arrow-right"/></svg>
       </button>
     </div>
   </div>
@@ -257,6 +270,7 @@
 <script src="js/games/simon.js"></script>
 <script src="js/tutorials.js"></script>
 <script src="js/world.js"></script>
+<script src="vendor/lottie_light.min.js"></script><!-- lottie-web 5.12.2 light (MIT) : éclat de fin de niveau -->
 <script src="js/app.js"></script>
 </body>
 </html>

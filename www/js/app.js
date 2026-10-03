@@ -29,9 +29,11 @@
     if (!ICON[g.id] && g.icon24) ICON[g.id] = g.icon24;
   });
   const icon = (id) => '<svg viewBox="0 0 24 24">' + ICON[id] + '</svg>';
+  // icônes d'interface : Phosphor duotone (MIT), sprite assets/ui/icons.svg
+  const UI = (name, extra) => '<svg class="ic' + (extra ? ' ' + extra : '') + '" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-' + name + '"/></svg>';
   const TOOL_ICON = {
-    fill: '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" class="f"/></svg>',
-    cross: '<svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></svg>'
+    fill: UI('square', 'ic-solid'),
+    cross: UI('x')
   };
 
   const game = (id) => C.games.find((g) => g.id === id);
@@ -123,7 +125,7 @@
     b.classList.toggle('boss', info.boss);
     b.classList.toggle('replay', selected < J.done);
     // bouton play ; le numéro du niveau en petite étiquette dessous
-    b.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" class="f"/></svg>';
+    b.innerHTML = UI('play');
     const lab = $('#go-label');
     lab.textContent = (info.boss ? 'épreuve · ' : 'niveau ') + (selected + 1);
     lab.hidden = b.hidden;
@@ -397,6 +399,7 @@
     const ov = $('#level-done');
     ov.hidden = false;
     C.sfx.place();
+    playBurst();
     // les barres se remplissent et les compteurs montent, une capacité après l'autre
     box.querySelectorAll('.ld-row').forEach((row, i) => {
       setTimeout(() => {
@@ -412,6 +415,19 @@
         if (row.querySelector('.ld-up')) setTimeout(() => { row.classList.add('leveled'); C.sfx.win(); }, 900);
       }, 350 + i * 450);
     });
+  }
+
+  // Éclat doré derrière le laurier (lottie-web, animation maison assets/ui/lottie) ; rien si Lottie absent ou animations réduites.
+  let burst = null;
+  function playBurst() {
+    const host = $('#ld-burst');
+    if (!host || !window.lottie) return;
+    if (document.documentElement.classList.contains('a11y-motion') || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    try {
+      if (!burst) burst = window.lottie.loadAnimation({ container: host, renderer: 'svg', loop: false, autoplay: false, path: 'assets/ui/lottie/success-burst.json' });
+      if (burst.isLoaded) burst.goToAndPlay(0, true);
+      else burst.addEventListener('DOMLoaded', () => burst.goToAndPlay(0, true));
+    } catch (e) { /* décor seulement */ }
   }
 
   // Tutoriel illustré : une page = un petit dessin + une phrase ; la flèche avance.
@@ -500,7 +516,7 @@
       b.className = 'tile';
       b.style.setProperty('--game', ACCENT[g.id]);
       b.innerHTML = '<span class="tile-icon">' + icon(g.id) + '</span><span class="tile-name">' + g.name + '</span>' +
-        '<span class="tile-lvl">' + gameProgress(g.id) + ' / ' + TIER_SIZE * TIERS.length + '</span>';
+        '<span class="tile-lvl">niv. ' + gameLvl(g.id) + '</span>';
       b.addEventListener('click', () => openLevels(g.id));
       gl.appendChild(b);
     });
@@ -525,11 +541,13 @@
     { id: 'expert', name: 'Expert', from: 25, span: 16 }
   ];
   const TIER_SIZE = 150, TIER_UNLOCK = 20;
-  const LOCK = '<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+  const LOCK = UI('lock-simple');
   const tierDone = (id, t) => ((C.store.tiers || {})[id] || {})[t] || 0;
   const tierOpen = (id, k) => k === 0 || tierDone(id, TIERS[k - 1].id) >= TIER_UNLOCK;
   const tierLevel = (t, k) => t.from + Math.floor((k - 1) * t.span / TIER_SIZE); // difficulté réelle du générateur
   const gameProgress = (id) => TIERS.reduce((s, t) => s + tierDone(id, t.id), 0);
+  // niveau d'un mini-jeu affiché au joueur (plutôt qu'un compteur) : +1 tous les 5 niveaux réussis
+  const gameLvl = (id) => 1 + Math.floor(gameProgress(id) / 5);
   function tierMark(id, tierId, k) {
     C.store.tiers = C.store.tiers || {};
     const d = C.store.tiers[id] = C.store.tiers[id] || {};
@@ -558,11 +576,11 @@
   function renderLevels(scroll) {
     const g = game(lv.id);
     $('#levels').style.setProperty('--game', ACCENT[lv.id]);
-    $('#lv-head').innerHTML = '<span class="lv-icon">' + icon(lv.id) + '</span><b>' + g.name + '</b><small>' + gameProgress(lv.id) + ' / ' + TIER_SIZE * TIERS.length + '</small>';
+    $('#lv-head').innerHTML = '<span class="lv-icon">' + icon(lv.id) + '</span><b>' + g.name + '</b><small>niveau ' + gameLvl(lv.id) + '</small>';
     $('#lv-tabs').innerHTML = TIERS.map((t, k) => {
       const open = tierOpen(lv.id, k);
       return '<button role="tab" data-tier="' + t.id + '" class="' + (t.id === lv.tier ? 'on' : '') + (open ? '' : ' locked') + '">' +
-        '<span>' + t.name + '</span><small>' + (open ? tierDone(lv.id, t.id) + ' / ' + TIER_SIZE : LOCK) + '</small></button>';
+        '<span>' + t.name + '</span><small>' + (!open ? LOCK : tierDone(lv.id, t.id) >= TIER_SIZE ? '✓' : 'niv. ' + (tierDone(lv.id, t.id) + 1)) + '</small></button>';
     }).join('');
     const k = TIERS.findIndex((t) => t.id === lv.tier);
     const done = tierDone(lv.id, lv.tier), open = tierOpen(lv.id, k);
@@ -574,8 +592,15 @@
     const grid = $('#lv-grid');
     grid.innerHTML = h;
     const sk = SKILLS.find((s) => s.games.includes(lv.id));
-    $('#lv-focus').hidden = !sk;
-    if (sk) { $('#lv-focus').dataset.skill = sk.id; $('#lv-focus').innerHTML = 'mode concentration · <b>' + sk.name.toLowerCase() + '</b>'; }
+    // reprendre là où on s'est arrêté : le plus haut palier ouvert qui n'est pas terminé
+    let resume = null;
+    TIERS.forEach((t, k) => { const d = tierDone(lv.id, t.id); if (tierOpen(lv.id, k) && d < TIER_SIZE) resume = { tier: t, k: d + 1 }; });
+    const fb = $('#lv-focus');
+    fb.hidden = !resume;
+    if (resume) {
+      fb.dataset.tier = resume.tier.id; fb.dataset.k = resume.k;
+      fb.innerHTML = (resume.k > 1 ? 'continuer' : 'commencer') + ' · <b>' + resume.tier.name.toLowerCase() + ' ' + resume.k + '</b>';
+    }
     if (scroll) {
       const cur = grid.querySelector('.lv.next') || grid.querySelector('.lv.done:last-of-type');
       grid.scrollTop = cur ? Math.max(0, cur.offsetTop - grid.clientHeight / 2) : 0;
@@ -689,7 +714,7 @@
           '<circle class="zg-ring" cx="' + x + '" cy="' + y + '" r="13" pathLength="100" stroke-dasharray="' + Math.max(pct, 0.01) + ' 100" transform="rotate(-90 ' + x + ' ' + y + ')"/>' +
           '<g transform="translate(' + (x - 7.2) + ' ' + (y - 7.2) + ') scale(.6)">' + ICON[id] + '</g>' +
           '<text class="zg-name" x="' + x + '" y="' + (y + 20) + '" text-anchor="middle">' + game(id).name + '</text>' +
-          '<text class="zg-lvl" x="' + x + '" y="' + (y + 25) + '" text-anchor="middle">' + gameProgress(id) + ' / ' + TIER_SIZE * TIERS.length + '</text></g>';
+          '<text class="zg-lvl" x="' + x + '" y="' + (y + 25) + '" text-anchor="middle">niv. ' + gameLvl(id) + '</text></g>';
       });
       html += '<g class="zone" data-skill="' + sk.id + '" style="color:' + accent + '">' + inner + '</g></g>';
     });
@@ -699,7 +724,7 @@
       const st = skillStats(sk);
       return '<button class="skill" data-skill="' + sk.id + '" style="--game:' + ACCENT[sk.games[0]] + '"><div class="skill-head"><span>' + sk.name +
         '</span><small>niv. ' + st.level + '</small></div><div class="skill-bar"><i style="width:' + Math.round(st.frac * 100) + '%"></i></div>' +
-        '<span class="skill-go" data-skill="' + sk.id + '" role="button" aria-label="Concentration : ' + sk.name + '"><svg viewBox="0 0 24 24"><path d="M9 6.5v11l9-5.5z"/></svg></span></button>';
+        '<span class="skill-go" data-skill="' + sk.id + '" role="button" aria-label="Concentration : ' + sk.name + '">' + UI('play') + '</span></button>';
     }).join('');
   }
 
@@ -754,7 +779,7 @@
     panel.innerHTML = '<div class="zp-head"><b>' + sk.name + '</b><small>niv. ' + st.level + ' · ' + st.cur + ' / ' + st.need + ' xp</small></div>' +
       '<div class="skill-bar"><i style="width:' + Math.round(st.frac * 100) + '%"></i></div>' +
       '<div class="zp-games">' + sk.games.map((id2, k) => '<button class="zp-game" data-game="' + id2 + '" style="--game:' + ACCENT[id2] + ';--k:' + k + '">' + icon(id2) +
-        '<span>' + game(id2).name + '</span><small>' + gameProgress(id2) + ' / ' + TIER_SIZE * TIERS.length + '</small></button>').join('') + '</div>' +
+        '<span>' + game(id2).name + '</span><small>niv. ' + gameLvl(id2) + '</small></button>').join('') + '</div>' +
       '<button class="zp-go" data-skill="' + sk.id + '">activer le mode concentration</button>';
   }
   // vol animé vers une zone (null = vue d'ensemble)
@@ -891,7 +916,7 @@
     const tab = e.target.closest('#lv-tabs button');
     if (tab) { lv.tier = tab.dataset.tier; renderLevels(true); C.sfx.tap(); return; }
     const fb = e.target.closest('#lv-focus');
-    if (fb) { $('#levels').hidden = true; $('#library').hidden = true; concentrate(SKILLS.find((sk) => sk.id === fb.dataset.skill)); return; }
+    if (fb) { startTier(lv.id, fb.dataset.tier, +fb.dataset.k); return; }
     const b = e.target.closest('.lv');
     if (b && !b.disabled) startTier(lv.id, lv.tier, +b.dataset.k);
   });
