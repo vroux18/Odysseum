@@ -876,6 +876,12 @@
   }
 
   function showLevelDone(info) {
+    // récapitulatif passé (réglage) : les étoiles éclosent un instant, puis retour direct sur la carte
+    if (C.store.settings.skipDone && !info.summary) {
+      if (info.stars && !info.assisted) popStars(info.stars);
+      setTimeout(goHome, 1100);
+      return;
+    }
     const box = $('#ld-skills');
     // compet : temps de la série, record du niveau, partage
     const ldTime = $('#ld-time');
@@ -921,6 +927,11 @@
       clock.innerHTML = '<div class="ck-time"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9.5 2.5h5M12 2.5V5"/></svg><b>' + C.formatTime(Math.round(run.time)) + '</b></div>' +
         '<div class="ck-track"><span class="ck-fill" style="--w:' + pos(run.time) + '"></span>' + tick(m3, 3) + tick(m2, 2) + '</div>';
     }
+    // moins de 3 étoiles : proposer de rejouer à côté de « suivant » ; case « ne plus afficher »
+    showLevelDone.last = info;
+    $('#ld-replay').hidden = !hasStars || info.stars >= 3 || !!info.summary;
+    $('#ld-skip').checked = !!C.store.settings.skipDone;
+    $('#ld-skip').parentElement.hidden = !!info.summary;
     const delay0 = hasStars ? 1.25 : 0.35; // les lignes d'XP arrivent après les étoiles
     box.innerHTML = rows.map((sk, i) => {
       const was = levelFrom(before[sk.id] || 0, 40), now = skillStats(sk);
@@ -1003,6 +1014,7 @@
     const help = Math.max(0.25, 1 - 0.25 * hints);
     const gain = Math.max(1, Math.round(base * speed * help * (+mult || 1)));
     C.store.xp[sk.id] = (C.store.xp[sk.id] || 0) + gain;
+    pushRankSoon(); // classement en ligne : envoi groupé ~3 s après le dernier gain
   }
   function showXp(html, accent) {
     const t = $('#xp-toast');
@@ -1510,6 +1522,242 @@
     }).join('');
   }
 
+  // ------------------------ Carte du joueur ------------------------
+  // La feuille #brain devient une carte de joueur : portrait d'Ulysse (aux couleurs de sa tenue), nom modifiable,
+  // niveau global + titre, bilan du voyage en tuiles, capacités (pentagone + barres). Toucher une capacité
+  // déplie ses 3 mini-jeux (showZone → #zone-panel) ; un mini-jeu ouvre ses niveaux (openLevels).
+  // L'ancienne carte du cerveau reste dans le DOM, cachée (.pc-legacy), pour ne rien casser.
+  // titres par tranche de niveau global : un clin d'œil à l'équipage d'Ulysse, pas une mesure
+  const RANKS = [[1, 'Mousse'], [3, 'Matelot'], [6, 'Marin'], [10, 'Navigateur'], [15, 'Capitaine'], [20, 'Héros'], [30, 'Légende d\'Ithaque']];
+  const rankOf = (lvl) => RANKS.reduce((r, x) => (lvl >= x[0] ? x[1] : r), RANKS[0][1]);
+  const profileOf = () => (C.store.profile = C.store.profile || {});
+  const playerName = () => String(profileOf().name || '').trim() || 'Ulysse';
+  const sumOf = (o) => Object.values(o || {}).reduce((s, v) => s + (+v || 0), 0);
+  function playerTotals() {
+    let stars = sumOf(J.stars);
+    Object.values(C.store.tierStars || {}).forEach((g) => Object.values(g || {}).forEach((t) => { stars += sumOf(t); }));
+    const M = C.store.mega || {};
+    Object.values(M).forEach((r) => { stars += sumOf(r && r.stars); });
+    return {
+      stars,
+      done: J.done || 0,
+      isle: Math.min(VOYAGE_ISLANDS.length, Math.floor((J.done || 0) / PER) + 1), isles: VOYAGE_ISLANDS.length,
+      streak: dailyStreak(), best: DAY.best || 0,
+      mega: Object.values(M).reduce((s, r) => s + ((r && r.done) || 0), 0),
+      trophies: Object.values(EV).filter((e) => e && e.done).length,
+      time: Object.values(C.store.games || {}).reduce((s, d) => s + ((d && d.totalTime) || 0), 0) // secondes (grilles réussies)
+    };
+  }
+  // portrait d'Ulysse en buste (viewBox 100) : peau, cheveux + barbe, tunique, cape, coiffe de la tenue choisie
+  function avatarSvg() {
+    let st = {};
+    try { st = crCurrent(); } catch (e) { st = Object.assign({}, skinState()); }
+    const opts = skinOptions();
+    const col = (cat, id, def) => { const o = (opts[cat] || []).find((x) => x.id === id); return (o && o.color) || def; };
+    const skin = col('skin', st.skin || 's2', '#e2b38f'), hair = col('hair', st.hair || 'brun', '#4a3424');
+    const tunic = col('tunic', st.tunic || 'egee', '#2f6f9f'), cape = st.cape === 'none' ? null : col('cape', st.cape || 'blanc', '#f4f1ea');
+    const acc = st.accessory || 'none';
+    const ink = 'stroke="#3a3550" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"';
+    let s = '<svg viewBox="0 0 100 100"><defs><clipPath id="pc-av-clip"><circle cx="50" cy="50" r="50"/></clipPath></defs><g clip-path="url(#pc-av-clip)">' +
+      '<circle class="pc-av-sky" cx="50" cy="50" r="50"/><path class="pc-av-sea" d="M0 80Q25 74 50 80T100 80V100H0Z"/>' +
+      // épaules, tunique, cape sur les épaules
+      '<path d="M10 104C12 82 30 72 50 72S88 82 90 104Z" fill="' + tunic + '" ' + ink + '/>' +
+      (cape ? '<path d="M16 92C20 80 30 74 38 73L44 84ZM84 92C80 80 70 74 62 73L56 84Z" fill="' + cape + '" ' + ink + '/>' : '') +
+      '<path d="M43 64h14v10c-4 4-10 4-14 0Z" fill="' + skin + '" ' + ink + '/>' +
+      // visage
+      '<circle cx="29.5" cy="47" r="4.6" fill="' + skin + '" ' + ink + '/><circle cx="70.5" cy="47" r="4.6" fill="' + skin + '" ' + ink + '/>' +
+      '<circle cx="50" cy="45" r="21" fill="' + skin + '" ' + ink + '/>' +
+      // barbe d'Ulysse (couleur des cheveux), puis le sourire
+      '<path d="M30 47C30 64 40 73 50 73S70 64 70 47C66 55 60 58 50 58S34 55 30 47Z" fill="' + hair + '" ' + ink + '/>' +
+      '<path d="M44 59.5Q50 63.5 56 59.5" fill="none" stroke="#3a3550" stroke-width="2.4" stroke-linecap="round"/>' +
+      '<circle cx="42" cy="46" r="2.6" fill="#3a3550"/><circle cx="58" cy="46" r="2.6" fill="#3a3550"/>' +
+      '<circle cx="42.8" cy="45.1" r=".9" fill="#fff"/><circle cx="58.8" cy="45.1" r=".9" fill="#fff"/>' +
+      '<ellipse cx="36" cy="53" rx="3.6" ry="2.2" fill="#ff7eb0" opacity=".45"/><ellipse cx="64" cy="53" rx="3.6" ry="2.2" fill="#ff7eb0" opacity=".45"/>' +
+      // cheveux
+      '<path d="M28.5 46C26 29 37 22 50 22S74 29 71.5 46C69 39 65 35 61 34C55 38 45 39 38 35C34 37 30.5 41 28.5 46Z" fill="' + hair + '" ' + ink + '/>';
+    if (acc === 'laurel') {
+      for (let i = 0; i < 5; i++) {
+        const a = Math.PI * (1.08 + i * 0.105), b = Math.PI * (1.92 - i * 0.105);
+        [a, b].forEach((t) => { const x = 50 + Math.cos(t) * 22, y = 44 + Math.sin(t) * 19; s += '<ellipse cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" rx="4.4" ry="2.4" transform="rotate(' + (t * 180 / Math.PI + 90).toFixed(0) + ' ' + x.toFixed(1) + ' ' + y.toFixed(1) + ')" fill="#6fae3a" stroke="#3a3550" stroke-width="1.6"/>'; });
+      }
+    } else if (acc === 'band') {
+      s += '<path d="M29.5 37C42 31 58 31 70.5 37L70 42C58 37 42 37 30 42Z" fill="#c0392b" ' + ink + '/>';
+    } else if (acc === 'helmet') {
+      s += '<path d="M27 47C25 28 36 19 50 19S75 28 73 47L66 47 64 38H36L34 47Z" fill="#c9923e" ' + ink + '/>' +
+        '<path d="M34 18C40 6 60 6 66 18C60 15 40 15 34 18Z" fill="#c0392b" ' + ink + '/>';
+    } else if (acc === 'petasos') {
+      s += '<ellipse cx="50" cy="31" rx="33" ry="6.5" fill="#b98a4e" ' + ink + '/><path d="M35 30C35 18 65 18 65 30Z" fill="#b98a4e" ' + ink + '/>';
+    }
+    return s + '</g><circle cx="50" cy="50" r="48.5" fill="none" stroke="#3a3550" stroke-width="3"/></svg>';
+  }
+  // pentagone des capacités : une branche par capacité, son emblème au bout
+  function radarSvg() {
+    const cx = 110, cy = 108, R = 66, n = SKILLS.length;
+    const pt = (i, r) => { const a = -Math.PI / 2 + i * 2 * Math.PI / n; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; };
+    const poly = (f) => SKILLS.map((_, i) => pt(i, f(i)).map((v) => v.toFixed(1)).join(',')).join(' ');
+    const vals = SKILLS.map((sk) => { const st = skillStats(sk); return st.level - 1 + st.frac; });
+    const max = Math.max(4, Math.ceil(Math.max.apply(null, vals) * 1.15));
+    let s = '';
+    [1, 2 / 3, 1 / 3].forEach((k, j) => { s += '<polygon class="pc-rd-ring' + (j ? '' : ' out') + '" points="' + poly(() => R * k) + '"/>'; });
+    SKILLS.forEach((_, i) => { const p = pt(i, R); s += '<line class="pc-rd-axis" x1="' + cx + '" y1="' + cy + '" x2="' + p[0].toFixed(1) + '" y2="' + p[1].toFixed(1) + '"/>'; });
+    s += '<polygon class="pc-rd-val" points="' + poly((i) => R * (0.14 + 0.86 * Math.min(1, vals[i] / max))) + '"/>';
+    SKILLS.forEach((sk, i) => {
+      const p = pt(i, R * (0.14 + 0.86 * Math.min(1, vals[i] / max)));
+      s += '<circle class="pc-rd-dot" cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="4" style="--c:var(--sk-' + sk.id + ')"/>';
+    });
+    SKILLS.forEach((sk, i) => {
+      const [x, y] = pt(i, R + 22), st = skillStats(sk);
+      s += '<g class="pc-rd-sk" data-skill="' + sk.id + '" style="--c:var(--sk-' + sk.id + ')" role="button" aria-label="' + sk.name + '">' +
+        '<circle class="pc-rd-disc" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="15"/>' +
+        '<g transform="translate(' + (x - 9).toFixed(1) + ' ' + (y - 9).toFixed(1) + ') scale(.75)" class="pc-rd-ic">' + SKILL_ICON[sk.id] + '</g>' +
+        '<circle class="pc-rd-badge" cx="' + (x + 12).toFixed(1) + '" cy="' + (y - 11).toFixed(1) + '" r="8.5"/>' +
+        '<text class="pc-rd-num" x="' + (x + 12).toFixed(1) + '" y="' + (y - 7.2).toFixed(1) + '" text-anchor="middle">' + st.level + '</text></g>';
+    });
+    return s;
+  }
+  // petites icônes des tuiles (24×24)
+  const PC_IC = {
+    star: '<path class="f" d="' + STAR_D + '"/>',
+    flag: '<path d="M6 21V4"/><path class="f" d="M6 4h11l-2.5 4L17 12H6z"/>',
+    isle: '<path class="f" d="M2.5 20c2.5-3.2 16.5-3.2 19 0z"/><path d="M10.5 17.5c0-4 1-7 3-9.5"/><path class="f" d="M13.5 8C11 5 7 5 5 7.5c3-.6 5.6-.4 8.5.5zM13.5 8c1.5-3.4 5.5-4.4 7.5-2.3-3 0-5.4.8-7.5 2.3zM13.5 8c-2.4 1-4.2 3.4-4.4 6.4 1.8-2.2 3.2-4.2 4.4-6.4zM13.5 8c2.4.8 4 3 4.2 6-1.4-2-2.8-4-4.2-6z"/>',
+    fire: '<path class="f" d="M12 21c-4 0-7-2.7-7-6.5 0-3.4 2.6-5.3 3.6-8.5 1.6 1.4 2.2 3 2.2 4.4 1.2-.8 2.2-2.6 2-5.4 3.5 2.2 6.2 5.6 6.2 9.5 0 3.8-3 6.5-7 6.5z"/>',
+    mega: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9.3 4v16M14.7 4v16M4 9.3h16M4 14.7h16"/>',
+    trophy: '<path class="f" d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4c0 3 1.5 4.5 3 4.5M17 6h3c0 3-1.5 4.5-3 4.5M12 14v3M8 20h8M9.5 17h5"/>',
+    time: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.6 2M10 3h4"/>'
+  };
+  const fmtTime = (t) => { const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60); return h ? h + ' h ' + String(m).padStart(2, '0') : Math.max(1, m) + ' min'; };
+  function renderProfile() {
+    const p = playerStats(), T = playerTotals();
+    $('#pc-avatar').innerHTML = avatarSvg();
+    $('#pc-name-txt').textContent = playerName();
+    $('#pc-title').textContent = rankOf(p.level);
+    $('#pc-level').textContent = p.level;
+    $('#pc-xp').textContent = p.cur + ' / ' + p.need;
+    $('#pc-xp-bar').style.width = Math.round(p.frac * 100) + '%';
+    // tuiles : icône, gros chiffre, un mot
+    const tiles = [
+      ['star', T.stars, 'étoiles', 'var(--k-sun)'],
+      ['flag', T.done, 'niveaux', 'var(--k-grass)'],
+      ['isle', T.isle + '<small>/' + T.isles + '</small>', 'île', 'var(--k-lagoon)'],
+      ['fire', T.streak + (T.best > T.streak ? '<small> · ' + T.best + '</small>' : ''), 'série', 'var(--k-roof)'],
+      ['mega', T.mega, 'méga', 'var(--sk-raisonnement)'],
+      ['trophy', T.trophies, 'trophées', 'var(--k-sun-dk)']
+    ];
+    if (T.time >= 60) tiles.push(['time', fmtTime(T.time), 'de jeu', 'var(--k-sky)']);
+    $('#pc-stats').innerHTML = tiles.map((t, k) => '<div class="pc-tile' + (k > 5 ? ' wide' : '') + '" style="--c:' + t[3] + ';--k:' + k + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + PC_IC[t[0]] + '</svg>' +
+      '<b>' + t[1] + '</b><small>' + t[2] + '</small></div>').join('');
+    $('#pc-radar').innerHTML = radarSvg();
+    $('#pc-skill-list').innerHTML = SKILLS.map((sk) => {
+      const st = skillStats(sk);
+      return '<button class="pc-skill" data-skill="' + sk.id + '" style="--c:var(--sk-' + sk.id + ');--game:' + ACCENT[sk.games[0]] + '" aria-expanded="false">' +
+        '<span class="pc-sk-ic"><svg viewBox="0 0 24 24" aria-hidden="true">' + SKILL_ICON[sk.id] + '</svg></span>' +
+        '<span class="pc-sk-name">' + sk.name + '</span><span class="pc-sk-lvl">' + st.level + '</span>' +
+        '<span class="pc-sk-bar"><i style="width:' + Math.max(4, Math.round(st.frac * 100)) + '%"></i></span></button>';
+    }).join('');
+    // panneau de capacité replié, rangé en fin de liste
+    showZone(null);
+    $('#pc-skill-list').after($('#zone-panel'));
+    // classement : la carte s'ouvre toujours sur la fiche ; on publie ses chiffres puis on affiche son rang
+    closeBoard();
+    refreshMyRank();
+  }
+
+  // ------------------------ Classement en ligne (js/rank.js) ------------------------
+  // On publie pseudo, niveau global, XP totale et étoiles ; tout échec réseau reste silencieux.
+  const rankStats = () => { const p = playerStats(); return { name: playerName(), level: p.level, xp: p.total, stars: playerTotals().stars }; };
+  function pushRank() { return C.rank ? C.rank.push(rankStats()).catch(() => false) : Promise.resolve(false); }
+  let rankTimer = 0;
+  function pushRankSoon() { clearTimeout(rankTimer); rankTimer = setTimeout(pushRank, 3000); }
+  const escHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  async function refreshMyRank() {
+    const el = $('#pc-rank-num');
+    $('#pc-rank').hidden = !C.rank;
+    if (!C.rank) return;
+    $('#pc-rank').classList.add('wait');
+    let n = null;
+    try { await pushRank(); n = await C.rank.myRank(rankStats()); } catch (e) { n = null; }
+    $('#pc-rank').classList.remove('wait');
+    el.textContent = n ? '#' + n : '#–';
+  }
+  const MEDAL = ['#ffc93d', '#c9d2e0', '#e59a5c']; // or, argent, bronze
+  function boardRow(r, pos, me) {
+    const medal = pos <= 3 ? '<svg class="pc-medal" viewBox="0 0 24 24" style="--m:' + MEDAL[pos - 1] + '"><path d="M7 2h4l1 5-4 1zM17 2h-4l-1 5 4 1z"/><circle cx="12" cy="15" r="6.5"/><text x="12" y="18.2" text-anchor="middle">' + pos + '</text></svg>' : '<span class="pc-pos">' + pos + '</span>';
+    return '<li class="pc-row' + (me ? ' me' : '') + '" style="--k:' + Math.min(pos, 20) + '">' + medal +
+      '<span class="pc-row-name">' + escHtml(r.name || 'Ulysse') + '</span>' +
+      '<span class="pc-row-stars"><svg viewBox="0 0 24 24"><path d="' + STAR_D + '"/></svg>' + (r.stars | 0) + '</span>' +
+      '<span class="pc-row-lvl">' + (r.level | 0) + '</span></li>';
+  }
+  async function loadBoard() {
+    const list = $('#pc-board-list');
+    list.innerHTML = '<li class="pc-board-msg"><span class="pc-spin"></span></li>';
+    try {
+      if (!C.rank) throw new Error('hors ligne');
+      await pushRank();
+      const rows = await C.rank.top(50), me = C.rank.playerId();
+      let html = rows.map((r, i) => boardRow(r, i + 1, r.id === me)).join('');
+      // hors du top 50 : sa propre ligne en dessous
+      if (!rows.some((r) => r.id === me)) {
+        const st = rankStats(), n = await C.rank.myRank(st).catch(() => null);
+        if (n) html += '<li class="pc-row-gap">⋯</li>' + boardRow(st, n, true);
+      }
+      list.innerHTML = html || '<li class="pc-board-msg">–</li>';
+      const mine = list.querySelector('.pc-row.me');
+      if (mine) requestAnimationFrame(() => mine.scrollIntoView({ block: 'nearest' }));
+    } catch (e) {
+      // hors ligne : un nuage barré et « réessayer »
+      list.innerHTML = '<li class="pc-board-msg off"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18h10a4 4 0 0 0 .6-8A6 6 0 0 0 6.2 9.4 4.3 4.3 0 0 0 7 18z"/><path d="M4 4l16 16"/></svg>' +
+        '<span>Hors ligne</span><button id="pc-board-retry" class="pc-board-retry" aria-label="Réessayer"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v5h-5"/></svg></button></li>';
+    }
+  }
+  function openBoard() {
+    $('#brain .pc-sheet').classList.add('board');
+    $('#pc-board').hidden = false;
+    $('#brain .pc-sheet').scrollTop = 0;
+    C.sfx.tap();
+    loadBoard();
+  }
+  function closeBoard() {
+    $('#brain .pc-sheet').classList.remove('board');
+    $('#pc-board').hidden = true;
+  }
+  // toucher une capacité (barre ou sommet du pentagone) : ses mini-jeux se déplient juste dessous ; re-toucher replie
+  function profileSkill(id) {
+    const sk = SKILLS.find((s) => s.id === id);
+    if (!sk) return;
+    const open = zoomed === id && !$('#zone-panel').hidden;
+    showZone(open ? null : sk);
+    document.querySelectorAll('.pc-skill').forEach((b) => b.setAttribute('aria-expanded', String(!open && b.dataset.skill === id)));
+    if (open) return;
+    const row = $('.pc-skill[data-skill="' + id + '"]');
+    row.after($('#zone-panel'));
+    C.sfx.tap();
+    requestAnimationFrame(() => $('#zone-panel').scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+  }
+  // nom du joueur : un toucher le rend modifiable (16 caractères au plus)
+  function editPlayerName() {
+    const btn = $('#pc-name');
+    if (btn.hidden) return;
+    const inp = document.createElement('input');
+    inp.className = 'pc-name-input'; inp.maxLength = 16; inp.value = playerName();
+    inp.setAttribute('aria-label', 'Nom du joueur'); inp.autocomplete = 'off'; inp.spellcheck = false;
+    btn.hidden = true;
+    btn.after(inp);
+    inp.focus(); inp.select();
+    let done = false;
+    const finish = (keep) => {
+      if (done) return;
+      done = true;
+      const name = inp.value.replace(/[<>]/g, '').trim().slice(0, 16); // vide → « Ulysse » (le classement exige 1 à 20 caractères)
+      const changed = keep && name !== String(profileOf().name || '');
+      if (changed) { profileOf().name = name; C.save(); }
+      inp.remove(); btn.hidden = false;
+      $('#pc-name-txt').textContent = playerName();
+      if (changed) pushRank();
+    };
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') finish(true); else if (e.key === 'Escape') finish(false); });
+    inp.addEventListener('blur', () => finish(true));
+  }
+
   // niveau d'un mini-jeu : une marche toutes les 3 grilles réussies
   const gameLevel = (id) => 1 + Math.floor(solvedOf(id) / 3);
 
@@ -1721,6 +1969,18 @@
     else { selected = L; J.selected = L; C.save(); renderPlay(); }
   });
   $('#voyage').addEventListener('click', (e) => { if (e.target.id === 'voyage') $('#voyage').hidden = true; });
+  // toucher la carte (sans glisser) : on masque les menus, il ne reste que la carte du prochain niveau ; re-toucher les ramène
+  {
+    const w = $('#world');
+    let p0 = null;
+    w.addEventListener('pointerdown', (e) => { p0 = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+    w.addEventListener('pointerup', (e) => {
+      if (!p0) return;
+      const moved = Math.hypot(e.clientX - p0.x, e.clientY - p0.y), quick = performance.now() - p0.t < 350;
+      p0 = null;
+      if (moved < 8 && quick && !$('#home').hidden) $('#home').classList.toggle('calm');
+    });
+  }
   // crédits : depuis les réglages
   $('#open-credits').addEventListener('click', () => { $('#credits').hidden = false; C.sfx.tap(); });
   $('#credits').addEventListener('click', (e) => { if (e.target.id === 'credits') $('#credits').hidden = true; });
@@ -1740,10 +2000,18 @@
     try { localStorage.setItem('odysseum.libmode', libMode); } catch (e) { /* ignore */ }
     renderLibrary();
   }));
-  $('#open-brain').addEventListener('click', () => { renderBrain(); $('#brain').hidden = false; zoomBrain(null, true); });
+  // badge de niveau → carte du joueur (l'ancienne carte du cerveau n'est plus dessinée)
+  $('#open-brain').addEventListener('click', () => { renderProfile(); $('#brain').hidden = false; $('#brain .pc-sheet').scrollTop = 0; C.sfx.tap(); });
   $('#brain').addEventListener('click', (e) => { if (e.target.id === 'brain') $('#brain').hidden = true; });
+  $('#pc-name').addEventListener('click', editPlayerName);
+  $('#pc-skill-list').addEventListener('click', (e) => { const b = e.target.closest('.pc-skill'); if (b) profileSkill(b.dataset.skill); });
+  $('#pc-radar').addEventListener('click', (e) => { const g = e.target.closest('.pc-rd-sk'); if (g) profileSkill(g.dataset.skill); });
+  $('#pc-rank').addEventListener('click', openBoard);
+  $('#pc-board-back').addEventListener('click', () => { closeBoard(); C.sfx.tap(); });
+  $('#pc-board-list').addEventListener('click', (e) => { if (e.target.closest('#pc-board-retry')) loadBoard(); });
   // le cadre change de taille (rotation, panneau du dessous) : la vue se recadre
-  if (window.ResizeObserver) new ResizeObserver(() => { if (!$('#brain').hidden) setBrainView(brainView); }).observe($('#brain-svg'));
+  // (seulement si l'ancienne carte est affichée : sinon showZone(null) refermerait le panneau de la carte du joueur)
+  if (window.ResizeObserver) new ResizeObserver(() => { const old = $('.pc-legacy'); if (!$('#brain').hidden && !(old && old.hidden)) setBrainView(brainView); }).observe($('#brain-svg'));
   // bandeau des niveaux d'un mini-jeu
   $('#levels').addEventListener('click', (e) => {
     if (e.target.id === 'levels') { $('#levels').hidden = true; return; }
@@ -1830,6 +2098,21 @@
   $('#win-next').addEventListener('click', goHome);
   // « niveau suivant » : retour sur la carte, où l'on voit Ulysse marcher jusqu'à la pierre suivante
   $('#ld-next').addEventListener('click', () => { $('#level-done').hidden = true; goHome(); });
+  // rejouer le même niveau (pour aller chercher les 3 étoiles)
+  $('#ld-replay').addEventListener('click', () => {
+    const i = showLevelDone.last;
+    $('#level-done').hidden = true;
+    if (!i) { goHome(); return; }
+    if (i.daily) startDaily();
+    else if (i.mega) startMega(i.steps[0].id, i.mega.k);
+    else if (i.event != null) startEvent(i.event);
+    else if (i.L >= 0) startLevel(i.L);
+    else goHome();
+  });
+  // « ne plus afficher » : le récapitulatif est passé (on garde juste les étoiles un instant)
+  $('#ld-skip').addEventListener('change', (e) => { C.store.settings.skipDone = e.target.checked; C.save(); const o = $('#opt-ldshow'); if (o) o.checked = !e.target.checked; });
+  // réglage inverse : « Bilan de fin de niveau » affiché ou non
+  { const o = $('#opt-ldshow'); if (o) { o.checked = !C.store.settings.skipDone; o.addEventListener('change', (e) => { C.store.settings.skipDone = !e.target.checked; C.save(); }); } }
 
   $('#open-settings').addEventListener('click', () => { $('#settings').hidden = false; });
 

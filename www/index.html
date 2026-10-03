@@ -28,6 +28,8 @@
 <link rel="stylesheet" href="css/intro.css">
 <!-- atelier du personnage plein écran (remplace l'ancienne feuille « garde-robe ») -->
 <link rel="stylesheet" href="css/creator.css">
+<!-- carte du joueur (feuille #brain) : toujours la dernière -->
+<link rel="stylesheet" href="css/profile.css">
 </head>
 <body>
 <!-- Intro « aube calme » : ciel crème pêche, soleil levant, îles au loin, goélands, mer turquoise douce en houles parallaxe,
@@ -273,10 +275,43 @@
     </div>
   </div>
 
-  <!-- carte du cerveau : les facultés qui se développent -->
+  <!-- carte du joueur (ex-carte du cerveau, même id #brain) : portrait, nom, niveau global, bilan, capacités.
+       Rempli par renderProfile() (js/app.js) ; styles dans css/profile.css. -->
   <div id="brain" class="overlay" hidden>
-    <div class="sheet brain-sheet">
-      <!-- bandeau du niveau global : un toucher affiche le niveau de chaque mini-jeu -->
+    <div class="sheet brain-sheet pc-sheet">
+      <section class="pc-card">
+        <div id="pc-avatar" class="pc-avatar" aria-hidden="true"></div>
+        <div class="pc-id">
+          <button id="pc-name" class="pc-name" aria-label="Changer de nom"><span id="pc-name-txt">Ulysse</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1-4.2L15.6 5.2a2 2 0 0 1 2.8 0l.4.4a2 2 0 0 1 0 2.8L8.2 19 4 20z"/><path d="M13.8 7l3.2 3.2"/></svg></button>
+          <span id="pc-title" class="pc-title">Mousse</span>
+        </div>
+        <div class="pc-coin" aria-label="Niveau"><small>niv.</small><b id="pc-level">1</b></div>
+        <div class="pc-xp"><span class="pc-xp-bar"><i id="pc-xp-bar"></i></span><small id="pc-xp">0 / 100</small></div>
+      </section>
+      <!-- classement en ligne (js/rank.js) : mon rang + bouton vers le top 50 -->
+      <button id="pc-rank" class="pc-rank" aria-label="Classement">
+        <span class="pc-rank-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="f" d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4c0 3 1.5 4.5 3 4.5M17 6h3c0 3-1.5 4.5-3 4.5M12 14v3M8 20h8M9.5 17h5"/></svg></span>
+        <b id="pc-rank-num">#–</b>
+        <span class="pc-rank-go">Classement<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></span>
+      </button>
+      <!-- vue du classement (remplace la carte dans la feuille, classe .board sur .pc-sheet) -->
+      <section id="pc-board" class="pc-board" hidden>
+        <div class="pc-board-head">
+          <button id="pc-board-back" class="pc-board-back" aria-label="Retour"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <h2>Classement</h2>
+        </div>
+        <ol id="pc-board-list" class="pc-board-list"></ol>
+      </section>
+      <div id="pc-stats" class="pc-stats"></div>
+      <section class="pc-skills">
+        <svg id="pc-radar" class="pc-radar" viewBox="0 0 220 200" role="img" aria-label="Capacités"></svg>
+        <div id="pc-skill-list" class="pc-skill-list"></div>
+      </section>
+      <!-- capacité choisie : ses 3 mini-jeux et le mode concentration (rempli par showZone, déplacé sous la capacité touchée) -->
+      <div id="zone-panel" class="zone-panel" hidden></div>
+      <!-- ancienne carte du cerveau : gardée cachée (gestes, zoom et bandeau y restent branchés) -->
+      <div class="pc-legacy" hidden>
       <button id="brain-band" class="level-band" aria-expanded="false">
         <span class="lb-label">niveau <b id="brain-level">1</b></span>
         <span class="lb-bar"><i id="brain-xp-bar"></i></span>
@@ -290,8 +325,7 @@
         <svg id="brain-svg" class="brain" viewBox="0 0 320 250" role="img" aria-label="Carte du cerveau"></svg>
       </div>
       <div id="skills" class="skills"></div>
-      <!-- zone choisie : ses mini-jeux et le mode concentration -->
-      <div id="zone-panel" class="zone-panel" hidden></div>
+      </div>
     </div>
   </div>
 
@@ -369,6 +403,8 @@
       </div>
       <!-- l'archipel suit l'heure réelle (aube, jour, soir, nuit) ; coché : toujours le grand jour -->
       <label class="toggle daylock"><span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="currentColor" stroke="none"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Toujours le jour</span><input type="checkbox" id="opt-daylock"><i></i></label>
+      <!-- récapitulatif de fin de niveau (étoiles, temps, XP) : on peut le passer -->
+      <label class="toggle"><span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l2.4 5 5.4.6-4 3.7 1.1 5.4L12 15.6l-4.9 2.6 1.1-5.4-4-3.7 5.4-.6z"/></svg>Bilan de fin de niveau</span><input type="checkbox" id="opt-ldshow"><i></i></label>
       <label class="toggle"><span><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-speaker-high"/></svg>Sons</span><input type="checkbox" id="opt-sound"><i></i></label>
       <label class="toggle"><span><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-music-notes"/></svg>Musique</span><input type="checkbox" id="opt-music"><i></i></label>
       <div class="mix">
@@ -402,9 +438,17 @@
       <div id="ld-time" class="ld-time" hidden></div>
       <div id="ld-skills" class="ld-skills"></div>
       <button id="ld-share" class="ld-share" hidden><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-share-network"/></svg>partager mon temps</button>
-      <button id="ld-next" class="next-btn" aria-label="Niveau suivant">
-        <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-arrow-right"/></svg>
-      </button>
+      <!-- moins de 3 étoiles : rejouer pour faire mieux, ou passer à la suite -->
+      <div class="ld-actions">
+        <button id="ld-replay" class="ld-replay" aria-label="Rejouer" hidden>
+          <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-arrow-counter-clockwise"/></svg>
+        </button>
+        <button id="ld-next" class="next-btn" aria-label="Niveau suivant">
+          <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-arrow-right"/></svg>
+        </button>
+      </div>
+      <!-- passer ce récapitulatif à l'avenir (réactivable dans les réglages) -->
+      <label class="ld-skip"><input type="checkbox" id="ld-skip"> ne plus afficher</label>
     </div>
   </div>
   <!-- gain d'expérience après une victoire -->
@@ -417,6 +461,7 @@
 <script src="vendor/GLTFLoader.js"></script>
 <script src="vendor/RGBELoader.js"></script>
 <script src="js/core.js"></script>
+<script src="js/rank.js"></script>
 <script src="js/games/flux.js"></script>
 <script src="js/games/reines.js"></script>
 <script src="js/games/astres.js"></script>

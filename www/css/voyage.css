@@ -208,3 +208,41 @@
 #home #cam-mode.on { color: var(--k-sea, #1d9be0) !important; }
 /* carte du niveau : nom de l'île en petit au-dessus du numéro */
 .lc-isle { font: 700 11px/1 var(--k-font, 'Fredoka', sans-serif); letter-spacing: .06em; text-transform: uppercase; color: var(--k-ink-soft, #8a83a3); margin-bottom: 1px; }
+
+/* fin de niveau : Rejouer (si moins de 3 étoiles) à côté de Suivant ; petite case « ne plus afficher » */
+.ld-actions { display: flex; align-items: center; justify-content: center; gap: 18px; }
+.ld-replay { width: 58px; height: 58px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer;
+  background: var(--k-bubble, #fff); color: var(--k-ink, #3a3550); box-shadow: 0 5px 0 var(--k-edge, #d9cfe8), var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14)); }
+.ld-replay[hidden] { display: none; }
+.ld-replay:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--k-edge, #d9cfe8); }
+.ld-replay svg { width: 26px; height: 26px; }
+.ld-skip { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; align-self: center; font: 600 12px/1 var(--k-font, 'Fredoka', sans-serif); color: var(--k-ink-soft, #8a83a3); cursor: pointer; }
+.ld-skip[hidden] { display: none; }
+.ld-skip input { width: 16px; height: 16px; accent-color: var(--k-grass, #5cc93b); }
+
+/* barre d'onglets façon nouveaux iPhone : pilule flottante translucide (verre dépoli), détachée des bords */
+#home { --dock-h: 64px; --lc-b: calc(var(--dock-h) + 26px + env(safe-area-inset-bottom, 0px)); }
+#home::after { left: 16px !important; right: 16px !important; bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important; height: var(--dock-h) !important;
+  border-radius: 32px !important; background: color-mix(in srgb, var(--k-bubble, #fff) 72%, transparent) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 10px 30px rgba(20, 16, 50, .25) !important; border: 1px solid rgba(255, 255, 255, .18); }
+#home #open-library, #home #open-daily, #home #open-wardrobe, #home #cam-mode {
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 20px) !important; width: calc((100vw - 48px) / 4) !important; max-width: none; height: 48px !important; border-radius: 24px !important; justify-content: center; }
+#home #open-library { left: 24px !important; }
+#home #open-daily { left: calc(24px + (100vw - 48px) / 4) !important; }
+#home #open-wardrobe { left: calc(24px + (100vw - 48px) / 2) !important; }
+#home #cam-mode { left: calc(24px + 3 * (100vw - 48px) / 4) !important; }
+#home #open-library svg, #home #open-wardrobe svg, #home #cam-mode svg { width: 23px !important; height: 23px !important; }
+#home #open-daily .daily-ic { width: 25px !important; height: 25px !important; }
+#home #open-daily .daily-ic svg { width: 15px !important; height: 15px !important; }
+#home #open-library::after, #home #open-daily::after, #home #open-wardrobe::after, #home #cam-mode::after { font-size: 10.5px; }
+/* onglet actif (vue libre) : petite pilule de surbrillance */
+#home #cam-mode.on { background: color-mix(in srgb, var(--k-sea, #1d9be0) 18%, transparent) !important; }
+#home #open-library:active, #home #open-daily:active, #home #open-wardrobe:active, #home #cam-mode:active { background: color-mix(in srgb, var(--k-ink, #3a3550) 10%, transparent) !important; }
+
+/* mode épuré (toucher la carte) : seuls restent le paysage et la carte du prochain niveau */
+#home #open-brain, #home #open-settings, #home #open-daily, #home #open-library, #home #open-wardrobe, #home #cam-mode, #home::after { transition: opacity .3s ease, transform .3s ease; }
+#home.calm #open-brain, #home.calm #open-settings { opacity: 0 !important; pointer-events: none !important; transform: translateY(-12px) !important; }
+#home.calm #open-daily, #home.calm #open-library, #home.calm #open-wardrobe, #home.calm #cam-mode, #home.calm::after { opacity: 0 !important; pointer-events: none !important; }
+#home.calm { --lc-b: calc(22px + env(safe-area-inset-bottom, 0px)); }
+#home .lvcard, #home #go { transition: bottom .35s cubic-bezier(.34, 1.4, .64, 1); }

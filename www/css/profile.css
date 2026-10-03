@@ -1,0 +1,209 @@
+/* =====================================================================
+   Carte du joueur (feuille #brain, remplie par renderProfile() dans js/app.js).
+   Chargée en DERNIER. Uniquement les jetons de css/cartoon.css (clair + sombre).
+   Portrait d'Ulysse, nom, pièce d'or du niveau, barre d'XP ; tuiles du bilan ;
+   pentagone des capacités + barres ; le panneau d'une capacité (#zone-panel) se glisse dessous.
+   ===================================================================== */
+
+/* feuille : hauteur au contenu, défilement vertical */
+#brain .brain-sheet.pc-sheet {
+  height: auto; max-height: min(92dvh, 900px); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
+  scrollbar-width: none; gap: 14px; padding: 62px 16px calc(20px + env(safe-area-inset-bottom, 0px));
+}
+#brain .pc-sheet::-webkit-scrollbar { display: none; }
+.pc-legacy[hidden] { display: none !important; }
+
+/* ---------- En-tête : la carte du joueur ---------- */
+.pc-card {
+  position: relative; width: 100%; display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: 'av id coin' 'av xp xp';
+  align-items: center; column-gap: 12px; row-gap: 8px; padding: 14px 14px 14px 12px; border-radius: var(--k-r-lg);
+  background: radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--k-sun) 26%, var(--k-bubble)), var(--k-bubble) 62%);
+  border: 3px solid var(--k-rim); box-shadow: 0 5px 0 var(--k-edge), var(--k-drop);
+}
+.pc-avatar {
+  grid-area: av; width: 86px; height: 86px; border-radius: 50%; flex: none;
+  box-shadow: 0 4px 0 var(--k-edge), var(--k-drop-sm); animation: pc-pop .5s var(--k-ease) both;
+}
+.pc-avatar svg { display: block; width: 100%; height: 100%; }
+.pc-av-sky { fill: var(--k-sky-lt); }
+.pc-av-sea { fill: var(--k-lagoon); opacity: .55; }
+:root[data-theme="dark"] .pc-av-sky { fill: #3a3f78; }
+
+.pc-id { grid-area: id; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.pc-name {
+  max-width: 100%; display: inline-flex; align-items: center; gap: 6px; padding: 0; background: none; border: 0; cursor: pointer;
+  font: 700 23px/1.1 var(--k-font); color: var(--k-ink);
+}
+.pc-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-name svg { flex: none; width: 16px; height: 16px; fill: none; stroke: var(--k-ink-soft); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.pc-name-input {
+  width: 100%; min-width: 0; padding: 4px 10px; border-radius: var(--k-r-sm); border: 3px solid var(--k-sky);
+  font: 700 20px/1.2 var(--k-font); color: var(--k-ink); background: var(--k-cream); outline: none;
+}
+.pc-title {
+  padding: 3px 11px; border-radius: var(--k-r-pill); font: 700 12.5px/1.2 var(--k-font); color: #fff;
+  background: var(--k-sea); box-shadow: 0 3px 0 color-mix(in srgb, var(--k-sea) 65%, #1a1440); text-shadow: 0 1px 0 rgba(0, 0, 0, .15);
+}
+/* pièce d'or : le niveau global */
+.pc-coin {
+  grid-area: coin; width: 62px; height: 62px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 36% 30%, var(--k-sun-lt), var(--k-sun) 58%, var(--k-sun-dk));
+  border: 3px solid #fff3c2; box-shadow: 0 5px 0 #b36f00, var(--k-drop-sm), inset 0 0 0 4px rgba(224, 143, 0, .35);
+  color: #7a4300; animation: pc-pop .5s .08s var(--k-ease) both;
+}
+.pc-coin small { font: 700 10px/1 var(--k-font); letter-spacing: .04em; margin-top: 2px; opacity: .8; }
+.pc-coin b { font: 700 27px/1 var(--k-font); text-shadow: 0 2px 0 rgba(255, 255, 255, .45); }
+:root[data-theme="dark"] .pc-coin { border-color: #ffe9a0; box-shadow: 0 5px 0 #8a5200, var(--k-drop-sm), inset 0 0 0 4px rgba(201, 124, 0, .4); }
+.pc-xp { grid-area: xp; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pc-xp-bar { flex: 1; height: 14px; border-radius: 7px; background: var(--k-well); box-shadow: inset 0 2px 0 rgba(80, 60, 140, .12); overflow: hidden; }
+.pc-xp-bar i { display: block; height: 100%; min-width: 14px; border-radius: 7px; background: linear-gradient(180deg, var(--k-sun-lt), var(--k-sun)); box-shadow: var(--k-shine); transition: width .9s var(--k-ease); }
+.pc-xp small { font: 700 12px/1 var(--k-font); color: var(--k-ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ---------- Classement en ligne (js/rank.js) ---------- */
+.pc-rank[hidden], .pc-board[hidden] { display: none !important; }
+/* tuile du rang : coupe dorée, « #12 », bouton Classement */
+.pc-rank {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 8px; border-radius: var(--k-r-pill); cursor: pointer;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--k-sun) 30%, var(--k-bubble)), var(--k-bubble));
+  border: 3px solid var(--k-rim); box-shadow: 0 4px 0 var(--k-edge), var(--k-drop-sm); color: var(--k-ink);
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.pc-rank:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--k-edge); }
+.pc-rank-ic {
+  width: 40px; height: 40px; flex: none; border-radius: 50%; display: grid; place-items: center;
+  background: radial-gradient(circle at 36% 30%, var(--k-sun-lt), var(--k-sun) 60%, var(--k-sun-dk)); box-shadow: 0 3px 0 #b36f00, var(--k-shine);
+}
+.pc-rank-ic svg { width: 24px; height: 24px; fill: none; stroke: #7a4300; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.pc-rank-ic svg .f { fill: #fff3c2; }
+.pc-rank b { font: 700 24px/1 var(--k-font); font-variant-numeric: tabular-nums; }
+.pc-rank.wait b { opacity: .4; animation: pc-blink 1s ease-in-out infinite alternate; }
+.pc-rank-go {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 4px; padding: 7px 10px 7px 14px; border-radius: var(--k-r-pill);
+  font: 700 14px/1 var(--k-font); color: #fff; background: var(--k-sky); box-shadow: 0 3px 0 color-mix(in srgb, var(--k-sky) 62%, #1a1440);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .15);
+}
+.pc-rank-go svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+
+/* vue du classement : remplace la fiche dans la même feuille */
+.pc-sheet.board > :not(.pc-board):not(.sheet-close) { display: none !important; }
+.pc-board { width: 100%; display: flex; flex-direction: column; gap: 12px; margin-top: -40px; }
+.pc-board-head { display: flex; align-items: center; gap: 10px; padding-right: 52px; }
+.pc-board-head h2 { margin: 0; font: 700 24px/1.2 var(--k-font); color: var(--k-ink); }
+.pc-board-back {
+  width: 42px; height: 42px; flex: none; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  background: var(--k-bubble); border: 3px solid var(--k-rim); box-shadow: 0 4px 0 var(--k-edge), var(--k-drop-sm); color: var(--k-ink);
+}
+.pc-board-back svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.pc-board-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pc-row {
+  display: grid; grid-template-columns: 34px 1fr auto auto; align-items: center; gap: 10px; padding: 7px 10px 7px 8px; border-radius: var(--k-r-md);
+  background: var(--k-bubble); border: 2px solid var(--k-rim); box-shadow: 0 3px 0 var(--k-edge);
+  animation: pc-pop .35s var(--k-ease) both; animation-delay: calc(var(--k, 0) * 25ms);
+}
+.pc-row.me { border-color: var(--k-sky); background: color-mix(in srgb, var(--k-sky) 16%, var(--k-bubble)); box-shadow: 0 3px 0 color-mix(in srgb, var(--k-sky) 55%, var(--k-edge)); }
+.pc-pos { justify-self: center; font: 700 15px/1 var(--k-font); color: var(--k-ink-soft); font-variant-numeric: tabular-nums; }
+.pc-medal { width: 32px; height: 32px; justify-self: center; }
+.pc-medal path { fill: var(--k-sky); stroke: #3a3550; stroke-width: 1.4; stroke-linejoin: round; }
+.pc-medal circle { fill: var(--m); stroke: #3a3550; stroke-width: 1.6; }
+.pc-medal text { font: 700 9px var(--k-font); fill: #3a3550; }
+.pc-row-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 15.5px/1.2 var(--k-font); color: var(--k-ink); }
+.pc-row-stars { display: inline-flex; align-items: center; gap: 3px; font: 700 13px/1 var(--k-font); color: var(--k-ink-soft); font-variant-numeric: tabular-nums; }
+.pc-row-stars svg { width: 16px; height: 16px; fill: var(--k-sun); stroke: var(--k-sun-dk); stroke-width: 1.2; stroke-linejoin: round; }
+.pc-row-lvl {
+  min-width: 32px; height: 32px; padding: 0 4px; border-radius: var(--k-r-pill); display: grid; place-items: center;
+  font: 700 14px/1 var(--k-font); color: #7a4300; background: radial-gradient(circle at 36% 30%, var(--k-sun-lt), var(--k-sun) 60%, var(--k-sun-dk));
+  border: 2px solid #fff3c2; box-shadow: 0 2px 0 #b36f00;
+}
+.pc-row-gap { text-align: center; font: 700 18px/1 var(--k-font); color: var(--k-ink-soft); }
+.pc-board-msg { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 34px 0; font: 700 16px/1.2 var(--k-font); color: var(--k-ink-soft); }
+.pc-board-msg.off > svg { width: 54px; height: 54px; fill: none; stroke: var(--k-ink-soft); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pc-board-retry {
+  width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: #fff;
+  background: var(--k-sky); border: 3px solid var(--k-rim); box-shadow: 0 4px 0 color-mix(in srgb, var(--k-sky) 62%, #1a1440);
+}
+.pc-board-retry svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.pc-spin { width: 36px; height: 36px; border-radius: 50%; border: 5px solid var(--k-well); border-top-color: var(--k-sun); animation: pc-turn .8s linear infinite; }
+@keyframes pc-turn { to { transform: rotate(360deg); } }
+@keyframes pc-blink { to { opacity: .9; } }
+
+/* ---------- Tuiles du bilan ---------- */
+.pc-stats { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.pc-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px 9px; border-radius: var(--k-r-md);
+  background: var(--k-bubble); border: 3px solid var(--k-rim); box-shadow: 0 4px 0 var(--k-edge), var(--k-drop-sm);
+  animation: pc-pop .45s var(--k-ease) both; animation-delay: calc(var(--k, 0) * 45ms);
+}
+.pc-tile svg {
+  width: 34px; height: 34px; padding: 6px; border-radius: 50%; background: var(--c); color: #fff;
+  fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--c) 65%, #2a1f3d);
+}
+.pc-tile svg .f { fill: currentColor; }
+.pc-tile b { font: 700 22px/1.1 var(--k-font); color: var(--k-ink); margin-top: 3px; white-space: nowrap; }
+.pc-tile b small { font-size: 13px; color: var(--k-ink-soft); }
+.pc-tile > small { font: 600 11.5px/1.1 var(--k-font); color: var(--k-ink-soft); }
+/* temps de jeu : une tuile en longueur sous la grille */
+.pc-tile.wide { grid-column: 1 / -1; flex-direction: row; justify-content: center; gap: 10px; padding: 8px 12px; }
+.pc-tile.wide b { margin-top: 0; font-size: 19px; }
+
+/* ---------- Capacités : pentagone + barres ---------- */
+.pc-skills {
+  width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 12px 14px; border-radius: var(--k-r-lg);
+  background: var(--k-bubble); border: 3px solid var(--k-rim); box-shadow: 0 5px 0 var(--k-edge), var(--k-drop);
+}
+.pc-radar { width: 100%; max-width: 270px; height: auto; display: block; overflow: visible; }
+.pc-rd-ring { fill: none; stroke: var(--k-edge); stroke-width: 1.5; stroke-linejoin: round; }
+.pc-rd-ring.out { fill: var(--k-well); stroke-width: 2.5; }
+.pc-rd-axis { stroke: var(--k-edge); stroke-width: 1.2; stroke-dasharray: 2 3; }
+.pc-rd-val {
+  fill: color-mix(in srgb, var(--k-coral) 30%, transparent); stroke: var(--k-coral); stroke-width: 3; stroke-linejoin: round;
+  transform-origin: 110px 108px; animation: pc-grow .7s .1s var(--k-ease) both;
+}
+.pc-rd-dot { fill: var(--c); stroke: var(--k-bubble); stroke-width: 2; }
+.pc-rd-sk { cursor: pointer; }
+.pc-rd-disc { fill: var(--c); stroke: var(--k-rim); stroke-width: 3; filter: drop-shadow(0 2.5px 0 color-mix(in srgb, var(--c) 60%, #2a1f3d)); }
+.pc-rd-ic { fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.pc-rd-badge { fill: var(--k-bubble); stroke: var(--c); stroke-width: 2.2; }
+.pc-rd-num { font: 700 11px var(--k-font); fill: var(--k-ink); pointer-events: none; }
+.pc-rd-sk:active .pc-rd-disc { transform: translateY(1.5px); transform-box: fill-box; }
+
+.pc-skill-list { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+.pc-skill {
+  width: 100%; display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: 'ic name lvl' 'ic bar bar';
+  align-items: center; column-gap: 10px; row-gap: 5px; padding: 8px 12px 9px 8px; border-radius: var(--k-r-md); cursor: pointer;
+  background: var(--k-cream); border: 2px solid var(--k-rim); box-shadow: 0 3px 0 var(--k-edge); color: var(--k-ink);
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.pc-skill:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--k-edge); }
+.pc-skill[aria-expanded="true"] { border-color: var(--c); box-shadow: 0 3px 0 color-mix(in srgb, var(--c) 60%, var(--k-edge)); }
+.pc-sk-ic {
+  grid-area: ic; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--c);
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--c) 62%, #2a1f3d), var(--k-shine);
+}
+.pc-sk-ic svg { width: 22px; height: 22px; fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.pc-sk-name { grid-area: name; text-align: left; font: 700 15.5px/1.15 var(--k-font); }
+.pc-sk-lvl {
+  grid-area: lvl; min-width: 28px; padding: 2px 8px; border-radius: var(--k-r-pill); text-align: center;
+  font: 700 13px/1.3 var(--k-font); color: #fff; background: var(--c); box-shadow: 0 2px 0 color-mix(in srgb, var(--c) 62%, #2a1f3d);
+}
+.pc-sk-bar { grid-area: bar; height: 9px; border-radius: 5px; background: var(--k-well); box-shadow: inset 0 2px 0 rgba(80, 60, 140, .1); overflow: hidden; }
+.pc-sk-bar i { display: block; height: 100%; border-radius: 5px; background: var(--c); box-shadow: var(--k-shine); transition: width .9s var(--k-ease); }
+:root[data-theme="dark"] .pc-sk-bar, :root[data-theme="dark"] .pc-xp-bar { box-shadow: inset 0 2px 0 rgba(8, 6, 40, .35); }
+
+/* panneau d'une capacité, glissé sous sa barre */
+.pc-skill-list .zone-panel {
+  padding: 12px; border-radius: var(--k-r-md); background: color-mix(in srgb, var(--game) 12%, var(--k-bubble));
+  border: 2px dashed color-mix(in srgb, var(--game) 45%, transparent);
+}
+.pc-skill-list .zone-panel .zp-go { padding: 11px; font-size: 14px; }
+
+@keyframes pc-pop { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: none; } }
+@keyframes pc-grow { from { transform: scale(.2); opacity: 0; } to { transform: none; opacity: 1; } }
+html.a11y-motion .pc-avatar, html.a11y-motion .pc-coin, html.a11y-motion .pc-tile, html.a11y-motion .pc-rd-val { animation: none; }
+
+@media (max-width: 360px) {
+  .pc-avatar { width: 72px; height: 72px; }
+  .pc-coin { width: 54px; height: 54px; }
+  .pc-coin b { font-size: 23px; }
+  .pc-name { font-size: 20px; }
+}
