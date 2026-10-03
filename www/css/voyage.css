@@ -70,3 +70,6 @@
 .gl-games svg { width: 20px; height: 20px; fill: none; stroke: #fff; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
 .gl-games svg .f { fill: #fff; }
 .gl-num { white-space: nowrap; }
+
+/* nom d'île sur une seule ligne (« Ithaque en vue », « Le Lit d'olivier ») : la police se resserre au besoin */
+#island-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: clamp(13px, 4.2vw, 17px) !important; line-height: 1.1 !important; min-width: 0; }
