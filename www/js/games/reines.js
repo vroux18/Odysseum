@@ -87,20 +87,51 @@
     return count;
   }
 
+  // grille « facile » : se résout entièrement par des évidences (une région, une ligne ou une colonne
+  // qui n'a plus qu'une case possible), sans raisonnement en chaîne — pour les tout premiers niveaux
+  function easySolvable(n, region, variant) {
+    const open = new Uint8Array(n * n).fill(1);
+    let placed = 0;
+    const place = (i) => {
+      const r = Math.floor(i / n), c = i % n;
+      for (let j = 0; j < n * n; j++) {
+        const rj = Math.floor(j / n), cj = j % n;
+        if (rj === r || cj === c || region[j] === region[i] || forbidden(variant, Math.abs(rj - r), cj - c)) open[j] = 0;
+      }
+      placed++;
+    };
+    for (let guard = 0; guard < n * 4 && placed < n; guard++) {
+      let found = -1;
+      const groups = [];
+      for (let k = 0; k < n; k++) { groups.push((i) => region[i] === k, (i) => Math.floor(i / n) === k, (i) => i % n === k); }
+      for (const inG of groups) {
+        const cand = [];
+        for (let i = 0; i < n * n; i++) if (open[i] && inG(i)) cand.push(i);
+        if (cand.length === 1) { found = cand[0]; break; }
+      }
+      if (found < 0) return false;
+      place(found);
+    }
+    return placed === n;
+  }
+
   function generate(rng, p) {
-    let fallback = null;
-    for (let t = 0; t < 400; t++) {
+    let fallback = null, unique = null;
+    for (let t = 0; t < (p.easy ? 1500 : 400); t++) {
       const cols = placeQueens(p.n, rng, p.variant);
       const region = growRegions(p.n, cols, rng);
       const puzzle = { n: p.n, variant: p.variant, region: Array.from(region), solution: cols };
       if (!fallback) fallback = puzzle;
-      if (countSolutions(p.n, region, 2, p.variant) === 1) return puzzle;
+      if (countSolutions(p.n, region, 2, p.variant) !== 1) continue;
+      if (!p.easy || easySolvable(p.n, region, p.variant)) return puzzle;
+      if (!unique) unique = puzzle;
     }
-    return fallback;
+    return unique || fallback;
   }
 
   function params(level, variant) {
-    return { n: Math.min(9, (variant === 'cavaliers' ? 6 : 4) + Math.floor((level - 1) / 5)), variant };
+    // premiers niveaux : grilles qui se résolvent par simples évidences (voir easySolvable)
+    return { n: Math.min(9, (variant === 'cavaliers' ? 6 : 4) + Math.floor((level - 1) / 5)), variant, easy: level <= 12 };
   }
 
   function create(host, puzzle, api) {
