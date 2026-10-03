@@ -2,16 +2,16 @@
 // Une chaîne d'îles sans fin. Sur chaque île, un sentier serpente entre PER
 // niveaux répartis sur tout le relief ; le dernier est un boss. Battre le boss
 // ouvre le portique et fait remonter les pierres de gué vers l'île suivante.
-// Chaque île a son ambiance (pinède, ruines, jardin, dunes), ses moutons, ses fleurs.
+// Style dessin animé, ensoleillé : chaque île suit un épisode de l'Odyssée (Troie, les
+// Cicones, les Lotophages…) avec son village, son bosquet et son monument.
 (function () {
   'use strict';
   const C = window.Carnet;
 
   const PER = 6;           // niveaux par île (le dernier est le boss)
-  const FOG = '#e9eeee';
+  const FOG = '#c4ecfb';   // brume bleu ciel de l'horizon
   const TOP = 0.63;        // hauteur du sol au bord des îles
   const SPACING = 15;      // distance entre deux îles
-  const THEMES = ['pinede', 'ruines', 'jardin', 'dunes'];
 
   const World = { ok: false, PER };
   let THREE, renderer, scene, camera, host, sun, raf = 0, running = false, last = 0, simTime = 0;
@@ -30,27 +30,37 @@
   }
 
   // Rendu « linéaire » : les couleurs sont écrites en sRGB (hex) et converties en espace
-  // linéaire pour l'éclairage ; la sortie est ré-encodée en sRGB avec un tone mapping filmique.
+  // linéaire pour l'éclairage ; la sortie est ré-encodée en sRGB, sans tone mapping
+  // (les couleurs franches du dessin animé restent vives).
   const lin = (hex) => new THREE.Color(hex).convertSRGBToLinear();
   const setLin = (color, hex) => color.set(hex).convertSRGBToLinear();
   const tint = (hex, amount) => new THREE.Color('#fbfaf7').lerp(new THREE.Color(hex), amount).convertSRGBToLinear();
-  // Matériau de base : ombrage doux « maquette » (PBR mat, sans reflets métalliques),
-  // éclairé par le soleil, le ciel (HDRI) et une lumière d'ambiance.
+  // Matériau de base « cartoon » : ombrage en aplats (MeshToonMaterial + dégradé à 3 marches),
+  // ombres portées colorées par la lumière du ciel. (roughness/metalness sont ignorés.)
   const stdMats = [];
-  let envBoost = 1;
+  let envBoost = 1, toonRamp = null;
+  function rampTexture() {
+    if (toonRamp) return toonRamp;
+    // trois paliers : ombre douce, mi-teinte, pleine lumière
+    toonRamp = new THREE.DataTexture(new Uint8Array([120, 120, 120, 255, 200, 200, 200, 255, 255, 255, 255, 255]), 3, 1, THREE.RGBAFormat);
+    toonRamp.minFilter = toonRamp.magFilter = THREE.NearestFilter;
+    toonRamp.generateMipmaps = false;
+    toonRamp.needsUpdate = true;
+    return toonRamp;
+  }
   const toonMat = (params) => {
-    const p = Object.assign({ roughness: 0.88, metalness: 0 }, params);
-    delete p.flatShading; delete p.gradientMap;
+    const p = Object.assign({}, params);
+    ['roughness', 'metalness', 'flatShading', 'envMapIntensity'].forEach((k) => { delete p[k]; });
     const hex = p.color;
     delete p.color;
-    const mat = new THREE.MeshStandardMaterial(p);
+    p.gradientMap = rampTexture();
+    const mat = new THREE.MeshToonMaterial(p);
     if (hex != null) { if (hex.isColor) mat.color.copy(hex); else setLin(mat.color, hex); }
-    mat.envMapIntensity = envBoost;
     stdMats.push(mat);
     return mat;
   };
   const lambert = (color, extra) => toonMat(Object.assign({ color }, extra || {}));
-  const OUTLINE = false; // contour encré du héros (abandonné avec l'éclairage doux)
+  const OUTLINE = false; // contour encré du héros (non retenu : coûteux sur téléphone)
   const chapterOf = (L) => Math.floor(L / PER);
   const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
@@ -181,62 +191,39 @@
       stops.forEach(([k, c]) => grd.addColorStop(k, c));
       g.fillStyle = grd; g.fillRect(0, 0, w, h);
     });
-    dayBg = gradient([[0, '#d3e1e7'], [0.5, '#eef2f1'], [1, FOG]]);
-    nightBg = gradient([[0, '#0e1418'], [0.55, '#18212a'], [1, '#1a2126']]);
+    dayBg = gradient([[0, '#5ec3f2'], [0.55, '#a9e3fb'], [1, FOG]]);
+    nightBg = dayBg;
     scene.background = dayBg;
-    scene.fog = new THREE.Fog(FOG, 22, 72);
-    // la lune, visible de nuit seulement
-    moon = new THREE.Mesh(new THREE.SphereGeometry(1.6, 24, 16), new THREE.MeshBasicMaterial({ color: '#eef1f4', fog: false }));
-    moon.material.toneMapped = false;
-    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: '#c9d6ff', transparent: true, opacity: 0.55, depthWrite: false, fog: false, toneMapped: false }));
-    halo.scale.set(12, 12, 1);
-    moon.add(halo);
+    scene.fog = new THREE.Fog(FOG, 30, 85);
+    // (la lune n'est plus utilisée : l'archipel reste ensoleillé ; l'objet reste pour l'API)
+    moon = new THREE.Object3D();
     moon.visible = false;
-    scene.add(moon);
   }
 
   // ------------------------------------------------------------------
-  // Lumière du jour : l'archipel suit l'heure réelle (aube, jour, crépuscule, nuit).
-  // Chaque moment est une palette ; entre deux moments, on interpole doucement.
+  // Lumière : un grand soleil de dessin animé, toujours joyeux. Le mode sombre choisi
+  // (setTime(…, true)) donne une fin d'après-midi dorée, jamais une nuit noire.
   // ------------------------------------------------------------------
-  // sea = [eau profonde, eau peu profonde (lagon autour des îles)] ; env = intensité du ciel HDRI
+  // sea = [eau du large, eau du lagon autour des îles]
   const MOMENTS = {
-    nuit: { sky: ['#0e1418', '#18212a', '#1a2126'], fog: '#1a2126', sea: ['#1d2c36', '#2f4a52'], hemi: ['#8fa2b8', '#1c2328', 0.45],
-      sun: ['#b8c8ff', 0.5], cloud: ['#46515a', 0.55], mtn: '#222b31', motes: ['#ffe2a0', 1, 0.17], night: 1, env: 0.12 },
-    aube: { sky: ['#c6cde0', '#f2d8cf', '#f4e2d6'], fog: '#f1e2d8', sea: ['#8fb0bf', '#bfe0d8'], hemi: ['#ffe9dc', '#b6b4c4', 0.3],
-      sun: ['#ffc9a4', 1.0], cloud: ['#fbe9e2', 0.9], mtn: '#e6dcdc', motes: ['#ffffff', 0.8, 0.12], night: 0, env: 0.3 },
-    jour: { sky: ['#a9cfe3', '#e3eff1', FOG], fog: FOG, sea: ['#5fa9bf', '#9ee0d6'], hemi: ['#f4f8ff', '#c9c2ae', 0.28],
-      sun: ['#fff0dc', 1.15], cloud: ['#ffffff', 0.92], mtn: '#dfe6e6', motes: ['#ffffff', 0.8, 0.12], night: 0, env: 0.35 },
-    crepuscule: { sky: ['#b6c1d8', '#f1ccb6', '#f3d8c3'], fog: '#efd9c9', sea: ['#7c9fb4', '#c4d8cf'], hemi: ['#ffe1c6', '#a9afc0', 0.3],
-      sun: ['#ffbe88', 1.05], cloud: ['#fae0cf', 0.9], mtn: '#e2d6d2', motes: ['#ffe9c4', 0.85, 0.13], night: 0, env: 0.3 }
+    jour: { sky: ['#5ec3f2', '#a9e3fb', FOG], fog: FOG, sea: ['#1d9be0', '#3fe0d0'], hemi: ['#d8f1ff', '#ffe7c4', 0.62],
+      sun: ['#fff6e0', 0.78], cloud: ['#ffffff', 1], mtn: '#ffffff', motes: ['#ffffff', 0.7, 0.1], night: 0, env: 0 },
+    dore: { sky: ['#7cb8f0', '#ffd9a8', '#ffe9c9'], fog: '#ffe6c6', sea: ['#2a8fd6', '#52d8c8'], hemi: ['#ffe9d2', '#ffd6b0', 0.62],
+      sun: ['#ffd9a0', 0.8], cloud: ['#fff3e6', 1], mtn: '#fff1e2', motes: ['#ffe9b8', 0.85, 0.12], night: 0, env: 0 }
   };
-  // (lumières en unités physiques : ×π par rapport à l'ancien rendu)
-  const SUN_K = Math.PI * 1.15, HEMI_K = Math.PI;
+  MOMENTS.nuit = MOMENTS.dore; MOMENTS.aube = MOMENTS.jour; MOMENTS.crepuscule = MOMENTS.dore;
+  const SUN_K = 1, HEMI_K = 1;
   let envMap = null;
-  // heure → moment (les intervalles se fondent les uns dans les autres)
-  const TIMELINE = [[0, 'nuit'], [5, 'nuit'], [6.5, 'aube'], [8.5, 'jour'], [17, 'jour'], [19, 'crepuscule'], [20.5, 'nuit'], [24, 'nuit']];
   let calm = false;
   let cine = null; // séquence « mode concentration » en cours
-  let lightHour = 12, forceNight = false, skyKey = '', mtnColor = '#dfe6e6';
+  let lightHour = 12, forceNight = false, skyKey = '', mtnColor = '#ffffff';
 
   function mix(a, b, k) {
     if (typeof a === 'number') return a + (b - a) * k;
     if (Array.isArray(a)) return a.map((v, i) => mix(v, b[i], k));
     return '#' + new THREE.Color(a).lerp(new THREE.Color(b), k).getHexString();
   }
-  function paletteAt(hour) {
-    if (forceNight) return MOMENTS.nuit;
-    for (let i = 0; i + 1 < TIMELINE.length; i++) {
-      const [h0, m0] = TIMELINE[i], [h1, m1] = TIMELINE[i + 1];
-      if (hour >= h0 && hour <= h1) {
-        const k = h1 === h0 ? 0 : (hour - h0) / (h1 - h0);
-        const A = MOMENTS[m0], B = MOMENTS[m1], out = {};
-        Object.keys(A).forEach((key) => { out[key] = mix(A[key], B[key], k); });
-        return out;
-      }
-    }
-    return MOMENTS.jour;
-  }
+  function paletteAt() { return forceNight ? MOMENTS.dore : MOMENTS.jour; }
 
   function applyLight() {
     const p = paletteAt(lightHour);
@@ -244,9 +231,9 @@
     if (key !== skyKey) { // le dégradé du ciel n'est redessiné que s'il change
       skyKey = key;
       if (scene.background && scene.background.dispose && scene.background !== dayBg) scene.background.dispose();
-      scene.background = canvasTexture(4, 256, (g, w, h) => {
+      scene.background = p === MOMENTS.jour ? dayBg : canvasTexture(4, 256, (g, w, h) => {
         const grd = g.createLinearGradient(0, 0, 0, h);
-        grd.addColorStop(0, p.sky[0]); grd.addColorStop(0.5, p.sky[1]); grd.addColorStop(1, p.sky[2]);
+        grd.addColorStop(0, p.sky[0]); grd.addColorStop(0.55, p.sky[1]); grd.addColorStop(1, p.sky[2]);
         g.fillStyle = grd; g.fillRect(0, 0, w, h);
       });
     }
@@ -254,30 +241,21 @@
     if (sea.material.userData.deep) {
       setLin(sea.material.userData.deep.value, p.sea[0]);
       setLin(sea.material.userData.shallow.value, p.sea[1]);
-      sea.material.userData.spark.value = 1 - p.night * 0.85;
+      sea.material.userData.spark.value = 1;
     }
     setLin(hemi.color, p.hemi[0]); setLin(hemi.groundColor, p.hemi[1]);
-    // avec le ciel HDRI, l'ambiance vient surtout de l'environnement : l'hémisphère complète
-    hemi.intensity = p.hemi[2] * HEMI_K * (envMap ? 0.55 : 1.15);
+    hemi.intensity = p.hemi[2] * HEMI_K;
     setLin(sun.color, p.sun[0]); sun.intensity = p.sun[1] * SUN_K;
-    envBoost = envMap ? p.env : 0;
-    stdMats.forEach((m) => { m.envMapIntensity = envBoost; });
     setLin(cloudMat.color, p.cloud[0]); cloudMat.opacity = p.cloud[1];
     mtnColor = p.mtn;
     mountains.forEach((m) => setLin(m.material.color, p.mtn));
     setLin(motes.material.color, p.motes[0]); motes.material.opacity = p.motes[1]; motes.material.size = p.motes[2];
-    isDark = p.night > 0.5;
-    moon.visible = p.night > 0.3;
-    moon.children[0].material.opacity = 0.55 * p.night;
+    isDark = false;
   }
 
-  // position du soleil selon l'heure : bas à l'aube et au crépuscule, ombres longues
+  // soleil haut, de trois quarts : ombres courtes et nettes, comme dans un dessin animé
   function sunOffset() {
-    if (forceNight || lightHour < 6 || lightHour > 20.5) return new THREE.Vector3(-8, 16, -10); // la lune
-    const k = (lightHour - 6) / 14.5;               // 0 au lever, 1 au coucher
-    const az = Math.PI * (0.15 + k * 0.7);
-    const elev = 4 + Math.sin(Math.PI * k) * 11; // soleil un peu bas : ombres longues et douces
-    return new THREE.Vector3(Math.cos(az) * 14, elev, Math.sin(az) * 10 + 4);
+    return forceNight ? new THREE.Vector3(12, 11, 6) : new THREE.Vector3(7, 16, 9);
   }
 
   const SEA_SIZE = 130, SEA_SEG = 48;
@@ -289,8 +267,8 @@
     const seaMat = toonMat({ color: '#ffffff', roughness: 0.32 });
     const U = seaMat.userData;
     U.time = { value: 0 };
-    U.deep = { value: lin('#5fa9bf') };
-    U.shallow = { value: lin('#9ee0d6') };
+    U.deep = { value: lin('#1d9be0') };
+    U.shallow = { value: lin('#3fe0d0') };
     U.isl = { value: [0, 1, 2, 3, 4, 5].map(() => new THREE.Vector4(0, 0, -99, 0)) };
     U.spark = { value: 1 };
     seaMat.onBeforeCompile = (sh) => {
@@ -324,20 +302,20 @@
           // moutons au large : petites crêtes d'écume qui naissent et s'effacent
           'float wc = sin(p.x * 0.9 + t * 0.4) * sin(p.y * 1.13 - t * 0.33) * sin((p.x + p.y) * 0.71 + t * 0.52);',
           'float caps = smoothstep(0.72, 0.86, wc) * smoothstep(5.0, 10.0, near) * smoothstep(0.2, 1.0, sin(p.x * 7.0 + p.y * 5.0));',
-          'base = mix(base, vec3(0.95), clamp(foam + foam2 + caps * 0.3, 0.0, 1.0));',
+          'base = mix(base, vec3(0.95), clamp(foam + foam2 + caps * 0.12, 0.0, 1.0));',
           // paillettes de soleil
           'vec2 g2 = p + vec2(sin(p.y * 0.73 + t * 0.3), cos(p.x * 0.61 - t * 0.25)) * 1.7;',
           'float gl = pow(max(0.0, sin(g2.x * 13.0 + t * 2.1) * sin(g2.y * 11.0 - t * 1.7)), 30.0) * smoothstep(0.55, 0.95, sin(p.x * 0.45 + p.y * 0.31 + t * 0.2) * 0.5 + 0.5);',
-          'base += vec3(1.0, 0.97, 0.88) * gl * 1.3 * uSpark;',
+          'base += vec3(1.0, 0.97, 0.88) * gl * 0.35 * uSpark * (1.0 - smoothstep(4.0, 14.0, near));',
           'vec4 diffuseColor = vec4(base, opacity);'
         ].join('\n'))
         .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n' + [
           // vagues : quatre trains de houle croisés (normales perturbées, sans texture)
           'vec2 q = vW.xz; float tt = uTime; vec2 gw = vec2(0.0);',
-          'gw += vec2(0.8, 0.6) * cos(dot(q, vec2(0.8, 0.6)) * 2.1 + tt * 1.3) * 0.07;',
-          'gw += vec2(-0.5, 0.85) * cos(dot(q, vec2(-0.5, 0.85)) * 3.3 + tt * 1.7) * 0.05;',
-          'gw += vec2(0.95, -0.3) * cos(dot(q, vec2(0.95, -0.3)) * 5.7 + tt * 2.3) * 0.035;',
-          'gw += vec2(-0.2, -1.0) * cos(dot(q, vec2(-0.2, -1.0)) * 9.1 + tt * 3.1) * 0.022;',
+          'gw += vec2(0.8, 0.6) * cos(dot(q, vec2(0.8, 0.6)) * 2.1 + tt * 1.3) * 0.025;',
+          'gw += vec2(-0.5, 0.85) * cos(dot(q, vec2(-0.5, 0.85)) * 3.3 + tt * 1.7) * 0.018;',
+          'gw += vec2(0.95, -0.3) * cos(dot(q, vec2(0.95, -0.3)) * 5.7 + tt * 2.3) * 0.0;',
+          'gw += vec2(-0.2, -1.0) * cos(dot(q, vec2(-0.2, -1.0)) * 9.1 + tt * 3.1) * 0.0;',
           'normal = normalize(normal + (viewMatrix * vec4(gw.x, 0.0, gw.y, 0.0)).xyz);'
         ].join('\n'));
     };
@@ -346,36 +324,38 @@
     scene.add(sea);
   }
 
+  // gros nuages de coton, hauts dans le ciel (un seul maillage par nuage)
   function makeClouds() {
-    const mat = cloudMat = lambert('#ffffff', { transparent: true, opacity: 0.92 });
+    const mat = cloudMat = toonMat({ color: '#ffffff', vertexColors: true, transparent: true, opacity: 1, emissive: lin('#9fb8c8').multiplyScalar(0.35), fog: false });
+    const puff = new THREE.IcosahedronGeometry(1, 2);
     for (let i = 0; i < 7; i++) {
-      const g = new THREE.Group();
-      const puffs = 3 + (i % 3);
+      const parts = [];
+      const puffs = 4 + (i % 3);
       for (let k = 0; k < puffs; k++) {
-        const s = 0.9 + Math.random() * 1.0;
-        const m = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 2), mat);
-        m.position.set(k * 1.15 - puffs * 0.5, Math.random() * 0.4, (Math.random() - 0.5) * 0.8);
-        m.scale.y = 0.55;
-        g.add(m);
+        const s = k === Math.floor(puffs / 2) ? 1.7 : 1.0 + Math.random() * 0.5;
+        parts.push({ geo: puff, color: '#ffffff', m: M4(k * 1.3 - puffs * 0.62, s * 0.25, (Math.random() - 0.5) * 0.9, 0, s, s * 0.8, s) });
       }
-      g.userData = { a: (i / 7) * Math.PI * 2, r: 16 + Math.random() * 14, y: 9 + Math.random() * 4, speed: 0.008 + Math.random() * 0.01 };
+      parts.push({ geo: puff, color: '#f2f8fc', m: M4(0, -0.1, 0, 0, puffs * 0.75, 0.5, 1.3) }); // dessous plat
+      const g = new THREE.Mesh(mergeParts(parts), mat);
+      g.userData = { a: (i / 7) * Math.PI * 2, r: 26 + Math.random() * 12, y: 14 + Math.random() * 4, speed: 0.006 + Math.random() * 0.008 };
       scene.add(g);
       clouds.push(g);
     }
   }
 
+  // goélands blancs qui planent au-dessus de l'archipel
   function makeBirds() {
     const shape = new THREE.Shape();
-    shape.moveTo(0, 0); shape.lineTo(0.5, 0.12); shape.lineTo(0.08, 0.16); shape.lineTo(0, 0);
+    shape.moveTo(0, 0); shape.quadraticCurveTo(0.25, 0.16, 0.5, 0.08); shape.lineTo(0.12, 0.17); shape.lineTo(0, 0);
     const wingGeo = new THREE.ShapeGeometry(shape);
-    const mat = new THREE.MeshBasicMaterial({ color: lin('#8a9399'), side: THREE.DoubleSide });
-    const gull = new THREE.MeshBasicMaterial({ color: lin('#e9ecec'), side: THREE.DoubleSide });
-    for (let i = 0; i < 7; i++) { // goélands et martinets
+    const gull = new THREE.MeshBasicMaterial({ color: lin('#ffffff'), side: THREE.DoubleSide });
+    const tip = new THREE.MeshBasicMaterial({ color: lin('#5d6f80'), side: THREE.DoubleSide });
+    for (let i = 0; i < 5; i++) {
       const b = new THREE.Group();
-      const l = new THREE.Mesh(wingGeo, i % 2 ? gull : mat), r = new THREE.Mesh(wingGeo, i % 2 ? gull : mat);
+      const l = new THREE.Mesh(wingGeo, i === 2 ? tip : gull), r = new THREE.Mesh(wingGeo, i === 2 ? tip : gull);
       r.scale.x = -1;
       b.add(l, r);
-      b.userData = { l, r, a: i * 1.6, rad: 7 + (i % 4) * 2.5 + i * 0.6, y: 3.2 + (i % 3) * 1.6, speed: (0.11 + i * 0.025) * (i % 2 ? -1 : 1), phase: i };
+      b.userData = { l, r, a: i * 1.6, rad: 7 + (i % 4) * 2.5 + i * 0.6, y: 3.6 + (i % 3) * 1.4, speed: (0.11 + i * 0.025) * (i % 2 ? -1 : 1), phase: i };
       scene.add(b);
       birds.push(b);
     }
@@ -502,7 +482,7 @@
   // Géographie : la chaîne d'îles et leur relief
   // ------------------------------------------------------------------
   function centerOf(c) { return new THREE.Vector3(c * SPACING, 0, Math.sin(c * 1.15) * 7); }
-  function radiusOf(c) { return 4.9 + C.makeRng('rayon:' + c)() * 0.6; }
+  function radiusOf(c) { return 5.4 + C.makeRng('rayon:' + c)() * 0.4; }
   function flat(v) { v.y = 0; return v.normalize(); }
   function edgeToward(c, other, k) {
     const ctr = centerOf(c);
@@ -511,7 +491,7 @@
   const entryOf = (c, k) => edgeToward(c, c > 0 ? centerOf(c - 1) : centerOf(c).add(new THREE.Vector3(-SPACING, 0, 0)), k || 0.84);
   const exitOf = (c, k) => edgeToward(c, centerOf(c + 1), k || 0.84);
 
-  // collines : quelques bosses douces qui s'aplatissent vers le rivage
+  // relief : un plateau doux (une bosse centrale, deux petites) qui s'aplatit vers la plage
   function heightLocal(ch, x, z) {
     let h = 0;
     ch.hills.forEach((b) => {
@@ -519,7 +499,7 @@
       h += b.a * Math.exp(-d2 / (2 * b.s * b.s));
     });
     const d = Math.hypot(x, z) / ch.r;
-    return TOP + h * (1 - smooth(0.7, 1.0, d)) + Math.sin(x * 2.1 + z * 1.3) * 0.03 * (1 - d);
+    return TOP + h * (1 - smooth(0.62, 0.86, d)) - smooth(0.86, 1.0, d) * 0.12;
   }
   // hauteur du sol en coordonnées monde (null au-dessus de l'eau)
   function worldHeight(x, z) {
@@ -531,32 +511,28 @@
     return null;
   }
 
+  // sol de l'île : prairie vive en larges taches nettes, anneau de plage doré bien franc
   function terrain(ch, colors) {
-    const R = ch.r, rings = 26, segs = 72;
-    const pos = [], col = [], idx = [], uv = [];
+    const R = ch.r, rings = 30, segs = 72;
+    const pos = [], col = [], idx = [];
     const c = new THREE.Color();
-    const push = (x, z, edge) => {
-      const y = edge ? TOP : heightLocal(ch, x, z);
+    const push = (x, z) => {
+      const y = heightLocal(ch, x, z);
       pos.push(x, y, z);
-      uv.push(x * 0.3, z * 0.3); // texture d'herbe répétée environ tous les 3 mètres
-      const t = Math.min(1, Math.max(0, (y - TOP) / 1.3));
-      if (edge) c.copy(colors.sand);
-      else {
-        c.copy(colors.low).lerp(colors.high, t);
-        // prairie vivante : taches d'herbe plus fraîches ou plus sèches, bord plus clair
-        const n = Math.sin(x * 1.3 + ch.phase) * Math.cos(z * 1.1 - ch.phase) + Math.sin((x + z) * 2.7) * 0.35;
-        c.lerp(n > 0 ? colors.fresh : colors.dry, Math.min(1, Math.abs(n)) * 0.45);
-        c.lerp(colors.sand, smooth(0.86, 1.0, Math.hypot(x, z) / R) * 0.55);
-      }
+      const d = Math.hypot(x, z) / R;
+      // taches d'herbe en aplats (deux verts), comme peintes
+      const n = Math.sin(x * 0.9 + ch.phase) * Math.cos(z * 0.8 - ch.phase) + Math.sin((x - z) * 1.7) * 0.3;
+      c.copy(n > 0.35 ? colors.fresh : colors.low);
+      c.lerp(colors.high, smooth(0.15, 0.6, (y - TOP) / 0.5) * 0.5);
+      c.lerp(colors.sand, smooth(0.845, 0.865, d));
       col.push(c.r, c.g, c.b);
     };
-    push(0, 0, false);
+    push(0, 0);
     for (let i = 1; i <= rings; i++) {
       const rr = R * (i / rings);
       for (let j = 0; j < segs; j++) {
-        const a = (j / segs) * Math.PI * 2 + (i < rings ? (ch.rng() - 0.5) * 0.05 : 0);
-        const jr = i < rings ? rr + (ch.rng() - 0.5) * 0.12 : rr;
-        push(Math.cos(a) * jr, Math.sin(a) * jr, i >= rings - 1 && i === rings);
+        const a = (j / segs) * Math.PI * 2;
+        push(Math.cos(a) * rr, Math.sin(a) * rr);
       }
     }
     for (let j = 0; j < segs; j++) idx.push(0, 1 + ((j + 1) % segs), 1 + j);
@@ -571,10 +547,9 @@
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     geo.setIndex(idx);
     geo.computeVertexNormals();
-    geo.userData.base = Float32Array.from(col); // (couleurs avant l'occlusion au pied des décors)
+    geo.userData.base = Float32Array.from(col);
     return geo;
   }
 
@@ -583,7 +558,7 @@
   // portique de sortie, puis traverse la mer sur un ponton de bois jusqu'à l'île suivante.
   // Les niveaux sont posés à intervalles réguliers le long de cette ligne (ordre = ordre des niveaux).
   // ------------------------------------------------------------------
-  const LV0 = 0.08, LV1 = 0.84, GATE_F = 0.9, PATH_W = 0.27;
+  const LV0 = 0.08, LV1 = 0.84, GATE_F = 0.9, PATH_W = 0.34;
   const levelF = (k) => LV0 + (LV1 - LV0) * k / (PER - 1);
   function layoutPath(ch, entry, exit) {
     const R = ch.r, rng = ch.rng;
@@ -592,14 +567,15 @@
     const len = dir.length();
     dir.normalize();
     const side = new THREE.Vector3(-dir.z, 0, dir.x);
-    const waves = rng() < 0.5 ? 1 : 1.5, amp = R * (0.42 + rng() * 0.1), ph = rng() < 0.5 ? 0 : Math.PI;
+    // une seule grande courbe en S : elle laisse deux larges zones, une de chaque côté
+    const waves = 1, amp = R * (0.26 + rng() * 0.08), ph = rng() < 0.5 ? 0 : Math.PI;
     const pts = [a];
     const n = 9;
     for (let i = 1; i <= n; i++) {
       const t = i / (n + 1);
       const p = a.clone().addScaledVector(dir, len * t).addScaledVector(side, Math.sin(Math.PI * 2 * waves * t + ph) * amp * Math.sin(Math.PI * t));
       const r = Math.hypot(p.x, p.z);
-      if (r > R * 0.76) p.multiplyScalar(R * 0.76 / r);
+      if (r > R * 0.72) p.multiplyScalar(R * 0.72 / r);
       pts.push(p);
     }
     pts.push(b);
@@ -643,36 +619,20 @@
     return best;
   }
 
-  // dallage du sentier : pierres claires irrégulières, joints doux, bords fondus (alpha)
+  // chemin de sable clair aux bords nets, liseré plus foncé, quelques dalles rondes
   let pathTex = null;
   function pathTexture() {
     if (pathTex) return pathTex;
     const W = 128, H = 256, r = C.makeRng('dallage');
     pathTex = canvasTexture(W, H, (g) => {
-      g.fillStyle = '#d9cdb4'; g.fillRect(0, 0, W, H);
-      let y = 0;
-      while (y < H) {
-        const h = 26 + r() * 22;
-        let x = -r() * 30;
-        while (x < W) {
-          const w = 30 + r() * 34;
-          const v = 228 + Math.floor(r() * 22);
-          g.fillStyle = 'rgb(' + v + ',' + (v - 8) + ',' + (v - 24) + ')';
-          const rr = 7;
-          g.beginPath();
-          g.moveTo(x + rr + 2, y + 2); g.arcTo(x + w - 2, y + 2, x + w - 2, y + h - 2, rr); g.arcTo(x + w - 2, y + h - 2, x + 2, y + h - 2, rr);
-          g.arcTo(x + 2, y + h - 2, x + 2, y + 2, rr); g.arcTo(x + 2, y + 2, x + w - 2, y + 2, rr); g.fill();
-          for (let k = 0; k < 6; k++) { g.fillStyle = 'rgba(120,100,70,' + (0.04 + r() * 0.05) + ')'; g.fillRect(x + r() * w, y + r() * h, 2 + r() * 3, 2 + r() * 3); }
-          x += w;
-        }
-        y += h;
+      g.clearRect(0, 0, W, H);
+      g.fillStyle = '#e9c98f'; g.fillRect(8, 0, W - 16, H);      // liseré
+      g.fillStyle = '#fff1cf'; g.fillRect(16, 0, W - 32, H);     // sable
+      for (let k = 0; k < 16; k++) {                             // dalles rondes, comme des galets posés
+        const x = 30 + r() * (W - 60), y = r() * H, rr = 7 + r() * 7;
+        g.fillStyle = 'rgba(232,206,160,.8)';
+        [0, H, -H].forEach((oy) => { g.beginPath(); g.ellipse(x, y + oy, rr * 1.3, rr, 0, 0, Math.PI * 2); g.fill(); });
       }
-      // bords fondus dans l'herbe
-      g.globalCompositeOperation = 'destination-in';
-      const grd = g.createLinearGradient(0, 0, W, 0);
-      grd.addColorStop(0, 'rgba(0,0,0,0)'); grd.addColorStop(0.16, 'rgba(0,0,0,1)');
-      grd.addColorStop(0.84, 'rgba(0,0,0,1)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
-      g.fillStyle = grd; g.fillRect(0, 0, W, H);
     });
     pathTex.wrapS = THREE.ClampToEdgeWrapping; pathTex.wrapT = THREE.RepeatWrapping;
     return pathTex;
@@ -680,7 +640,7 @@
   // progression du voyage le long du sentier (niveaux), partagée par tous les rubans
   const pathU = { value: 0 };
   function pathMaterial() {
-    const mat = toonMat({ color: '#ffffff', map: pathTexture(), transparent: true, depthWrite: false, roughness: 0.95,
+    const mat = toonMat({ color: '#ffffff', map: pathTexture(), transparent: true, alphaTest: 0.5, depthWrite: false,
       polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
     mat.onBeforeCompile = (sh) => {
       sh.uniforms.uDone = pathU;
@@ -688,13 +648,11 @@
       sh.fragmentShader = 'uniform float uDone;\nvarying float vAlong;\n' + sh.fragmentShader
         .replace('#include <map_fragment>', [
           '#include <map_fragment>',
-          // derrière Ulysse : dallage doré et lumineux ; devant : pierre grise, pointillés estompés
+          // derrière Ulysse : chemin doré et lumineux ; devant : sable clair
           'float lit = 1.0 - smoothstep(uDone - 0.05, uDone + 0.3, vAlong);',
-          'diffuseColor.rgb *= mix(vec3(0.8, 0.82, 0.84), vec3(1.1, 0.98, 0.74), lit);',
-          'float dash = smoothstep(0.38, 0.46, fract(vAlong * 1.6)) * (1.0 - smoothstep(0.88, 0.96, fract(vAlong * 1.6)));',
-          'diffuseColor.a *= mix(0.62 * mix(0.35, 1.0, dash), 1.0, lit);'
+          'diffuseColor.rgb *= mix(vec3(1.0), vec3(1.08, 0.92, 0.55), lit);'
         ].join('\n'))
-        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(0.16, 0.11, 0.03) * lit * diffuseColor.rgb;');
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(0.18, 0.12, 0.02) * lit * diffuseColor.rgb;');
     };
     return mat;
   }
@@ -755,7 +713,8 @@
     return geo;
   }
   const M4 = (x, y, z, ry, sx, sy, sz, rx, rz) => new THREE.Matrix4().compose(new THREE.Vector3(x || 0, y || 0, z || 0),
-    new THREE.Quaternion().setFromEuler(new THREE.Euler(rx || 0, ry || 0, rz || 0, 'YXZ')), new THREE.Vector3(sx || 1, sy || 1, sz || 1));
+    new THREE.Quaternion().setFromEuler(new THREE.Euler(rx || 0, ry || 0, rz || 0, 'YXZ')),
+    new THREE.Vector3(sx || 1, sy || (sy == null && sx) || 1, sz || (sz == null && sx) || 1)); // (une seule échelle : uniforme)
 
   // un tronçon de ponton : trois planches et deux pieux (géométrie partagée)
   let pierGeo = null, pierMat = null;
@@ -779,219 +738,774 @@
   }
 
   // ------------------------------------------------------------------
-  // Décors : arbres, rochers, colonnes, temple, fleurs, palmiers…
+  // Les îles de l'Odyssée. Chacune est dessinée comme une planche de dessin animé :
+  // une plage en anneau, un plateau d'herbe, UN village groupé autour d'une placette,
+  // UN bosquet (verger aligné ou rond d'arbres), UN monument lié à l'épisode, quelques
+  // massifs de fleurs. Tout est posé par règles (zones, anneaux, alignements), loin du
+  // sentier, puis fusionné en un seul maillage par île (un appel de dessin).
   // ------------------------------------------------------------------
-  const PROP = {
-    pin(m, rng) {
-      const g = new THREE.Group();
-      const s = 0.85 + rng() * 0.5;
-      const t = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 0.25, 5), m('#c4b39c'));
-      t.position.y = 0.12;
-      const a = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.62, 16), m('#97b6a0'));
-      a.position.y = 0.5;
-      const b = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.48, 16), m('#a9c4ad'));
-      b.position.y = 0.86;
-      g.add(t, a, b);
-      g.scale.setScalar(s);
-      return g;
-    },
-    olivier(m, rng) {
-      const g = new THREE.Group();
-      const t = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 0.42, 5), m('#bfae96'));
-      t.position.y = 0.21; t.rotation.z = (rng() - 0.5) * 0.3;
-      const c = new THREE.Mesh(new THREE.IcosahedronGeometry(0.38, 2), m('#b7c49a'));
-      c.position.y = 0.6; c.scale.y = 0.75;
-      g.add(t, c);
-      g.scale.setScalar(0.8 + rng() * 0.5);
-      return g;
-    },
-    buisson(m, rng) {
-      const g = new THREE.Group();
-      for (let k = 0; k < 3; k++) {
-        const b = new THREE.Mesh(new THREE.IcosahedronGeometry(0.16 + rng() * 0.1, 2), m(k % 2 ? '#b5cdb0' : '#a6c2a6'));
-        b.position.set((rng() - 0.5) * 0.3, 0.12, (rng() - 0.5) * 0.3);
-        g.add(b);
-      }
-      return g;
-    },
-    rocher(m, rng) {
-      const r = new THREE.Mesh(new THREE.IcosahedronGeometry(0.18 + rng() * 0.28, 1), m('#e4e1da'));
-      r.position.y = 0.08; r.rotation.set(rng() * 3, rng() * 3, rng() * 3); r.scale.y = 0.7;
-      return r;
-    },
-    colonne(m, rng) {
-      const g = new THREE.Group();
-      const h = rng() < 0.5 ? 0.35 + rng() * 0.5 : 1.1 + rng() * 0.3;
-      const base = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.08, 0.34), m('#f1eee8'));
-      base.position.y = 0.04;
-      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, h, 10), m('#f5f3ee'));
-      shaft.position.y = 0.08 + h / 2;
-      g.add(base, shaft);
-      if (h > 1) {
-        const cap = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.3), m('#f1eee8'));
-        cap.position.y = 0.12 + h;
-        g.add(cap);
-      } else {
-        const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.3, 10), m('#f5f3ee'));
-        drum.rotation.z = Math.PI / 2; drum.position.set(0.32, 0.12, 0.1);
-        g.add(drum);
-      }
-      return g;
-    },
-    temple(m) {
-      const g = new THREE.Group();
-      const base = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.16, 1.1), m('#efece6'));
-      base.position.y = 0.08;
-      g.add(base);
-      [[-0.55, -0.38], [0.55, -0.38], [-0.55, 0.38], [0.55, 0.38], [0, -0.38], [0, 0.38]].forEach(([x, z]) => {
-        const p = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.8, 8), m('#f6f4ef'));
-        p.position.set(x, 0.56, z);
-        g.add(p);
-      });
-      const roof = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.08, 1.1), m('#efece6'));
-      roof.position.y = 0.99;
-      const pediment = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 1.5, 3), m('#f3f0ea'));
-      pediment.rotation.z = Math.PI / 2; pediment.scale.set(1, 1, 0.38);
-      pediment.position.y = 1.18;
-      g.add(roof, pediment);
-      return g;
-    },
-    fleurs(m, rng) {
-      const g = new THREE.Group();
-      const palette = ['#f0c9c4', '#f3e3b8', '#d9cdee', '#ffffff', '#f4d2b6'];
-      const col = palette[Math.floor(rng() * palette.length)];
-      for (let k = 0; k < 5; k++) {
-        const f = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 5), m(col));
-        f.position.set((rng() - 0.5) * 0.4, 0.06, (rng() - 0.5) * 0.4);
-        g.add(f);
-      }
-      return g;
-    },
-    touffe(m, rng) {
-      const g = new THREE.Group();
-      for (let k = 0; k < 3; k++) {
-        const b = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.22 + rng() * 0.12, 4), m('#a8bf9f'));
-        b.position.set((k - 1) * 0.06, 0.12, (rng() - 0.5) * 0.05);
-        b.rotation.z = (k - 1) * 0.3;
-        g.add(b);
-      }
-      return g;
-    },
-    palmier(m, rng) {
-      const g = new THREE.Group();
+  // grass = [herbe, taches plus fraîches, hauteurs] ; roofs = toits du village ;
+  // tree = essence du bosquet ; animals = [espèce, nombre] ; landmark = monument
+  const ISLES = [
+    { id: 'troie', grass: ['#79d14a', '#8fdc55', '#b8e86a'], tree: 'olive', grove: 'orchard', roofs: ['#ee7a4d', '#f4a259'], flowers: ['#ff5d8f', '#ffd23f'], animals: ['sheep', 2], landmark: 'horse' },
+    { id: 'cicones', grass: ['#6fd04f', '#86dc5c', '#b5e86e'], tree: 'round', grove: 'ring', roofs: ['#3d8ee8', '#ee7a4d'], flowers: ['#ffd23f', '#ff7a5c'], animals: ['sheep', 3], landmark: 'market' },
+    { id: 'lotus', grass: ['#62d877', '#7de38a', '#b0ee8e'], tree: 'palm', grove: 'ring', roofs: ['#ff8fb1', '#3db8c9'], flowers: ['#ff8fc0', '#ffffff'], animals: null, landmark: 'lotus', beach: 'palms' },
+    { id: 'cyclope', grass: ['#8bd24e', '#a0dc5a', '#c4e874'], tree: 'pine', grove: 'ring', roofs: ['#d9824a', '#c96f45'], flowers: ['#ffd23f', '#ffffff'], animals: ['sheep', 6], landmark: 'cave' },
+    { id: 'eolie', grass: ['#7ad65e', '#93e070', '#bdec86'], tree: 'round', grove: 'orchard', roofs: ['#3d8ee8', '#5aa9f0'], flowers: ['#7ec8ff', '#ffffff'], animals: ['sheep', 2], landmark: 'windmills' },
+    { id: 'lestrygons', grass: ['#76cc55', '#8ed866', '#b2e47c'], tree: 'pine', grove: 'ring', roofs: ['#ee7a4d', '#d9824a'], flowers: ['#ff5d5d', '#ffd23f'], animals: null, landmark: 'cliffs' },
+    { id: 'circe', grass: ['#6fd67e', '#8be092', '#b5eca4'], tree: 'round', grove: 'ring', roofs: ['#c86fd6', '#ff8fb1'], flowers: ['#d68bff', '#ff8fc0'], animals: ['pig', 4], landmark: 'palace' },
+    { id: 'ombres', grass: ['#7fd6b4', '#97e0c4', '#c0ecd8'], tree: 'cypress', grove: 'orchard', roofs: ['#8a7fe0', '#a99cf0'], flowers: ['#c7b8ff', '#ffffff'], animals: null, landmark: 'portal' },
+    { id: 'sirenes', grass: ['#7ddc6c', '#96e57e', '#c0f09a'], tree: 'palm', grove: 'ring', roofs: ['#3db8c9', '#5ad1c9'], flowers: ['#ff8fc0', '#ffd23f'], animals: null, landmark: 'shells', beach: 'palms' },
+    { id: 'charybde', grass: ['#72d35c', '#8bde6c', '#b4ea86'], tree: 'pine', grove: 'ring', roofs: ['#3d8ee8', '#ee7a4d'], flowers: ['#7ec8ff', '#ffd23f'], animals: ['sheep', 2], landmark: 'whirlpool' },
+    { id: 'thrinacie', grass: ['#a2d94a', '#b6e25a', '#d6ee7a'], tree: 'olive', grove: 'orchard', roofs: ['#f4a259', '#ee7a4d'], flowers: ['#ffd23f', '#ff9f3d'], animals: ['cow', 4], landmark: 'sun' },
+    { id: 'ogygie', grass: ['#5fd884', '#7be396', '#aaeeb0'], tree: 'palm', grove: 'ring', roofs: ['#3db8c9', '#ff8fb1'], flowers: ['#ff8fc0', '#d68bff'], animals: null, landmark: 'grotto', beach: 'palms' },
+    { id: 'scherie', grass: ['#78d65c', '#90e06e', '#b8ec88'], tree: 'round', grove: 'orchard', roofs: ['#f2c14e', '#3d8ee8'], flowers: ['#ffd23f', '#ff5d8f'], animals: ['sheep', 2], landmark: 'palaceGold' },
+    { id: 'ithaque', grass: ['#80d251', '#97dd62', '#bfe97a'], tree: 'olive', grove: 'orchard', roofs: ['#ee7a4d', '#f4a259'], flowers: ['#ff5d8f', '#ffffff'], animals: ['sheep', 3], landmark: 'home' }
+  ];
+  const isleOf = (c) => ISLES[c % ISLES.length];
+  const SAND = '#ffe3a1', CLIFF = '#f4bf7f', WHITE = '#fffaf0', BLUE = '#3d7fe0', WOOD = '#b77a45', WOOD_D = '#8a5a30';
+
+  // bibliothèque de formes simples, non indexées (fusion rapide)
+  let GEO = null;
+  function geoLib() {
+    if (GEO) return GEO;
+    const ni = (g) => (g.index ? g.toNonIndexed() : g);
+    const tri = new THREE.Shape();
+    tri.moveTo(-0.5, 0); tri.lineTo(0.5, 0); tri.lineTo(0, 1); tri.lineTo(-0.5, 0);
+    const prism = new THREE.ExtrudeGeometry(tri, { depth: 1, bevelEnabled: false });
+    prism.translate(0, 0, -0.5); prism.rotateY(Math.PI / 2); // faîtage le long de x
+    const star = new THREE.Shape();
+    for (let k = 0; k < 10; k++) {
+      const a = Math.PI / 2 + k * Math.PI / 5, r = k % 2 ? 0.42 : 1;
+      if (k) star.lineTo(Math.cos(a) * r, Math.sin(a) * r); else star.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+    }
+    const starGeo = new THREE.ExtrudeGeometry(star, { depth: 0.25, bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.08, bevelSegments: 1 });
+    starGeo.translate(0, 0, -0.125);
+    GEO = {
+      box: ni(new THREE.BoxGeometry(1, 1, 1)),
+      cyl: ni(new THREE.CylinderGeometry(0.5, 0.5, 1, 14)),
+      cyl6: ni(new THREE.CylinderGeometry(0.5, 0.5, 1, 7)),
+      taper: ni(new THREE.CylinderGeometry(0.4, 0.5, 1, 12)),
+      cone: ni(new THREE.ConeGeometry(0.5, 1, 12)),
+      ball: ni(new THREE.IcosahedronGeometry(0.5, 1)),
+      rock: ni(new THREE.IcosahedronGeometry(0.5, 0)),
+      sphere: ni(new THREE.SphereGeometry(0.5, 12, 8)),
+      dome: ni(new THREE.SphereGeometry(0.5, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2)),
+      torus: ni(new THREE.TorusGeometry(0.5, 0.14, 6, 18)),
+      prism: ni(prism),
+      star: ni(starGeo)
+    };
+    return GEO;
+  }
+
+  // « kit » de construction : pièces colorées dans un repère qu'on peut emboîter
+  function kit() {
+    const parts = [];
+    let base = new THREE.Matrix4();
+    const k = {
+      parts,
+      add(geo, color, x, y, z, sx, sy, sz, ry, rx, rz) {
+        parts.push({ geo, color, m: base.clone().multiply(M4(x, y, z, ry, sx, sy == null ? sx : sy, sz == null ? sx : sz, rx, rz)) });
+        return k;
+      },
+      at(x, y, z, ry, s, fn) { const prev = base; base = prev.clone().multiply(M4(x, y, z, ry, s, s, s)); fn(); base = prev; return k; },
+      pt(x, y, z) { return new THREE.Vector3(x, y, z).applyMatrix4(base); },
+      rot() { return new THREE.Euler().setFromRotationMatrix(base, 'YXZ').y; }
+    };
+    return k;
+  }
+
+  // --- éléments de décor (chacun dessiné à l'origine, face vers +z) ---
+  function drawTree(k, type, rng) {
+    const G = geoLib();
+    const j = () => 0.9 + rng() * 0.2;
+    if (type === 'palm') {
       let x = 0, y = 0;
-      const lean = 0.05 + rng() * 0.05;
-      for (let k = 0; k < 5; k++) {
-        const s = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.065, 0.24, 6), m(k % 2 ? '#d8c6a8' : '#cdb998'));
-        s.position.set(x, y + 0.12, 0);
-        s.rotation.z = -lean * 2;
-        g.add(s);
-        x += lean; y += 0.23;
+      const lean = 0.06 + rng() * 0.05;
+      for (let i = 0; i < 6; i++) {
+        k.add(G.cyl, i % 2 ? '#c99a5e' : '#b5844a', x, y + 0.13, 0, 0.17 - i * 0.012, 0.27, 0.17 - i * 0.012, 0, 0, -lean * 1.6);
+        x += lean; y += 0.25;
       }
-      for (let k = 0; k < 6; k++) {
-        const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.62, 8), m('#a3c09f'));
-        const a = (k / 6) * Math.PI * 2;
-        leaf.position.set(x + Math.cos(a) * 0.22, y + 0.05, Math.sin(a) * 0.22);
-        leaf.rotation.set(Math.sin(a) * 1.2, 0, -Math.cos(a) * 1.2);
-        leaf.scale.z = 0.35;
-        g.add(leaf);
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2 + rng() * 0.3;
+        k.add(G.ball, i % 2 ? '#35c24a' : '#4cd65a', x + Math.sin(a) * 0.38, y + 0.02, Math.cos(a) * 0.38, 0.24, 0.07, 0.9, a, 0.42);
       }
-      return g;
+      [0, 2, 4].forEach((i) => k.add(G.sphere, '#8a5a2b', x + Math.cos(i) * 0.09, y - 0.08, Math.sin(i) * 0.09, 0.13));
+      return;
+    }
+    if (type === 'pine') {
+      k.add(G.cyl, WOOD, 0, 0.18, 0, 0.13, 0.36, 0.13);
+      k.add(G.cone, '#27a862', 0, 0.62, 0, 0.95 * j(), 0.75, 0.95);
+      k.add(G.cone, '#33bd70', 0, 1.0, 0, 0.74, 0.65, 0.74);
+      k.add(G.cone, '#45d17f', 0, 1.33, 0, 0.5, 0.55, 0.5);
+      return;
+    }
+    if (type === 'cypress') {
+      k.add(G.cyl, WOOD, 0, 0.12, 0, 0.12, 0.24, 0.12);
+      k.add(G.ball, '#24a05e', 0, 0.95, 0, 0.5, 1.6 * j(), 0.5);
+      k.add(G.ball, '#33b86c', 0.05, 1.12, 0.06, 0.34, 1.0, 0.34);
+      return;
+    }
+    if (type === 'olive') {
+      k.add(G.cyl, '#9c7352', 0, 0.22, 0, 0.16, 0.45, 0.16, 0, 0, 0.12);
+      k.add(G.cyl, '#9c7352', 0.06, 0.5, 0, 0.1, 0.3, 0.1, 0, 0, -0.4);
+      k.add(G.ball, '#98cf58', 0.1, 0.82, 0, 0.78 * j(), 0.5, 0.72);
+      k.add(G.ball, '#86c44c', -0.22, 0.74, 0.12, 0.5, 0.36, 0.5);
+      k.add(G.ball, '#aad968', 0.2, 0.95, -0.12, 0.46, 0.34, 0.46);
+      return;
+    }
+    // arbre rond (feuillus)
+    k.add(G.cyl, WOOD, 0, 0.26, 0, 0.15, 0.52, 0.15);
+    k.add(G.ball, '#3fbf45', 0, 0.82, 0, 0.82 * j());
+    k.add(G.ball, '#55d455', 0.2, 1.02, 0.08, 0.55);
+    k.add(G.ball, '#34b23c', -0.22, 0.92, -0.08, 0.55);
+  }
+  function drawBush(k, rng, col) {
+    const G = geoLib();
+    k.add(G.ball, col || '#43c64a', 0, 0.16, 0, 0.5, 0.38, 0.5);
+    k.add(G.ball, '#55d455', 0.22, 0.13, 0.06, 0.34, 0.28, 0.34);
+    k.add(G.ball, '#38b443', -0.2, 0.12, -0.05, 0.32, 0.26, 0.32);
+  }
+  function drawFlowers(k, palette, rng) {
+    const G = geoLib();
+    k.add(G.ball, '#4fcf55', 0, 0.06, 0, 0.62, 0.18, 0.62);
+    for (let i = 0; i < 7; i++) {
+      const a = i * 2.4 + rng(), r = i ? 0.2 + rng() * 0.08 : 0;
+      const x = Math.cos(a) * r, z = Math.sin(a) * r, h = 0.16 + rng() * 0.08;
+      const col = palette[i % palette.length];
+      k.add(G.cyl6, '#3aa846', x, h / 2, z, 0.025, h, 0.025);
+      k.add(G.sphere, col, x, h + 0.02, z, 0.13, 0.08, 0.13);
+      k.add(G.sphere, '#ffe14d', x, h + 0.05, z, 0.05);
+    }
+  }
+  function drawHouse(k, roof, style) {
+    const G = geoLib();
+    k.add(G.box, '#efe2cc', 0, 0.04, 0, 0.86, 0.08, 0.76);
+    k.add(G.box, WHITE, 0, 0.38, 0, 0.8, 0.68, 0.7);
+    k.add(G.box, BLUE, 0, 0.2, 0.36, 0.22, 0.36, 0.04);
+    k.add(G.sphere, '#ffd23f', 0.07, 0.2, 0.385, 0.03);
+    [-0.25, 0.25].forEach((x) => k.add(G.box, BLUE, x, 0.47, 0.36, 0.15, 0.15, 0.04));
+    k.add(G.box, BLUE, 0.41, 0.45, 0, 0.04, 0.15, 0.15);
+    k.add(G.box, '#ffffff', 0, 0.52, 0.37, 0.9, 0.025, 0.02);
+    if (style === 'dome') {
+      k.add(G.box, WHITE, 0, 0.74, 0, 0.84, 0.06, 0.74);
+      k.add(G.cyl, WHITE, 0, 0.8, 0, 0.42, 0.08, 0.42);
+      k.add(G.dome, roof, 0, 0.83, 0, 0.42, 0.42, 0.42);
+    } else {
+      k.add(G.prism, roof, 0, 0.71, 0, 0.98, 0.36, 0.86);
+      k.add(G.box, WHITE, 0.24, 0.92, -0.12, 0.1, 0.22, 0.1);
+    }
+  }
+  function drawFountain(k) {
+    const G = geoLib();
+    k.add(G.cyl, '#f6e4bf', 0, 0.02, 0, 1.9, 0.05, 1.9);
+    k.add(G.cyl, '#fff3dc', 0, 0.12, 0, 0.62, 0.2, 0.62);
+    k.add(G.cyl, '#47cfee', 0, 0.2, 0, 0.5, 0.06, 0.5);
+    k.add(G.cyl, '#fff3dc', 0, 0.36, 0, 0.1, 0.36, 0.1);
+    k.add(G.cyl, '#fff3dc', 0, 0.55, 0, 0.3, 0.06, 0.3);
+    k.add(G.ball, '#8fe6ff', 0, 0.63, 0, 0.14);
+  }
+  function drawColumn(k, h, col) {
+    const G = geoLib();
+    k.add(G.box, '#f3ead8', 0, 0.04, 0, 0.26, 0.08, 0.26);
+    k.add(G.cyl, col || '#ffffff', 0, 0.08 + h / 2, 0, 0.16, h, 0.16);
+    k.add(G.box, '#f3ead8', 0, 0.12 + h, 0, 0.26, 0.08, 0.26);
+  }
+  function drawRock(k, col, sx, sy, sz, ry) {
+    const G = geoLib();
+    k.add(G.rock, col || '#c9c1d8', 0, sy * 0.36, 0, sx, sy, sz, ry || 0);
+  }
+  function drawLighthouse(k) {
+    const G = geoLib();
+    k.add(G.taper, WHITE, 0, 0.7, 0, 0.5, 1.4, 0.5);
+    k.add(G.cyl, '#ff5d5d', 0, 0.55, 0, 0.47, 0.2, 0.47);
+    k.add(G.cyl, '#ff5d5d', 0, 1.05, 0, 0.43, 0.2, 0.43);
+    k.add(G.cyl, '#f3ead8', 0, 1.43, 0, 0.56, 0.06, 0.56);
+    k.add(G.cyl, '#ffe066', 0, 1.58, 0, 0.3, 0.26, 0.3);
+    k.add(G.cone, '#ff5d5d', 0, 1.82, 0, 0.42, 0.24, 0.42);
+  }
+  function drawPalace(k, wall, roof, trim) {
+    const G = geoLib();
+    k.add(G.box, '#fff3e0', 0, 0.06, 0, 2.0, 0.12, 1.3);
+    k.add(G.box, '#fff8ec', 0, 0.18, 0, 1.8, 0.12, 1.12);
+    k.add(G.box, wall, 0, 0.56, -0.08, 1.3, 0.66, 0.7);
+    k.add(G.box, BLUE, 0, 0.42, 0.28, 0.26, 0.4, 0.04);
+    [-0.75, -0.25, 0.25, 0.75].forEach((x) => k.at(x, 0.24, 0.42, 0, 1, () => drawColumn(k, 0.66)));
+    k.add(G.box, trim, 0, 1.02, 0, 1.9, 0.1, 1.2);
+    k.add(G.prism, roof, 0, 1.07, 0, 2.0, 0.42, 1.24);
+    k.add(G.sphere, '#ffd23f', 0, 1.5, 0, 0.14);
+  }
+
+  // --- monuments : un par île, liés à l'épisode de l'Odyssée (face vers le sentier) ---
+  const LANDMARKS = {
+    // Troie : le cheval de bois sur son chariot, devant un pan de remparts
+    horse(k) {
+      const G = geoLib();
+      k.add(G.box, '#f2d9a6', 0, 0.36, -0.95, 2.2, 0.72, 0.32);
+      [-0.9, -0.45, 0, 0.45, 0.9].forEach((x, i) => { if (i !== 3) k.add(G.box, '#f2d9a6', x, 0.82, -0.95, 0.26, 0.22, 0.34); });
+      k.add(G.box, '#e8c88c', -1.05, 0.55, -0.9, 0.4, 1.1, 0.42);
+      k.at(0, 0, 0.1, 0, 1, () => {
+        k.add(G.box, WOOD_D, 0, 0.26, 0, 1.25, 0.12, 0.6);
+        [[-0.45, 0.33], [0.45, 0.33], [-0.45, -0.33], [0.45, -0.33]].forEach(([x, z]) => k.add(G.cyl, '#7a4a26', x, 0.16, z, 0.32, 0.08, 0.32, 0, Math.PI / 2));
+        [[-0.32, 0.15], [0.32, 0.15], [-0.32, -0.15], [0.32, -0.15]].forEach(([x, z]) => k.add(G.cyl, '#d39553', x, 0.55, z, 0.14, 0.5, 0.14));
+        k.add(G.ball, '#dfa15c', 0, 0.98, 0, 1.15, 0.6, 0.55);
+        k.add(G.box, '#dfa15c', 0.42, 1.3, 0, 0.26, 0.6, 0.24, 0, 0, -0.45);
+        k.add(G.box, '#e6aa66', 0.66, 1.58, 0, 0.5, 0.26, 0.26, 0, 0, -0.1);
+        k.add(G.box, WOOD_D, 0.36, 1.48, 0, 0.14, 0.4, 0.27, 0, 0, -0.45);
+        [-0.07, 0.07].forEach((z) => { k.add(G.cone, '#dfa15c', 0.52, 1.8, z, 0.1, 0.18, 0.1); k.add(G.sphere, '#2b2b3a', 0.74, 1.64, z * 2.1, 0.07); });
+        k.add(G.cone, WOOD_D, -0.6, 0.95, 0, 0.12, 0.45, 0.12, 0, 0, 1.0);
+      });
+    },
+    // Ismaros (Cicones) : marché aux étals rayés et aux paniers de fruits
+    market(k, ctx) {
+      const G = geoLib();
+      [[-0.75, 0.1, 0.35, '#ff6b6b'], [0, -0.15, 0, '#ffb43d'], [0.75, 0.1, -0.35, '#3d8ee8']].forEach(([x, z, ry, col]) => k.at(x, 0, z, ry, 1, () => {
+        k.add(G.box, '#d39553', 0, 0.18, 0, 0.62, 0.36, 0.38);
+        [-0.28, 0.28].forEach((px) => k.add(G.cyl6, WOOD_D, px, 0.4, -0.16, 0.05, 0.8, 0.05));
+        for (let i = 0; i < 4; i++) k.add(G.box, i % 2 ? '#ffffff' : col, -0.24 + i * 0.16, 0.8, 0, 0.16, 0.05, 0.5, 0, 0.3);
+        ['#ffa53d', '#ff5d5d', '#8bd34a'].forEach((fc, i) => k.add(G.sphere, fc, -0.18 + i * 0.18, 0.4, 0.06, 0.14));
+      }));
+      [-0.3, 0.3].forEach((x) => { k.add(G.sphere, '#e0884d', x, 0.2, 0.75, 0.32, 0.38, 0.32); k.add(G.cyl, '#e0884d', x, 0.42, 0.75, 0.12, 0.14, 0.12); });
+    },
+    // Lotophages : un étang de lotus roses et de nénuphars
+    lotus(k, ctx) {
+      const G = geoLib(), rng = ctx.rng;
+      k.add(G.cyl, '#fff0c8', 0, 0.03, 0, 2.3, 0.08, 2.0);
+      k.add(G.cyl, '#3fd0ef', 0, 0.06, 0, 2.0, 0.06, 1.72);
+      for (let i = 0; i < 9; i++) {
+        const a = i * 2.3, r = 0.25 + (i % 3) * 0.22;
+        const x = Math.cos(a) * r * 1.1, z = Math.sin(a) * r * 0.9;
+        k.add(G.cyl6, '#45c552', x, 0.1, z, 0.34, 0.02, 0.34, a);
+        if (i % 2 === 0) k.at(x, 0.12, z, a, 1, () => {
+          for (let p = 0; p < 6; p++) { const b = p * Math.PI / 3; k.add(G.sphere, p % 2 ? '#ff9cc8' : '#ff7fb6', Math.sin(b) * 0.07, 0.05, Math.cos(b) * 0.07, 0.07, 0.07, 0.16, b, -0.6); }
+          k.add(G.sphere, '#ffe14d', 0, 0.08, 0, 0.08);
+        });
+      }
+      [[1.0, 0.5], [-0.95, -0.55], [-1.05, 0.4]].forEach(([x, z]) => { for (let i = 0; i < 3; i++) { k.add(G.cyl6, '#3aa846', x + i * 0.06, 0.25, z, 0.03, 0.5, 0.03); k.add(G.sphere, '#9c6a3a', x + i * 0.06, 0.5, z, 0.05, 0.14, 0.05); } });
+    },
+    // Cyclopes : la grotte de Polyphème, son gros rocher
+    cave(k) {
+      const G = geoLib(), rock = '#c3b6d6';
+      k.add(G.ball, rock, 0, 0.5, -0.2, 2.3, 1.7, 1.7);
+      k.add(G.ball, '#b5a7cb', 0.85, 0.32, 0.05, 1.2, 1.0, 1.2);
+      k.add(G.ball, '#cfc3df', -0.85, 0.34, -0.05, 1.3, 1.1, 1.2);
+      k.add(G.ball, '#6fd04f', 0, 1.3, -0.25, 1.4, 0.3, 1.1);
+      k.add(G.cyl, '#3b2f55', 0, 0.2, 0.6, 1.0, 0.06, 1.1, 0, Math.PI / 2 - 0.15);
+      k.add(G.rock, '#d4c9e3', 0.75, 0.25, 0.85, 0.6, 0.5, 0.6, 0.6);
+      k.add(G.cyl, '#8a5a30', -0.75, 0.32, 0.75, 0.12, 0.65, 0.12, 0, 0.2, 0.3);
+    },
+    // Éolie : deux moulins à vent et un muret de bronze
+    windmills(k, ctx) {
+      const G = geoLib();
+      k.add(G.box, '#e3a043', 0, 0.2, -0.85, 2.3, 0.4, 0.18);
+      k.add(G.box, '#ffcb5c', 0, 0.42, -0.85, 2.36, 0.06, 0.24);
+      [[-0.6, 0], [0.65, 0.15]].forEach(([x, z]) => k.at(x, 0, z, 0, 1, () => {
+        k.add(G.taper, WHITE, 0, 0.6, 0, 0.66, 1.2, 0.66);
+        k.add(G.cone, '#ee7a4d', 0, 1.4, 0, 0.82, 0.45, 0.82);
+        k.add(G.box, BLUE, 0, 0.18, 0.31, 0.18, 0.32, 0.04);
+        ctx.sails.push({ p: k.pt(0, 1.08, 0.36), ry: k.rot() });
+      }));
+    },
+    // Lestrygons : hautes aiguilles de falaise et phare du port
+    cliffs(k) {
+      const G = geoLib();
+      [[-0.55, -0.2, 0.95, 2.4], [0.25, -0.5, 0.8, 1.8], [-0.05, 0.35, 0.6, 1.1]].forEach(([x, z, w, h]) => {
+        k.add(G.rock, '#f0b27a', x, h * 0.42, z, w, h, w, x * 3);
+        k.add(G.ball, '#6fd04f', x, h * 0.8, z, w * 0.6, 0.18, w * 0.6);
+      });
+      k.at(0.8, 0, 0.35, 0, 0.85, () => drawLighthouse(k));
+    },
+    // Circé : palais rose, jardin de haies et de fleurs (les cochons gambadent autour)
+    palace(k, ctx) {
+      const G = geoLib();
+      k.at(0, 0, -0.25, 0, 1.0, () => drawPalace(k, '#ffe0ef', '#d96bd6', '#ffd6ea'));
+      [-0.75, 0.75].forEach((x) => { k.add(G.box, '#3fbf45', x, 0.16, 0.75, 0.75, 0.32, 0.26); k.add(G.ball, '#3fbf45', x, 0.33, 0.75, 0.75, 0.12, 0.26); });
+      [-0.75, 0.75].forEach((x) => k.at(x, 0.3, 0.75, 0, 0.6, () => drawFlowers(k, ctx.isle.flowers, ctx.rng)));
+    },
+    // Pays des Ombres : un portique de pierre mauve, une lueur douce, des lanternes
+    portal(k, ctx) {
+      const G = geoLib();
+      k.add(G.cyl, '#efe6ff', 0, 0.03, 0, 2.2, 0.06, 1.6);
+      [-0.55, 0.55].forEach((x) => { k.add(G.cyl, '#d9cff5', x, 0.65, 0, 0.26, 1.3, 0.26); k.add(G.box, '#c9bdf0', x, 0.05, 0, 0.34, 0.1, 0.34); });
+      k.add(G.box, '#c9bdf0', 0, 1.36, 0, 1.5, 0.2, 0.34);
+      k.add(G.prism, '#b3a3ee', 0, 1.46, 0, 1.5, 0.28, 0.36);
+      k.add(G.cyl, '#cbb8ff', 0, 0.68, 0, 0.92, 0.04, 1.24, 0, Math.PI / 2);
+      [[-1.0, 0.55], [1.0, 0.55]].forEach(([x, z]) => {
+        k.add(G.cyl6, '#8a7fe0', x, 0.3, z, 0.06, 0.6, 0.06);
+        k.add(G.ball, '#fff2a8', x, 0.68, z, 0.2);
+      });
+      ctx.mist.push(k.pt(0, 0.7, 0.3), k.pt(-1.3, 0.4, -0.4), k.pt(1.3, 0.45, -0.3), k.pt(0.2, 0.35, 1.2));
+    },
+    // Sirènes : rochers ronds, grands coquillages nacrés, étoiles de mer
+    shells(k) {
+      const G = geoLib();
+      drawRock(k, '#c9c1d8', 1.6, 1.1, 1.3, 0.3);
+      k.at(-0.7, 0, -0.2, 0.5, 1, () => drawRock(k, '#d6cfe3', 0.8, 0.6, 0.7));
+      k.at(0.75, 0, -0.1, 1.2, 1, () => drawRock(k, '#bdb4cf', 0.7, 0.5, 0.6));
+      const shell = (x, z, ry, s, col) => k.at(x, 0.02, z, ry, s, () => {
+        for (let i = 0; i < 7; i++) k.add(G.sphere, i % 2 ? col : '#ffffff', 0, 0.28, 0.02, 0.12, 0.62, 0.08, 0, 0, -0.9 + i * 0.3);
+        k.add(G.sphere, '#ffffff', 0, 0.05, 0.02, 0.16, 0.1, 0.1);
+        k.add(G.sphere, '#fff7fb', 0, 0.12, 0.12, 0.12);
+      });
+      shell(-0.3, 0.6, 0.2, 1.6, '#ffb3c9');
+      shell(0.55, 0.7, -0.3, 1.2, '#ffd0a8');
+      [[0.15, 0.95, 0.3], [-0.75, 0.6, 1.1]].forEach(([x, z, r]) => k.at(x, 0.03, z, r, 0.2, () => k.add(G.star, '#ff8a3d', 0, 0, 0, 1, 1, 1, 0, -Math.PI / 2)));
+    },
+    // Charybde et Scylla : le rocher de Scylla et sa grotte (le tourbillon tourne au large)
+    whirlpool(k, ctx) {
+      const G = geoLib();
+      k.add(G.rock, '#c3b6d6', 0, 0.85, -0.1, 1.3, 2.2, 1.2, 0.4);
+      k.add(G.rock, '#b5a7cb', 0.55, 0.4, 0.2, 0.9, 1.0, 0.9, 1.1);
+      k.add(G.cyl, '#3b2f55', 0.0, 0.55, 0.5, 0.42, 0.05, 0.5, 0, Math.PI / 2 - 0.2);
+      k.add(G.ball, '#6fd04f', 0, 1.75, -0.1, 0.6, 0.2, 0.6);
+      ctx.whirl = true;
+    },
+    // Thrinacie : la colonne du Soleil, au milieu du pré clos des vaches d'Hélios
+    sun(k, ctx) {
+      const G = geoLib();
+      k.add(G.cyl, '#fff3e0', 0, 0.55, 0, 0.26, 1.1, 0.26);
+      k.add(G.box, '#ffe8c0', 0, 0.06, 0, 0.5, 0.12, 0.5);
+      k.at(0, 1.42, 0, 0, 1, () => {
+        k.add(G.cyl, '#ffc531', 0, 0, 0, 0.62, 0.12, 0.62, 0, Math.PI / 2);
+        for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6; k.add(G.cone, '#ffa21f', Math.cos(a) * 0.44, Math.sin(a) * 0.44, 0, 0.12, 0.24, 0.06, 0, 0, a - Math.PI / 2); }
+        [-0.1, 0.1].forEach((x) => k.add(G.sphere, '#7a4a10', x, 0.06, 0.07, 0.05));
+        k.add(G.torus, '#7a4a10', 0, -0.06, 0.06, 0.18, 0.12, 0.12, 0, 0, Math.PI);
+      });
+      for (let i = 0; i < 18; i++) { // enclos : piquets et lisses
+        const a = (i / 18) * Math.PI * 2;
+        if (Math.cos(a) > 0.9) continue; // une entrée, côté sentier
+        const x = Math.sin(a) * 1.45, z = Math.cos(a) * 1.45;
+        k.add(G.cyl6, '#c98b4f', x, 0.17, z, 0.07, 0.34, 0.07);
+        const b = a + Math.PI / 18;
+        if (Math.cos(b + Math.PI / 18) <= 0.9) k.add(G.box, '#dba066', Math.sin(b) * 1.45, 0.22, Math.cos(b) * 1.45, 0.06, 0.05, 0.52, b + Math.PI / 2);
+      }
+    },
+    // Ogygie : la grotte de Calypso, ses vignes et sa petite source
+    grotto(k, ctx) {
+      const G = geoLib(), rock = '#e8c9a0';
+      k.add(G.ball, rock, -0.72, 0.6, -0.1, 0.85, 1.4, 0.9);
+      k.add(G.ball, rock, 0.72, 0.6, -0.1, 0.85, 1.4, 0.9);
+      k.add(G.ball, '#f0d5b0', 0, 1.25, -0.1, 2.1, 0.62, 1.0);
+      k.add(G.box, '#3c5c5a', 0, 0.45, -0.35, 0.8, 0.9, 0.1);
+      k.add(G.ball, '#5ad455', 0, 1.52, -0.1, 1.7, 0.26, 0.8);
+      for (let i = 0; i < 7; i++) {
+        const x = -0.6 + i * 0.2, h = 0.3 + (i % 3) * 0.14;
+        k.add(G.cyl6, '#2fae45', x, 1.15 - h / 2, 0.35, 0.03, h, 0.03);
+        k.add(G.ball, i % 2 ? '#4cd65a' : '#ff8fc0', x, 1.15 - h, 0.35, 0.12);
+      }
+      k.add(G.cyl, '#fff0c8', 0, 0.03, 0.85, 1.1, 0.06, 0.8);
+      k.add(G.cyl, '#3fd0ef', 0, 0.05, 0.85, 0.94, 0.06, 0.66);
+    },
+    // Schérie : le palais d'Alcinoos au toit d'or, bannières bleues
+    palaceGold(k) {
+      const G = geoLib();
+      k.at(0, 0, -0.15, 0, 0.95, () => drawPalace(k, WHITE, '#ffc531', '#ffe8a8'));
+      [-1.1, 1.1].forEach((x) => { k.add(G.cyl6, WOOD_D, x, 0.75, 0.4, 0.05, 1.5, 0.05); k.add(G.box, BLUE, x + 0.2, 1.3, 0.4, 0.36, 0.26, 0.03); });
+    },
+    // Ithaque : la maison d'Ulysse, son grand olivier et Argos le chien fidèle
+    home(k, ctx) {
+      const G = geoLib();
+      k.add(G.box, '#efe2cc', 0, 0.05, -0.2, 1.7, 0.1, 1.2);
+      k.add(G.box, WHITE, 0, 0.5, -0.25, 1.5, 0.84, 1.0);
+      k.add(G.prism, '#ee7a4d', 0, 0.92, -0.25, 1.7, 0.5, 1.2);
+      k.add(G.box, BLUE, 0, 0.27, 0.26, 0.3, 0.5, 0.04);
+      [-0.45, 0.45].forEach((x) => { k.add(G.box, BLUE, x, 0.6, 0.26, 0.2, 0.2, 0.04); k.at(x, 0, 0.42, 0, 0.9, () => drawColumn(k, 0.78)); });
+      k.add(G.box, '#efe2cc', 0, 0.94, 0.42, 1.3, 0.08, 0.3);
+      k.at(-1.15, 0, -0.45, 0.4, 1.5, () => drawTree(k, 'olive', ctx.rng));
+      k.at(0.55, 0, 0.75, -0.6, 1, () => { // Argos
+        k.add(G.ball, '#c98b4f', 0, 0.2, 0, 0.36, 0.22, 0.2);
+        k.add(G.ball, '#c98b4f', 0.2, 0.32, 0, 0.2);
+        k.add(G.ball, '#8a5a30', 0.2, 0.36, 0.08, 0.06, 0.14, 0.04);
+        k.add(G.ball, '#8a5a30', 0.2, 0.36, -0.08, 0.06, 0.14, 0.04);
+        k.add(G.sphere, '#2b2b3a', 0.31, 0.3, 0, 0.05);
+        [[-0.1, 0.06], [0.1, 0.06], [-0.1, -0.06], [0.1, -0.06]].forEach(([x, z]) => k.add(G.cyl6, '#c98b4f', x, 0.07, z, 0.05, 0.14, 0.05));
+        k.add(G.cyl6, '#c98b4f', -0.2, 0.26, 0, 0.04, 0.18, 0.04, 0, 0, 0.8);
+      });
     }
   };
 
-  // composition de chaque ambiance : [type, nombre, distance minimale au sentier]
-  const SCENES = {
-    pinede: [['pin', 16, 0.8], ['rocher', 6, 0.6], ['buisson', 5, 0.6], ['touffe', 12, 0.45], ['fleurs', 6, 0.45]],
-    ruines: [['temple', 1, 1.3], ['colonne', 7, 0.7], ['olivier', 7, 0.8], ['rocher', 4, 0.6], ['touffe', 8, 0.45], ['fleurs', 5, 0.45]],
-    jardin: [['buisson', 10, 0.6], ['olivier', 6, 0.8], ['fleurs', 18, 0.45], ['touffe', 8, 0.45], ['rocher', 3, 0.6]],
-    dunes: [['palmier', 6, 0.8], ['rocher', 9, 0.6], ['touffe', 14, 0.45], ['colonne', 2, 0.7], ['fleurs', 3, 0.45]]
+  // --- animaux : corps fusionné + tête à part (elle broute) ---
+  const ANIMALS = {
+    sheep(k, h) {
+      const G = geoLib();
+      if (h) {
+        k.add(G.ball, '#4a4458', 0, 0, 0, 0.2, 0.18, 0.17);
+        [-1, 1].forEach((s) => { k.add(G.sphere, '#4a4458', -0.02, 0.06, s * 0.1, 0.05, 0.03, 0.09); k.add(G.sphere, '#ffffff', 0.08, 0.03, s * 0.045, 0.045); k.add(G.sphere, '#1e1b26', 0.1, 0.03, s * 0.045, 0.022); });
+        k.add(G.ball, '#ffffff', -0.04, 0.09, 0, 0.13);
+        return;
+      }
+      [[-0.1, -0.07], [0.1, -0.07], [-0.1, 0.07], [0.1, 0.07]].forEach(([x, z]) => k.add(G.cyl6, '#4a4458', x, 0.08, z, 0.05, 0.16, 0.05));
+      k.add(G.ball, '#ffffff', 0, 0.25, 0, 0.42, 0.3, 0.32);
+      [[0.12, 0.3, 0.08], [-0.12, 0.3, -0.08], [0.0, 0.34, 0.0], [-0.14, 0.26, 0.1], [0.12, 0.26, -0.1]].forEach(([x, y, z]) => k.add(G.ball, '#f6f4fb', x, y, z, 0.22));
+    },
+    pig(k, h) {
+      const G = geoLib();
+      if (h) {
+        k.add(G.ball, '#ffb3c7', 0, 0, 0, 0.24, 0.22, 0.22);
+        k.add(G.cyl, '#ff8fb0', 0.12, -0.01, 0, 0.11, 0.06, 0.11, 0, 0, Math.PI / 2);
+        [-1, 1].forEach((s) => { k.add(G.cone, '#ff9cb8', 0, 0.12, s * 0.07, 0.08, 0.09, 0.05); k.add(G.sphere, '#1e1b26', 0.09, 0.05, s * 0.05, 0.03); });
+        return;
+      }
+      [[-0.1, -0.07], [0.1, -0.07], [-0.1, 0.07], [0.1, 0.07]].forEach(([x, z]) => k.add(G.cyl6, '#ff9cb8', x, 0.07, z, 0.06, 0.14, 0.06));
+      k.add(G.ball, '#ffb3c7', 0, 0.22, 0, 0.46, 0.3, 0.3);
+      k.add(G.torus, '#ff9cb8', -0.23, 0.26, 0, 0.06, 0.06, 0.06, 0, 0, Math.PI / 2);
+    },
+    cow(k, h) {
+      const G = geoLib();
+      if (h) {
+        k.add(G.ball, '#f2a541', 0, 0, 0, 0.26, 0.24, 0.22);
+        k.add(G.ball, '#ffd9c2', 0.1, -0.05, 0, 0.14, 0.12, 0.17);
+        [-1, 1].forEach((s) => { k.add(G.cone, '#fff3d6', -0.02, 0.14, s * 0.08, 0.04, 0.12, 0.04, 0, s * 0.5); k.add(G.sphere, '#1e1b26', 0.08, 0.05, s * 0.06, 0.03); });
+        return;
+      }
+      [[-0.14, -0.08], [0.14, -0.08], [-0.14, 0.08], [0.14, 0.08]].forEach(([x, z]) => k.add(G.cyl6, '#e08a2a', x, 0.1, z, 0.07, 0.2, 0.07));
+      k.add(G.ball, '#f2a541', 0, 0.32, 0, 0.56, 0.34, 0.32);
+      k.add(G.ball, '#ffffff', 0.05, 0.38, 0.1, 0.2, 0.16, 0.14);
+      k.add(G.ball, '#ffffff', -0.14, 0.34, -0.1, 0.18, 0.14, 0.14);
+      k.add(G.cyl6, '#e08a2a', -0.28, 0.3, 0, 0.03, 0.22, 0.03, 0, 0, 0.5);
+    }
   };
+  const animalGeo = {};
+  let animalMat = null;
+  function animalGeos(kind) {
+    if (!animalGeo[kind]) {
+      const b = kit(), h = kit();
+      ANIMALS[kind](b, false); ANIMALS[kind](h, true);
+      animalGeo[kind] = { body: mergeParts(b.parts), head: mergeParts(h.parts), hx: kind === 'cow' ? 0.32 : 0.26, hy: kind === 'cow' ? 0.4 : kind === 'pig' ? 0.27 : 0.31 };
+    }
+    return animalGeo[kind];
+  }
+  function makeAnimal(ch, kind, home) {
+    animalMat = animalMat || toonMat({ color: '#ffffff', vertexColors: true });
+    const G = animalGeos(kind);
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(G.body, animalMat);
+    const head = new THREE.Mesh(G.head, animalMat);
+    head.position.set(G.hx, G.hy, 0);
+    body.castShadow = head.castShadow = true;
+    body.userData.keepGeo = head.userData.keepGeo = true;
+    g.add(body, head);
+    g.scale.setScalar(kind === 'cow' ? 1.05 : 1.1);
+    const a = ch.rng() * Math.PI * 2, d = home.r * 0.6 * ch.rng();
+    const x = home.x + Math.cos(a) * d, z = home.z + Math.sin(a) * d;
+    g.userData = { x, z, tx: x, tz: z, wait: ch.rng() * 4, hop: 0, head, hy: G.hy, home };
+    g.rotation.y = ch.rng() * 6;
+    ch.group.add(g);
+    return g;
+  }
+  function updateSheep(ch, s, dt, t) {
+    const u = s.userData;
+    const dx = u.tx - u.x, dz = u.tz - u.z, d = Math.hypot(dx, dz);
+    if (d < 0.05) {
+      u.wait -= dt;
+      u.head.position.y = u.hy - (Math.sin(t * 2 + u.x) > 0.3 ? 0.1 : 0); // il broute
+      if (u.wait <= 0) { // nouvelle destination, dans son pré, loin du sentier
+        const H = u.home;
+        for (let k = 0; k < 10; k++) {
+          const a = Math.random() * Math.PI * 2, r = Math.random() * H.r;
+          const nx = H.x + Math.cos(a) * r, nz = H.z + Math.sin(a) * r;
+          if (Math.hypot(nx - H.x, nz - H.z) > (H.inner || 0) && distToPath(ch, nx, nz) > 0.75) { u.tx = nx; u.tz = nz; break; }
+        }
+        u.wait = 2 + Math.random() * 5;
+      }
+    } else {
+      const step = Math.min(d, dt * 0.45);
+      u.x += (dx / d) * step; u.z += (dz / d) * step;
+      u.hop += dt * 9;
+      u.head.position.y = u.hy;
+      s.rotation.y = Math.atan2(-dz, dx);
+    }
+    s.position.set(u.x, heightLocal(ch, u.x, u.z) + (d >= 0.05 ? Math.abs(Math.sin(u.hop)) * 0.05 : 0), u.z);
+  }
 
-  // ------------------------------------------------------------------
-  // Modèles 3D (CC0 : Kenney Nature Kit, Quaternius) chargés en arrière-plan.
-  // Tant qu'ils ne sont pas là (ou si le chargement échoue, hors ligne…), le monde
-  // procédural ci-dessus sert de décor. Une fois chargés, chaque île est redécorée :
-  // tous ses modèles sont fusionnés en un seul maillage à couleurs de sommets
-  // (un seul appel de dessin par île), avec le même ombrage « cartoon ».
-  // ------------------------------------------------------------------
+  // petite barque de pêche (géométrie partagée, une couleur de coque par variante)
+  const boatGeos = {};
+  function fishingBoatGeo(hull) {
+    if (boatGeos[hull]) return boatGeos[hull];
+    const parts = [];
+    const shell = new THREE.SphereGeometry(0.5, 14, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
+    parts.push({ geo: shell, color: '#f1ede4', m: M4(0, 0.16, 0, 0, 0.32, 0.36, 1) });
+    parts.push({ geo: new THREE.TorusGeometry(0.5, 0.04, 5, 20), color: hull, m: M4(0, 0.15, 0, 0, 0.33, 1, 1.02, Math.PI / 2) });
+    parts.push({ geo: new THREE.BoxGeometry(0.22, 0.03, 0.5), color: '#b08a64', m: M4(0, 0.12, 0) });
+    parts.push({ geo: new THREE.CylinderGeometry(0.014, 0.014, 0.75, 5), color: '#8a6a4c', m: M4(0, 0.5, 0.08) });
+    const sail = new THREE.BufferGeometry();
+    sail.setAttribute('position', new THREE.Float32BufferAttribute([0, 0.2, 0.1, 0, 0.85, 0.09, 0, 0.22, -0.32, 0, 0.2, 0.1, 0, 0.22, -0.32, 0, 0.85, 0.09], 3));
+    sail.computeVertexNormals();
+    parts.push({ geo: sail, color: '#f8f1e2', m: M4(0.01, 0, 0) });
+    boatGeos[hull] = mergeParts(parts);
+    return boatGeos[hull];
+  }
+  let boatMat = null;
+  function fishingBoat(hull) {
+    boatMat = boatMat || toonMat({ color: '#ffffff', vertexColors: true, roughness: 0.8, side: THREE.DoubleSide });
+    const m = new THREE.Mesh(fishingBoatGeo(hull), boatMat);
+    m.castShadow = true;
+    m.userData.keepGeo = true;
+    return m;
+  }
+
+  // ailes de moulin (géométrie partagée)
+  let sailGeo = null;
+  function millSails() {
+    if (!sailGeo) {
+      const parts = [];
+      for (let k = 0; k < 4; k++) {
+        const ang = k * Math.PI / 2;
+        parts.push({ geo: geoLib().box, color: WOOD_D, m: new THREE.Matrix4().makeRotationZ(ang).multiply(M4(0, 0.31, 0, 0, 0.04, 0.62, 0.03)) });
+        parts.push({ geo: geoLib().box, color: k % 2 ? '#ffffff' : '#ff8f6b', m: new THREE.Matrix4().makeRotationZ(ang).multiply(M4(0.12, 0.38, 0, 0, 0.2, 0.48, 0.015)) });
+      }
+      parts.push({ geo: geoLib().sphere, color: '#ee7a4d', m: M4(0, 0, 0.02, 0, 0.14) });
+      sailGeo = mergeParts(parts);
+    }
+    return sailGeo;
+  }
+
+  // tourbillon de Charybde : spirale peinte qui tourne au ras de l'eau
+  let whirlTex = null;
+  function whirlTexture() {
+    return whirlTex || (whirlTex = canvasTexture(128, 128, (g) => {
+      g.clearRect(0, 0, 128, 128);
+      g.translate(64, 64);
+      for (let arm = 0; arm < 3; arm++) {
+        g.beginPath();
+        for (let i = 0; i <= 60; i++) {
+          const t = i / 60, a = arm * Math.PI * 2 / 3 + t * Math.PI * 3, r = 6 + t * 56;
+          if (i) g.lineTo(Math.cos(a) * r, Math.sin(a) * r); else g.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+        }
+        g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 7; g.lineCap = 'round'; g.stroke();
+      }
+      const grd = g.createRadialGradient(0, 0, 0, 0, 0, 64);
+      grd.addColorStop(0, 'rgba(10,80,140,.75)'); grd.addColorStop(0.5, 'rgba(30,140,200,.35)'); grd.addColorStop(1, 'rgba(30,140,200,0)');
+      g.globalCompositeOperation = 'destination-over';
+      g.fillStyle = grd; g.fillRect(-64, -64, 128, 128);
+    }));
+  }
+
+  // point le plus proche du sentier : distance et côté (+1 / -1)
+  function pathSide(ch, x, z) {
+    const pts = ch.pathPts;
+    let best = Infinity, side = 1, px = 0, pz = 0;
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const abx = b.x - a.x, abz = b.z - a.z;
+      const t = Math.max(0, Math.min(1, ((x - a.x) * abx + (z - a.z) * abz) / (abx * abx + abz * abz || 1)));
+      const qx = a.x + abx * t, qz = a.z + abz * t, d = Math.hypot(qx - x, qz - z);
+      if (d < best) { best = d; px = qx; pz = qz; side = abx * (z - qz) - abz * (x - qx) > 0 ? 1 : -1; }
+    }
+    return { d: best, side, px, pz };
+  }
+
+  // Plan de l'île : on choisit les zones (monument, village, bosquet, pré, massifs) sur une
+  // grille de points candidats, en gardant une large marge de chaque côté du sentier.
+  function planIsland(ch) {
+    const R = ch.r, rng = C.makeRng('plan:' + ch.c);
+    const cand = [];
+    for (let x = -R; x <= R; x += 0.3) for (let z = -R; z <= R; z += 0.3) {
+      const r = Math.hypot(x, z);
+      if (r > R * 0.8) continue;
+      const ps = pathSide(ch, x, z);
+      cand.push({ x, z, r, d: ps.d, side: ps.side, px: ps.px, pz: ps.pz, j: rng() * 0.3 });
+    }
+    const occ = [{ x: ch.gateLocal.x, z: ch.gateLocal.z, r: 1.1 }];
+    if (ch.harborLand) occ.push(ch.harborLand);
+    ch.nodes.forEach((n) => occ.push({ x: n.local.x, z: n.local.z, r: 0.6 }));
+    const pick = (need, prefSide, gap) => {
+      for (const s of [1, 0.85, 0.7]) {
+        const rr = need * s;
+        let best = null, bs = -Infinity;
+        cand.forEach((c) => {
+          if (c.d < rr + (gap == null ? 0.6 : gap)) return;
+          if (c.r + rr * 0.85 > R * 0.86) return;
+          if (occ.some((o) => Math.hypot(o.x - c.x, o.z - c.z) < o.r + rr + 0.25)) return;
+          const sc = Math.min(c.d, 2.6) + (prefSide && c.side === prefSide ? 3 : 0) + c.j - c.r * 0.08;
+          if (sc > bs) { bs = sc; best = c; }
+        });
+        if (best) {
+          const o = Object.assign({}, best, { s, rad: rr });
+          occ.push({ x: o.x, z: o.z, r: rr });
+          // orientation : face au sentier
+          o.ry = Math.atan2(best.px - best.x, best.pz - best.z);
+          return o;
+        }
+      }
+      return null;
+    };
+    const plan = {};
+    plan.landmark = pick(1.5, 0, 0.6);
+    plan.village = pick(1.55, plan.landmark ? -plan.landmark.side : 0, 0.6);
+    plan.grove = pick(1.05, 0, 0.6);
+    plan.pasture = pick(0.9, 0, 0.7);
+    plan.flowers = [];
+    for (let i = 0; i < 4; i++) { const f = pick(0.36, 0, 0.75); if (f) plan.flowers.push(f); }
+    plan.bushes = [];
+    for (let i = 0; i < 3; i++) { const b = pick(0.42, 0, 0.8); if (b) plan.bushes.push(b); }
+    plan.lone = [];
+    for (let i = 0; i < 3; i++) { const t = pick(0.5, 0, 1.0); if (t) plan.lone.push(t); }
+    return plan;
+  }
+
+  // matériau du décor fusionné d'une île (il s'estompe avec l'île dans la brume)
+  function decorMaterial(ch) {
+    if (!ch.decorMat) {
+      ch.decorMat = toonMat({ color: '#ffffff', vertexColors: true, transparent: true });
+      ch.fadeMats.push(ch.decorMat);
+    }
+    return ch.decorMat;
+  }
+
+  function decorate(ch) {
+    const isle = ch.isle, R = ch.r;
+    const rng = C.makeRng('decor:' + ch.c);
+    const decor = new THREE.Group();
+    ch.decor = decor;
+    ch.group.add(decor);
+    ch.life = { sails: [], boats: [], lamp: null, mist: [], whirl: null };
+    const k = kit();
+    const G = geoLib();
+    const y0 = (x, z) => heightLocal(ch, x, z) - 0.02;
+    const plan = ch.plan = planIsland(ch);
+    const ctx = { rng, isle, sails: [], mist: [], whirl: false };
+
+    // le monument
+    const L = plan.landmark;
+    if (L) k.at(L.x, y0(L.x, L.z), L.z, L.ry, L.s, () => LANDMARKS[isle.landmark](k, ctx));
+
+    // le village : maisons en arc autour d'une placette à fontaine, ouvert vers le sentier
+    const V = plan.village;
+    if (V) {
+      k.at(V.x, y0(V.x, V.z), V.z, 0, V.s, () => drawFountain(k));
+      const a0 = Math.atan2(V.pz - V.z, V.px - V.x) + Math.PI;
+      [-1.75, -0.6, 0.6, 1.75].forEach((off, i) => {
+        const a = a0 + off, rr = 1.12 * V.s;
+        const x = V.x + Math.cos(a) * rr, z = V.z + Math.sin(a) * rr;
+        const ry = Math.atan2(V.x - x, V.z - z);
+        k.at(x, y0(x, z), z, ry, 0.82 * V.s, () => drawHouse(k, isle.roofs[i % isle.roofs.length], i % 3 === 1 ? 'dome' : 'tile'));
+      });
+      // deux pots de fleurs devant les maisons du fond
+      [-0.25, 0.25].forEach((off) => {
+        const a = a0 + off, x = V.x + Math.cos(a) * 0.95 * V.s, z = V.z + Math.sin(a) * 0.95 * V.s;
+        k.at(x, y0(x, z), z, 0, 0.45, () => { k.add(G.cyl, '#e0884d', 0, 0.15, 0, 0.36, 0.3, 0.36); drawBush(k, rng, '#4cd65a'); });
+      });
+    }
+
+    // le bosquet : verger en rangées alignées sur le sentier, ou rond d'arbres
+    const B = plan.grove;
+    if (B) {
+      const t = isle.tree, s = (t === 'cypress' ? 1.15 : 1.25) * B.s;
+      const spots = [];
+      if (isle.grove === 'orchard') {
+        for (let i = -1; i <= 1; i++) for (let jj = 0; jj < 2; jj++) spots.push([i * 0.8, (jj - 0.5) * 0.8]);
+      } else {
+        spots.push([0, 0]);
+        for (let i = 0; i < 4; i++) spots.push([Math.cos(i * Math.PI / 2 + 0.4) * 0.78, Math.sin(i * Math.PI / 2 + 0.4) * 0.78]);
+      }
+      const cs = Math.cos(B.ry), sn = Math.sin(B.ry);
+      spots.forEach(([lx, lz]) => {
+        const x = B.x + (lx * cs + lz * sn) * B.s, z = B.z + (-lx * sn + lz * cs) * B.s;
+        k.at(x, y0(x, z), z, rng() * 6, s * (0.9 + rng() * 0.2), () => drawTree(k, t, rng));
+      });
+    }
+    // arbres isolés, plus loin du sentier : ils encadrent la vue
+    plan.lone.forEach((T) => k.at(T.x, y0(T.x, T.z), T.z, rng() * 6, 1.25 * T.s, () => drawTree(k, isle.tree === 'palm' ? 'round' : isle.tree, rng)));
+    plan.bushes.forEach((b) => k.at(b.x, y0(b.x, b.z), b.z, rng() * 6, 1, () => drawBush(k, rng)));
+    plan.flowers.forEach((f) => k.at(f.x, y0(f.x, f.z), f.z, rng() * 6, 1.1, () => drawFlowers(k, isle.flowers, rng)));
+
+    // la plage : palmiers par paires (îles tropicales) ou touffes d'oyats, à intervalles réguliers
+    const S = ch.path.samp;
+    const ends = [Math.atan2(S[0].z, S[0].x), Math.atan2(S[S.length - 1].z, S[S.length - 1].x), ch.harborAngle];
+    const far = (a, lim) => ends.every((e) => Math.abs(Math.atan2(Math.sin(a - e), Math.cos(a - e))) > lim);
+    let placed = 0;
+    for (let i = 0; i < 12 && placed < 3; i++) {
+      const a = ch.phase + i * (Math.PI * 2 / 12) * 5 % (Math.PI * 2);
+      if (!far(a, 0.75)) continue;
+      placed++;
+      [-0.18, 0.18].forEach((da, j) => {
+        const r = R * 0.93, x = Math.cos(a + da) * r, z = Math.sin(a + da) * r;
+        if (isle.beach === 'palms') k.at(x, y0(x, z), z, a + Math.PI, 1.25 + j * 0.2, () => drawTree(k, 'palm', rng));
+        else if (j === 0) k.at(x, y0(x, z), z, a, 0.8, () => { for (let q = 0; q < 4; q++) k.add(G.cone, '#9bd65a', (q - 1.5) * 0.12, 0.18, (q % 2) * 0.08, 0.08, 0.36, 0.08, 0, 0, (q - 1.5) * 0.25); });
+      });
+    }
+
+    // le port : ponton vers le large, barques amarrées
+    const ox = Math.cos(ch.harborAngle), oz = Math.sin(ch.harborAngle);
+    const jr = Math.atan2(ox, oz);
+    k.at(ox * R * 0.9, 0, oz * R * 0.9, jr, 1, () => {
+      for (let i = 0; i < 9; i++) k.add(G.box, i % 2 ? '#c98b4f' : '#d39553', 0, 0.36, i * 0.22, 0.6, 0.06, 0.2);
+      for (let i = 0; i < 3; i++) [-0.32, 0.32].forEach((x) => k.add(G.cyl6, WOOD_D, x, 0.12, i * 0.8, 0.09, 0.7, 0.09));
+    });
+    ch.harbor = { x: ox * R * 1.35, z: oz * R * 1.35, a: ch.harborAngle };
+    [[0.55, 1.12], [-0.6, 1.4]].forEach(([side, dist], i) => {
+      const b = fishingBoat(isle.roofs[i % isle.roofs.length]);
+      b.position.set(ox * R * dist - oz * side, 0, oz * R * dist + ox * side);
+      b.rotation.y = jr + (i ? 0.25 : -0.2);
+      b.userData.base = b.rotation.y;
+      b.userData.phase = rng() * 6;
+      decor.add(b);
+      ch.life.boats.push(b);
+    });
+    // deux îlots au large, loin des traversées : un dôme de sable et un palmier
+    for (let i = 0, made = 0; i < 20 && made < 2; i++) {
+      const a = rng() * Math.PI * 2;
+      if (!far(a, 0.9)) continue;
+      const d = R * (1.6 + rng() * 0.7), x = Math.cos(a) * d, z = Math.sin(a) * d;
+      const s = 0.7 + rng() * 0.4;
+      k.at(x, -0.1, z, rng() * 6, s, () => {
+        k.add(G.dome, SAND, 0, 0, 0, 1.6, 0.55, 1.4);
+        k.add(G.dome, isle.grass[0], 0, 0.12, 0, 1.0, 0.36, 0.9);
+        k.at(0.1, 0.25, 0, 0, 0.9, () => drawTree(k, 'palm', rng));
+      });
+      made++;
+    }
+
+    const mesh = new THREE.Mesh(mergeParts(k.parts), decorMaterial(ch));
+    mesh.castShadow = mesh.receiveShadow = true;
+    decor.add(mesh);
+
+    // parties animées : ailes des moulins, brumes des Ombres, tourbillon
+    ctx.sails.forEach((sp) => {
+      const sails = new THREE.Mesh(millSails(), decorMaterial(ch));
+      sails.userData.keepGeo = true;
+      sails.scale.setScalar(1.35);
+      const hub = new THREE.Group();
+      hub.position.copy(sp.p);
+      hub.rotation.y = sp.ry;
+      hub.add(sails);
+      sails.castShadow = true;
+      decor.add(hub);
+      ch.life.sails.push(sails);
+    });
+    ctx.mist.forEach((p, i) => {
+      const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: '#efe6ff', transparent: true, opacity: 0.6, depthWrite: false }));
+      m.position.copy(p);
+      m.scale.set(1.6, 1.0, 1);
+      m.userData = { y: p.y, phase: i * 1.7 };
+      decor.add(m);
+      ch.life.mist.push(m);
+    });
+    if (ctx.whirl) {
+      let wa = ch.harborAngle + Math.PI;
+      for (let i = 0; i < 12 && !far(wa, 1.0); i++) wa += 0.5;
+      const w = new THREE.Mesh(new THREE.CircleGeometry(1.5, 40), new THREE.MeshBasicMaterial({ map: whirlTexture(), transparent: true, depthWrite: false }));
+      w.rotation.x = -Math.PI / 2;
+      w.position.set(Math.cos(wa) * R * 1.55, 0.07, Math.sin(wa) * R * 1.55);
+      decor.add(w);
+      ch.life.whirl = w;
+    }
+
+    // les animaux, dans leur pré (les vaches du Soleil : dans l'enclos du monument)
+    if (isle.animals && !ch.sheep.length) {
+      const [kind, n] = isle.animals;
+      const home = kind === 'cow' && L ? { x: L.x, z: L.z, r: 1.05 * L.s, inner: 0.45 } : plan.pasture ? { x: plan.pasture.x, z: plan.pasture.z, r: 1.0 } : null;
+      if (home) for (let i = 0; i < n; i++) ch.sheep.push(makeAnimal(ch, kind, home));
+    }
+  }
+
+  // le voilier : le modèle remplace la coque procédurale (même groupe, même trajectoire)
+  const TEX = {};
+  const MATCOL = { DarkWood: '#a0663a', LightWood: '#e2b27a', Sail: '#ffffff', Steel: '#b9c4cc', _defaultMat: '#f0e6d6', Red: '#ff5d5d', White: '#ffffff' };
+  const assets = { ready: false, status: 'none', tpl: {}, error: null, tex: {} };
   const MODEL_DIR = 'assets/models/';
-  const TEX_DIR = 'assets/textures/';
-  const MK = 'megakit/';
-  const MODELS = {
-    man: 'hero.glb', boat: 'sailboat.glb', column: 'column.glb', columnRound: 'column_round.glb', arch: 'arch.glb',
-    palmTall: 'nature/tree_palmDetailedTall.glb', palmBend: 'nature/tree_palmBend.glb',
-    // Quaternius — Stylized Nature MegaKit (CC0), textures peintes à la main
-    tree3: MK + 'CommonTree_3.glb', tree5: MK + 'CommonTree_5.glb', pine5: MK + 'Pine_5.glb',
-    twisted: MK + 'TwistedTree_1.glb', bush: MK + 'Bush_Common.glb', bushFl: MK + 'Bush_Common_Flowers.glb',
-    grassS: MK + 'Grass_Common_Short.glb', grassT: MK + 'Grass_Common_Tall.glb',
-    flower3: MK + 'Flower_3_Group.glb', flower3s: MK + 'Flower_3_Single.glb',
-    clover: MK + 'Clover_1.glb', plant1: MK + 'Plant_1.glb', plant7: MK + 'Plant_7_Big.glb', fern: MK + 'Fern_1.glb',
-    rock1: MK + 'Rock_Medium_1.glb', rock2: MK + 'Rock_Medium_2.glb', rock3: MK + 'Rock_Medium_3.glb',
-    peb1: MK + 'Pebble_Round_1.glb', peb2: MK + 'Pebble_Round_2.glb', peb3: MK + 'Pebble_Round_3.glb',
-    pebS1: MK + 'Pebble_Square_1.glb', pebS2: MK + 'Pebble_Square_2.glb', pebS3: MK + 'Pebble_Square_3.glb', pebS4: MK + 'Pebble_Square_4.glb'
-  };
-  // matériaux texturés (par nom de matériau glTF) : image, découpe alpha, teinte (sRGB) × gain,
-  // ombre portée (l'herbe et les fleurs n'en projettent pas : moins de travail pour le GPU)
-  const TEX = {
-    Bark_NormalTree: { file: 'bark.jpg', tint: '#c2cdc8', gain: 1.05 },
-    Bark_TwistedTree: { file: 'bark_twisted.jpg', tint: '#e8dccb', gain: 1 },
-    Leaves_NormalTree: { file: 'leaves_tree.png', alpha: true, tint: '#d8f0a8', gain: 1.25, fluffy: 0.75 },
-    Leaves_Pine: { file: 'leaves_pine.png', alpha: true, tint: '#c4e2a2', gain: 1.6, fluffy: 0.6 },
-    Leaves_TwistedTree: { file: 'leaves_twisted.png', alpha: true, tint: '#7fb062', gain: 0.9, fluffy: 0.75 }, // masque blanc : teinte libre
-    Leaves: { file: 'leaves.png', alpha: true, tint: '#f2f8e6', gain: 1.05, noShadow: true },
-    Flowers: { file: 'flowers.png', alpha: true, tint: '#ffffff', gain: 1.05, noShadow: true },
-    Grass: { file: 'grass.png', alpha: true, tint: '#e6f2c8', gain: 1.1, noShadow: true },
-    Rocks: { file: 'limestone.jpg', tint: '#fff8ee', gain: 1.25 }, // calcaire (dérivé de Rocks_Desert, désaturé)
-    Rocks_desert: { file: 'rocks_desert.jpg', tint: '#ffffff', gain: 1.2 },
-    PathRocks: { file: 'pathrocks.jpg', tint: '#fff8ee', gain: 1.1, noShadow: true }
-  };
-  // couleurs (par nom de matériau glTF) des modèles sans texture, dans la palette douce de l'archipel
-  const MATCOL = {
-    leafsGreen: '#93c27c', leafsDark: '#6f9f80', grass: '#a7cd88', woodBark: '#c09f80', woodBarkDark: '#a6876e',
-    dirt: '#d9c5a7', stone: '#e5e1d8', _defaultMat: '#e5e1d8', Stone: '#e3ded4',
-    colorPurple: '#c8b4ee', colorRed: '#f2a49c', colorYellow: '#f7d586',
-    Marble: '#f4f0e8', Grey_Floor: '#f3efe7', DarkGrey_Floor: '#e6e0d5', HalloweenBits: '#efe9de',
-    DarkWood: '#a07c5f', LightWood: '#dabf9c', Sail: '#fcf9f2', Steel: '#b9bdc0',
-    // village grec (gabarits procéduraux) : chaux, volets bleus, tuiles, bois, terre cuite
-    houseWhite: '#f7f4ee', houseShade: '#e9e4da', houseBlue: '#3d78b8', roofTerra: '#c8714c', domeBlue: '#2e6bb0',
-    straw: '#cfb489', woodPier: '#a98563', terracotta: '#c8784c', drystone: '#ddd5c6', sailCloth: '#f8f4ea',
-    hullWhite: '#f1ede4', hullBlue: '#3a6ea8', hullRed: '#b4493a', islet: '#d9d0c2', bandRed: '#c0473b'
-  };
-  const THEME_COL = {
-    dunes: { grass: '#d3cd97', leafsGreen: '#a3c486', Grass: '#f0e6b0' },
-    jardin: { Leaves_NormalTree: '#e2f5ae' }
-  };
-  // [modèles possibles, hauteur min/max, place libre autour, décor procédural de secours]
-  // narrow : silhouette resserrée (cyprès) ; fit : la taille vaut pour la plus grande dimension
-  const KINDS = {
-    cypress: { m: ['pine5'], h: [1.6, 2.2], narrow: 0.42, room: 0.42, fb: 'pin' },
-    pine: { m: ['pine5'], h: [1.2, 1.9], room: 0.7, fb: 'pin' },
-    olive: { m: ['tree5', 'tree3'], h: [1.0, 1.35], room: 0.75, fb: 'olivier', col: { Leaves_NormalTree: '#c9d9a2' } },
-    bigOlive: { m: ['twisted'], h: [1.5, 1.7], room: 1.1, fb: 'olivier', col: { Leaves_TwistedTree: '#a9bd86', Bark_TwistedTree: '#d9cfc0' } },
-    tree: { m: ['tree3', 'tree5'], h: [1.3, 1.7], room: 0.75, fb: 'olivier' },
-    bush: { m: ['bush', 'bushFl', 'bush'], h: [0.42, 0.62], room: 0.36, fb: 'buisson', fit: true },
-    plant: { m: ['plant1', 'fern', 'plant7', 'clover'], h: [0.26, 0.4], room: 0.2, fb: 'touffe', fit: true },
-    grass: { m: ['grassS', 'grassT', 'grassS'], h: [0.26, 0.4], room: 0.14, fb: 'touffe' },
-    flower: { m: ['flower3', 'flower3s', 'flower3'], h: [0.28, 0.4], room: 0.16, fb: 'fleurs' },
-    rock: { m: ['rock1', 'rock2', 'rock3'], h: [0.45, 0.8], room: 0.45, fb: 'rocher', fit: true },
-    pebble: { m: ['peb1', 'peb2', 'peb3', 'pebS1', 'pebS2'], path: ['pebS1', 'pebS2', 'pebS3', 'pebS4'], h: [0.16, 0.26], room: 0.15, fb: null, fit: true },
-    column: { m: ['column', 'columnRound'], h: [1.2, 1.45], room: 0.5, fb: 'colonne', broken: 0.55 },
-    arch: { m: ['arch'], h: [1.5, 1.7], room: 1.1, fb: null },
-    palm: { m: ['palmTall', 'palmBend'], h: [1.5, 2.0], room: 0.6, fb: 'palmier', keepXZ: true },
-    temple: { m: [], room: 1.4, fb: 'temple' }
-  };
-  // composition des îles quand les modèles sont là : dense, luxuriante, mais légère pour un téléphone
-  const SCENES_3D = {
-    pinede: [['cypress', 5, 0.8], ['pine', 7, 0.9], ['rock', 5, 0.6], ['bush', 8, 0.55], ['plant', 8, 0.4], ['grass', 30, 0.35], ['flower', 10, 0.35], ['pebble', 8, 0.3]],
-    ruines: [['temple', 1, 1.3], ['arch', 1, 1.0], ['bigOlive', 1, 1.0], ['column', 9, 0.7], ['olive', 5, 0.8], ['cypress', 5, 0.8], ['rock', 3, 0.6], ['bush', 8, 0.55],
-      ['plant', 6, 0.4], ['grass', 30, 0.35], ['flower', 12, 0.35], ['pebble', 6, 0.3]],
-    jardin: [['bigOlive', 1, 1.0], ['bush', 12, 0.55], ['olive', 3, 0.8], ['tree', 3, 0.8], ['cypress', 3, 0.8], ['flower', 26, 0.35], ['plant', 10, 0.4],
-      ['grass', 20, 0.35], ['rock', 3, 0.6]],
-    dunes: [['palm', 7, 0.8], ['rock', 9, 0.6], ['grass', 16, 0.4], ['column', 2, 0.7], ['plant', 4, 0.4], ['flower', 3, 0.4], ['pebble', 12, 0.3]]
-  };
-  const assets = { ready: false, status: 'none', tpl: {}, error: null, tex: {}, cliffTex: null };
-
+  const MODELS = { man: 'hero_kaykit.glb', boat: 'sailboat.glb' };
   // modèle glTF → gabarit : triangles à plat (positions, normales, UV, occlusion des sommets,
   // nom du matériau), posés au sol (y min = 0), centrés, hauteur ramenée à 1
   function makeTemplate(root, opt) {
@@ -1134,408 +1648,10 @@
     };
   }
 
-  // matériau d'un lot pour une île (partagé, il s'estompe avec l'île dans la brume)
-  function decorMaterial(ch, key) {
-    ch.decorMats = ch.decorMats || {};
-    if (ch.decorMats[key]) return ch.decorMats[key];
-    const T = TEX[key];
-    let mat;
-    if (!T) mat = toonMat({ color: '#ffffff', vertexColors: true, transparent: true });
-    else {
-      mat = toonMat({ color: '#ffffff', vertexColors: true, transparent: true, map: assets.tex[T.file],
-        alphaTest: T.alpha ? 0.42 : 0, side: T.alpha ? THREE.DoubleSide : THREE.FrontSide, roughness: T.alpha ? 0.8 : 0.92 });
-      // cartes de feuilles : pas d'inversion de la normale au dos (les normales « duveteuses »
-      // pointent déjà vers l'extérieur du houppier)
-      if (T.alpha) mat.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('normal = normal * faceDirection;', ''); };
-    }
-    ch.decorMats[key] = mat;
-    ch.fadeMats.push(mat);
-    return mat;
-  }
-
-  // occlusion douce au pied des arbres et des rochers, sentier de terre battue
-  function shadeGround(ch, placed) {
-    const geo = ch.ground.geometry, P = geo.attributes.position, Cl = geo.attributes.color, base = geo.userData.base;
-    if (!base) return;
-    const dust = lin(THEMES[ch.c % THEMES.length] === 'dunes' ? '#e9d3a6' : '#dccfae');
-    const blobs = placed.filter((p) => p.ao);
-    for (let i = 0; i < P.count; i++) {
-      const x = P.getX(i), z = P.getZ(i);
-      let k = 1;
-      for (let j = 0; j < blobs.length; j++) {
-        const b = blobs[j], d2 = (x - b.x) * (x - b.x) + (z - b.z) * (z - b.z);
-        if (d2 < b.s * b.s * 9) k *= 1 - b.ao * Math.exp(-d2 / (2 * b.s * b.s));
-      }
-      const path = ch.pathPts ? 1 - smooth(0.12, 0.42, distToPath(ch, x, z)) : 0;
-      const r = base[i * 3] + (dust.r - base[i * 3]) * path * 0.75;
-      const g = base[i * 3 + 1] + (dust.g - base[i * 3 + 1]) * path * 0.75;
-      const b = base[i * 3 + 2] + (dust.b - base[i * 3 + 2]) * path * 0.75;
-      Cl.setXYZ(i, r * k, g * k, b * k);
-    }
-    Cl.needsUpdate = true;
-  }
-
-  // ------------------------------------------------------------------
-  // Gabarits procéduraux du monde habité : maisons cubiques, chapelle à coupole, moulin,
-  // phare, amphores, murets, îlots. Fusionnés dans le lot de chaque île (un appel de dessin).
-  // ------------------------------------------------------------------
-  const procTpl = {};
-  function namedMat(name) { const m = new THREE.MeshBasicMaterial(); m.name = name; return m; }
-  function buildProcTemplates() {
-    if (procTpl.house) return;
-    const T = (fill) => { const g = new THREE.Group(); fill(g, (geo, mat, x, y, z, ry) => { const m = new THREE.Mesh(geo, namedMat(mat)); m.position.set(x || 0, y || 0, z || 0); m.rotation.y = ry || 0; g.add(m); return m; }); return makeTemplate(g, { keepXZ: true }); };
-    const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
-    // maison cubique à toit plat, porte et volets bleus
-    procTpl.house = T((g, a) => {
-      a(box(1, 0.8, 0.9), 'houseWhite', 0, 0.4, 0);
-      a(box(1.06, 0.06, 0.96), 'houseShade', 0, 0.83, 0);
-      a(box(0.22, 0.4, 0.04), 'houseBlue', 0.18, 0.2, 0.46);
-      a(box(0.16, 0.16, 0.04), 'houseBlue', -0.25, 0.5, 0.46);
-      a(box(0.04, 0.16, 0.16), 'houseBlue', 0.51, 0.5, 0.1);
-    });
-    // maison à deux niveaux (terrasse)
-    procTpl.house2 = T((g, a) => {
-      a(box(1, 0.7, 0.9), 'houseWhite', 0, 0.35, 0);
-      a(box(0.55, 0.5, 0.6), 'houseWhite', -0.2, 0.95, -0.12);
-      a(box(1.04, 0.05, 0.94), 'houseShade', 0, 0.72, 0);
-      a(box(0.2, 0.36, 0.04), 'houseBlue', 0.25, 0.18, 0.46);
-      a(box(0.14, 0.14, 0.04), 'houseBlue', -0.2, 1.0, 0.19);
-      a(box(0.14, 0.14, 0.04), 'houseBlue', -0.2, 0.45, 0.46);
-    });
-    // maison à toit de tuiles
-    procTpl.houseTile = T((g, a) => {
-      a(box(1, 0.7, 0.8), 'houseWhite', 0, 0.35, 0);
-      const roof = new THREE.CylinderGeometry(0.5, 0.5, 1.1, 3); roof.rotateZ(Math.PI / 2); roof.scale(1, 0.62, 1.05);
-      a(roof, 'roofTerra', 0, 0.84, 0);
-      a(box(0.2, 0.36, 0.04), 'houseBlue', 0, 0.18, 0.41);
-    });
-    // chapelle à coupole bleue
-    procTpl.chapel = T((g, a) => {
-      a(box(0.9, 0.75, 0.9), 'houseWhite', 0, 0.375, 0);
-      a(new THREE.CylinderGeometry(0.34, 0.36, 0.16, 18), 'houseWhite', 0, 0.83, 0);
-      a(new THREE.SphereGeometry(0.34, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), 'domeBlue', 0, 0.9, 0);
-      a(box(0.04, 0.2, 0.04), 'houseShade', 0, 1.33, 0);
-      a(box(0.14, 0.04, 0.04), 'houseShade', 0, 1.36, 0);
-      a(box(0.22, 0.38, 0.04), 'houseBlue', 0, 0.19, 0.46);
-    });
-    // tour du moulin (les ailes tournent à part)
-    procTpl.mill = T((g, a) => {
-      a(new THREE.CylinderGeometry(0.34, 0.42, 1.2, 16), 'houseWhite', 0, 0.6, 0);
-      a(new THREE.ConeGeometry(0.42, 0.42, 16), 'straw', 0, 1.4, 0);
-      a(box(0.2, 0.34, 0.04), 'houseBlue', 0, 0.17, 0.4);
-    });
-    // phare : tour fuselée à bande, lanterne
-    procTpl.lighthouse = T((g, a) => {
-      a(new THREE.CylinderGeometry(0.22, 0.32, 1.6, 16), 'houseWhite', 0, 0.8, 0);
-      a(new THREE.CylinderGeometry(0.245, 0.27, 0.22, 16), 'bandRed', 0, 0.95, 0);
-      a(new THREE.CylinderGeometry(0.3, 0.3, 0.06, 16), 'houseShade', 0, 1.62, 0);
-      a(new THREE.CylinderGeometry(0.17, 0.17, 0.24, 12), 'sailCloth', 0, 1.77, 0);
-      a(new THREE.ConeGeometry(0.22, 0.2, 12), 'domeBlue', 0, 1.99, 0);
-    });
-    // amphore de terre cuite
-    procTpl.amphora = T((g, a) => {
-      const prof = [[0.0, 0], [0.12, 0.02], [0.3, 0.25], [0.32, 0.5], [0.22, 0.78], [0.1, 0.9], [0.1, 1.0], [0.14, 1.04]].map(([r, y]) => new THREE.Vector2(r, y));
-      a(new THREE.LatheGeometry(prof, 12), 'terracotta');
-    });
-    // muret de pierres sèches
-    procTpl.wall = T((g, a) => {
-      const r = C.makeRng('muret');
-      for (let k = 0; k < 7; k++) for (let j = 0; j < 2; j++) {
-        a(box(0.3 + r() * 0.12, 0.17, 0.26), 'drystone', -0.95 + k * 0.32 + j * 0.14, 0.09 + j * 0.17, (r() - 0.5) * 0.04, (r() - 0.5) * 0.15);
-      }
-    });
-    // ponton du port : planches sur pieux
-    procTpl.jetty = T((g, a) => {
-      for (let k = 0; k < 9; k++) a(box(0.55, 0.05, 0.17), 'woodPier', 0, 0.62, k * 0.2);
-      for (let k = 0; k < 3; k++) [-0.3, 0.3].forEach((x) => a(new THREE.CylinderGeometry(0.04, 0.045, 0.75, 6), 'DarkWood', x, 0.3, k * 0.8));
-    });
-    // îlot rocheux (parfois coiffé d'une maison)
-    procTpl.islet = T((g, a) => {
-      const geo = new THREE.IcosahedronGeometry(1, 1);
-      const p = geo.attributes.position, r = C.makeRng('ilot');
-      for (let i = 0; i < p.count; i++) { const f = 0.85 + r() * 0.3; p.setXYZ(i, p.getX(i) * f, Math.max(-0.2, p.getY(i)) * 0.45 * f, p.getZ(i) * f); }
-      geo.computeVertexNormals();
-      a(geo, 'islet', 0, 0.09, 0);
-    });
-    procTpl.buoy = T((g, a) => {
-      a(new THREE.SphereGeometry(0.5, 10, 8), 'bandRed', 0, 0.5, 0);
-      a(new THREE.CylinderGeometry(0.08, 0.08, 0.6, 6), 'houseWhite', 0, 1.1, 0);
-    });
-  }
-
-  // petite barque de pêche (géométrie partagée, une couleur de coque par variante)
-  const boatGeos = {};
-  function fishingBoatGeo(hull) {
-    if (boatGeos[hull]) return boatGeos[hull];
-    const parts = [];
-    const shell = new THREE.SphereGeometry(0.5, 14, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
-    parts.push({ geo: shell, color: '#f1ede4', m: M4(0, 0.16, 0, 0, 0.32, 0.36, 1) });
-    parts.push({ geo: new THREE.TorusGeometry(0.5, 0.04, 5, 20), color: hull, m: M4(0, 0.15, 0, 0, 0.33, 1, 1.02, Math.PI / 2) });
-    parts.push({ geo: new THREE.BoxGeometry(0.22, 0.03, 0.5), color: '#b08a64', m: M4(0, 0.12, 0) });
-    parts.push({ geo: new THREE.CylinderGeometry(0.014, 0.014, 0.75, 5), color: '#8a6a4c', m: M4(0, 0.5, 0.08) });
-    const sail = new THREE.BufferGeometry();
-    sail.setAttribute('position', new THREE.Float32BufferAttribute([0, 0.2, 0.1, 0, 0.85, 0.09, 0, 0.22, -0.32, 0, 0.2, 0.1, 0, 0.22, -0.32, 0, 0.85, 0.09], 3));
-    sail.computeVertexNormals();
-    parts.push({ geo: sail, color: '#f8f1e2', m: M4(0.01, 0, 0) });
-    boatGeos[hull] = mergeParts(parts);
-    return boatGeos[hull];
-  }
-  let boatMat = null;
-  function fishingBoat(hull) {
-    boatMat = boatMat || toonMat({ color: '#ffffff', vertexColors: true, roughness: 0.8, side: THREE.DoubleSide });
-    const m = new THREE.Mesh(fishingBoatGeo(hull), boatMat);
-    m.castShadow = true;
-    m.userData.keepGeo = true;
-    return m;
-  }
-
-  // Village, moulin, phare et port d'une île ; îlots au large. (Les objets animés — ailes du
-  // moulin, barques amarrées, feu du phare — sont gardés dans ch.life pour la boucle.)
-  function settle(ch, batch, placed, rng) {
-    buildProcTemplates();
-    const R = ch.r, theme = THEMES[ch.c % THEMES.length];
-    const free = (x, z, room, clear) => distToPath(ch, x, z) > clear && ch.gateLocal.distanceTo(new THREE.Vector3(x, 0, z)) > 1.3 &&
-      !placed.some((p) => Math.hypot(p.x - x, p.z - z) < Math.max(room, p.room));
-    const put = (tpl, x, z, h, rot, room, ao, sink) => {
-      batch.add(tpl, x, heightLocal(ch, x, z) - (sink == null ? 0.03 : sink), z, rot, h, h, null, null);
-      placed.push({ x, z, room, ao: ao || 0.2, s: room * 0.7 });
-    };
-    ch.life = { sails: null, boats: [], lamp: null };
-    // le village : 4 à 7 maisons serrées autour d'une placette, portes vers le centre de l'île
-    let vc = null;
-    for (let t = 0; t < 60 && !vc; t++) {
-      const a = rng() * Math.PI * 2, d = R * (0.4 + rng() * 0.32);
-      const x = Math.cos(a) * d, z = Math.sin(a) * d;
-      if (free(x, z, 1.2, 1.25)) vc = { x, z };
-    }
-    if (vc) {
-      const kinds = theme === 'dunes' ? ['house', 'house', 'house2', 'chapel'] : ['house', 'house2', 'houseTile', 'house', 'chapel', 'houseTile'];
-      const n = 4 + Math.floor(rng() * 4);
-      let chapel = false;
-      for (let k = 0; k < n; k++) {
-        for (let t = 0; t < 25; t++) {
-          const a = rng() * Math.PI * 2, d = 0.25 + rng() * 0.95;
-          const x = vc.x + Math.cos(a) * d, z = vc.z + Math.sin(a) * d;
-          if (Math.hypot(x, z) > R * 0.84 || !free(x, z, 0.42, 0.62)) continue;
-          let kind = kinds[Math.floor(rng() * kinds.length)];
-          if (kind === 'chapel') { if (chapel) kind = 'house'; chapel = true; }
-          const h = kind === 'chapel' ? 0.62 : 0.4 + rng() * 0.14;
-          // les maisons regardent vers la placette (axes « carrés » : rues étroites)
-          const rot = Math.round((Math.atan2(vc.x - x, vc.z - z)) / (Math.PI / 2)) * (Math.PI / 2) + (rng() - 0.5) * 0.12;
-          put(procTpl[kind], x, z, h, rot, 0.45, 0.22, 0.03);
-          break;
-        }
-      }
-      // amphores et muret au bord de la placette
-      for (let k = 0; k < 3; k++) {
-        const a = rng() * Math.PI * 2, x = vc.x + Math.cos(a) * 0.35, z = vc.z + Math.sin(a) * 0.35;
-        if (free(x, z, 0.12, 0.5)) put(procTpl.amphora, x, z, 0.16 + rng() * 0.05, rng() * 6, 0.12, 0.1, 0.01);
-      }
-    }
-    // moulin à vent sur une hauteur (îles herbeuses)
-    if (theme === 'pinede' || theme === 'jardin' || theme === 'ruines') {
-      for (let t = 0; t < 50; t++) {
-        const a = rng() * Math.PI * 2, d = R * (0.2 + rng() * 0.55);
-        const x = Math.cos(a) * d, z = Math.sin(a) * d;
-        if (!free(x, z, 0.7, 1.0)) continue;
-        put(procTpl.mill, x, z, 1.05, rng() * 6, 0.6, 0.25, 0.04);
-        // ailes : quatre voiles triangulaires sur un moyeu
-        const parts = [];
-        for (let k = 0; k < 4; k++) {
-          const ang = k * Math.PI / 2;
-          parts.push({ geo: new THREE.BoxGeometry(0.03, 0.62, 0.02), color: '#8a6a4c', m: M4(0, 0, 0, 0, 1, 1, 1, 0, 0).multiply(new THREE.Matrix4().makeRotationZ(ang)).multiply(new THREE.Matrix4().makeTranslation(0, 0.31, 0)) });
-          parts.push({ geo: new THREE.BoxGeometry(0.2, 0.5, 0.01), color: '#f4efe2', m: new THREE.Matrix4().makeRotationZ(ang).multiply(new THREE.Matrix4().makeTranslation(0.11, 0.36, 0)) });
-        }
-        const sails = new THREE.Mesh(mergeParts(parts), toonMat({ color: '#ffffff', vertexColors: true, roughness: 0.85, side: THREE.DoubleSide }));
-        const hub = new THREE.Group();
-        hub.position.set(x, heightLocal(ch, x, z) + 1.05 * 0.7, z);
-        hub.rotation.y = Math.atan2(-x, -z) + Math.PI; // face au large
-        sails.position.z = 0.28;
-        sails.scale.setScalar(0.72);
-        sails.castShadow = true;
-        hub.add(sails);
-        ch.decor.add(hub);
-        ch.fadeMats.push(sails.material);
-        ch.life.sails = sails;
-        break;
-      }
-    }
-    // le port : un ponton vers le large, deux barques amarrées, une bouée
-    const pa = Math.atan2(ch.path.samp[0].z, ch.path.samp[0].x), pb = Math.atan2(ch.path.samp[ch.path.samp.length - 1].z, ch.path.samp[ch.path.samp.length - 1].x);
-    let best = 0, bd = -1;
-    for (let k = 0; k < 24; k++) { // l'angle le plus éloigné des deux bouts du sentier
-      const a = (k / 24) * Math.PI * 2;
-      const d = Math.min(Math.abs(Math.atan2(Math.sin(a - pa), Math.cos(a - pa))), Math.abs(Math.atan2(Math.sin(a - pb), Math.cos(a - pb))));
-      if (d > bd) { bd = d; best = a; }
-    }
-    const ox = Math.cos(best), oz = Math.sin(best);
-    const jx = ox * R * 0.93, jz = oz * R * 0.93;
-    batch.add(procTpl.jetty, jx, -0.42, jz, Math.atan2(ox, oz), 0.95, 0.95, null, null);
-    ch.harbor = { x: ox * R * 1.35, z: oz * R * 1.35, a: best };
-    [[0.55, 1.1], [-0.6, 1.45]].forEach(([side, dist], i) => {
-      const b = fishingBoat(i ? '#b4493a' : '#3a6ea8');
-      const tx = -oz, tz = ox;
-      b.position.set(ox * R * dist + tx * side, 0, oz * R * dist + tz * side);
-      b.rotation.y = Math.atan2(ox, oz) + (i ? 0.25 : -0.2);
-      b.userData.base = b.rotation.y;
-      b.userData.phase = rng() * 6;
-      ch.decor.add(b);
-      ch.life.boats.push(b);
-    });
-    batch.add(procTpl.buoy, ox * R * 1.7 - oz * 0.9, -0.02, oz * R * 1.7 + ox * 0.9, 0, 0.16, 0.16, null, null);
-    // phare au bout de l'île, une île sur deux
-    if (ch.c % 2 === 1) {
-      const a = best + Math.PI * 0.55;
-      const x = Math.cos(a) * R * 0.86, z = Math.sin(a) * R * 0.86;
-      if (free(x, z, 0.5, 0.7)) {
-        put(procTpl.lighthouse, x, z, 1.5, 0, 0.5, 0.2, 0.02);
-        const lamp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: '#ffe3a0', transparent: true, opacity: 0, depthWrite: false, toneMapped: false }));
-        lamp.position.set(x, heightLocal(ch, x, z) + 1.5 * 0.88, z);
-        lamp.scale.set(1.4, 1.4, 1);
-        ch.decor.add(lamp);
-        ch.life.lamp = lamp;
-      }
-    }
-    // îlots et rochers au large (loin des traversées)
-    const avoid = [pa, pb];
-    for (let k = 0, made = 0; k < 30 && made < 6; k++) {
-      const a = rng() * Math.PI * 2;
-      if (avoid.some((v) => Math.abs(Math.atan2(Math.sin(a - v), Math.cos(a - v))) < 0.7)) continue;
-      const d = R * (1.55 + rng() * 1.3);
-      const x = Math.cos(a) * d, z = Math.sin(a) * d;
-      const big = made < 2;
-      const s = big ? 0.9 + rng() * 0.6 : 0.25 + rng() * 0.3;
-      batch.add(procTpl.islet, x, -0.12, z, rng() * 6, s, s * (big ? 1.4 : 1.1), null, null);
-      if (big) { // un îlot habité : une maison, un cyprès
-        batch.add(procTpl.house, x + 0.1, -0.12 + s * 1.4 * 0.82, z, rng() * 6, 0.32, 0.32, null, null);
-        const cy = KINDS.cypress.m.map((m) => assets.tpl[m]).filter(Boolean)[0];
-        if (cy) batch.add(cy, x - s * 0.3, -0.12 + s * 1.4 * 0.7, z + s * 0.2, 0, 0.8 * 0.42, 0.8, null, rng);
-      }
-      made++;
-    }
-  }
-
-  // bordures du sentier : galets clairs, touffes, fleurs ; parfois une amphore ou un muret
-  function pathBorder(ch, batch, rng) {
-    buildProcTemplates();
-    const S = ch.path.samp, cum = ch.path.cum;
-    const peb = KINDS.pebble.path.map((k) => assets.tpl[k]).filter(Boolean);
-    const grass = ['grassS', 'grassT'].map((k) => assets.tpl[k]).filter(Boolean);
-    const flow = ['flower3s', 'flower3'].map((k) => assets.tpl[k]).filter(Boolean);
-    const nodes = ch.nodes.map((n) => n.local);
-    let next = 0.3, wallAt = 2 + rng() * 2;
-    for (let i = 1; i < S.length - 1; i++) {
-      if (cum[i] < next) continue;
-      next = cum[i] + 0.3 + rng() * 0.18;
-      const a = S[i - 1], b = S[i + 1];
-      const tx = b.x - a.x, tz = b.z - a.z, tl = Math.hypot(tx, tz) || 1;
-      const nx = -tz / tl, nz = tx / tl;
-      const sg = rng() < 0.5 ? 1 : -1;
-      const off = PATH_W + 0.06 + rng() * 0.14;
-      const x = S[i].x + nx * off * sg, z = S[i].z + nz * off * sg;
-      if (Math.hypot(x, z) > ch.r * 0.92) continue;
-      if (nodes.some((p) => Math.hypot(p.x - x, p.z - z) < 0.5)) continue;
-      const y = heightLocal(ch, x, z);
-      const r = rng();
-      if (cum[i] > wallAt && Math.hypot(S[i].x - ch.gateLocal.x, S[i].z - ch.gateLocal.z) > 1.2) { // muret ou amphores
-        wallAt = cum[i] + 2.5 + rng() * 2.5;
-        const w = PATH_W + 0.38;
-        const wx = S[i].x + nx * w * sg, wz = S[i].z + nz * w * sg;
-        if (nodes.some((p) => Math.hypot(p.x - wx, p.z - wz) < 0.8)) continue;
-        if (rng() < 0.55) batch.add(procTpl.wall, wx, heightLocal(ch, wx, wz) - 0.03, wz, Math.atan2(tx, tz) + Math.PI / 2, 0.36, 0.3, null, null);
-        else {
-          batch.add(procTpl.amphora, wx, heightLocal(ch, wx, wz) - 0.01, wz, rng() * 6, 0.2, 0.2, null, null);
-          batch.add(procTpl.amphora, wx + tx / tl * 0.14, heightLocal(ch, wx, wz) - 0.01, wz + tz / tl * 0.14, rng() * 6, 0.15, 0.15, null, null);
-        }
-        continue;
-      }
-      if (r < 0.42 && peb.length) {
-        const tpl = peb[Math.floor(rng() * peb.length)];
-        const s = (0.13 + rng() * 0.08) / Math.max(1, tpl.w, tpl.d);
-        batch.add(tpl, x, y - 0.02, z, rng() * 6.28, s, s * 0.7, null, rng);
-      } else if (r < 0.75 && grass.length) {
-        const tpl = grass[Math.floor(rng() * grass.length)];
-        batch.add(tpl, x, y - 0.01, z, rng() * 6.28, 0.22 + rng() * 0.1, 0.22 + rng() * 0.1, null, rng);
-      } else if (flow.length) {
-        const tpl = flow[Math.floor(rng() * flow.length)];
-        batch.add(tpl, x, y - 0.01, z, rng() * 6.28, 0.24 + rng() * 0.08, 0.24 + rng() * 0.08, null, rng);
-      }
-    }
-  }
-
-  function decorate(ch, m) {
-    const placed = [];
-    const theme = THEMES[ch.c % THEMES.length];
-    const variant = theme === 'dunes' ? 'desert' : null;
-    const rng = C.makeRng('decor:' + ch.c);
-    const decor = new THREE.Group();
-    ch.decor = decor;
-    ch.group.add(decor);
-    const batch = assets.ready ? newBatch() : null;
-    const themeCol = THEME_COL[theme] || {};
-    if (batch) { try { settle(ch, batch, placed, rng); } catch (e) { console.warn('[world] village', e); } }
-    (batch ? SCENES_3D : SCENES)[theme].forEach(([type, count, clear]) => {
-      const kind = batch ? KINDS[type] : null;
-      const tpls = kind ? kind.m.map((k) => assets.tpl[k]).filter(Boolean) : [];
-      const proc = kind ? kind.fb : type;
-      if (!tpls.length && !proc) return;
-      const big = proc === 'temple' && !tpls.length;
-      const room = kind ? kind.room : type === 'temple' ? 1.4 : type === 'touffe' || type === 'fleurs' ? 0.3 : 0.55;
-      const over = kind && Object.assign({}, themeCol, kind.col || {});
-      // occlusion au sol : [force, rayon] selon la taille de l'objet
-      const ao = /^(cypress|pine|olive|bigOlive|tree|palm|pin|olivier|palmier)$/.test(type) ? [0.32, 0.42]
-        : /^(rock|rocher|bush|buisson|column|colonne|arch|temple)$/.test(type) ? [0.22, 0.3] : null;
-      for (let k = 0; k < count; k++) {
-        for (let tries = 0; tries < 40; tries++) {
-          const a = rng() * Math.PI * 2;
-          const d = Math.sqrt(rng()) * ch.r * (big ? 0.55 : 0.86);
-          const x = Math.cos(a) * d, z = Math.sin(a) * d;
-          if (distToPath(ch, x, z) < clear) continue;
-          if (ch.gateLocal.distanceTo(new THREE.Vector3(x, 0, z)) < 1.2) continue;
-          if (placed.some((p) => Math.hypot(p.x - x, p.z - z) < Math.max(room, p.room))) continue;
-          const y = heightLocal(ch, x, z) - 0.02;
-          if (tpls.length) {
-            const tpl = tpls[Math.floor(rng() * tpls.length)];
-            // (h = hauteur ; pour les « fit », plus grande dimension : un rocher plat reste petit)
-            const h = (kind.h[0] + rng() * (kind.h[1] - kind.h[0])) / (kind.fit ? Math.max(1, tpl.w, tpl.d) : 1);
-            const sy = kind.broken && rng() < kind.broken ? h * (0.22 + rng() * 0.35) : h; // colonnes brisées
-            const sink = kind.fit ? 0.03 : 0.01; // rochers et buissons un peu enfoncés dans le sol
-            const wj = kind.fit ? 1 : 0.86 + rng() * 0.28; // silhouettes variées
-            batch.add(tpl, x, y - sink, z, rng() * Math.PI * 2, h * (kind.narrow || 1) * wj, sy, over, rng, variant);
-          } else {
-            const obj = PROP[proc](m, rng);
-            obj.position.set(x, y, z);
-            obj.rotation.y = rng() * Math.PI * 2;
-            obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-            decor.add(obj);
-          }
-          placed.push({ x, z, room: room * 0.6, ao: ao && ao[0], s: ao && ao[1] });
-          break;
-        }
-      }
-    });
-    if (batch) pathBorder(ch, batch, rng);
-    if (batch && batch.count()) decor.add(batch.build((key) => decorMaterial(ch, key)));
-    shadeGround(ch, placed);
-    // des moutons sur les îles herbeuses
-    if (theme !== 'dunes' && !ch.sheep.length) {
-      for (let k = 0; k < 3; k++) ch.sheep.push(makeSheep(ch, m));
-    }
-  }
-
-  function redecorate(ch) {
-    if (ch.decor) {
-      ch.group.remove(ch.decor);
-      ch.decor.traverse((o) => { if (o.isMesh && !o.userData.keepGeo) o.geometry.dispose(); });
-    }
-    decorate(ch, ch.m);
-  }
-
   function loadAssets() {
     if (!THREE.GLTFLoader) { assets.status = 'no-loader'; return; }
     assets.status = 'loading';
     const loader = new THREE.GLTFLoader();
-    const texLoader = new THREE.TextureLoader();
     const embedded = window.ODY_ASSETS || {};
     const load = (key) => new Promise((resolve) => {
       const path = MODEL_DIR + MODELS[key];
@@ -1546,76 +1662,15 @@
         });
       } catch (e) { resolve([key, null]); }
     });
-    const loadTex = (file) => new Promise((resolve) => {
-      const path = TEX_DIR + file;
-      try {
-        texLoader.load(embedded[path] || path, (t) => {
-          t.encoding = THREE.sRGBEncoding;
-          t.flipY = false; // UV glTF
-          t.wrapS = t.wrapT = THREE.RepeatWrapping;
-          t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
-          resolve([file, t]);
-        }, undefined, () => { console.warn('[world] texture indisponible', path); resolve([file, null]); });
-      } catch (e) { resolve([file, null]); }
-    });
-    const files = [...new Set(Object.values(TEX).map((T) => T.file))];
-    Promise.all([Promise.all(Object.keys(MODELS).map(load)), Promise.all(files.map(loadTex))]).then(([list, texs]) => {
-      texs.forEach(([f, t]) => { if (t) assets.tex[f] = t; });
-      if (assets.tex['limestone.jpg']) { // falaises de calcaire peint
-        const t = assets.tex['limestone.jpg'].clone();
-        t.needsUpdate = true;
-        t.flipY = true;
-        t.repeat.set(7, 1.3);
-        assets.cliffTex = t;
-        chapters.forEach((ch) => { if (ch) dressCliff(ch); });
-      }
+    Promise.all(Object.keys(MODELS).map(load)).then((list) => {
       const got = {};
       list.forEach(([k, g]) => { if (g) got[k] = g; });
-      // décor
-      Object.keys(got).forEach((k) => {
-        if (k === 'man' || k === 'boat') return;
-        try {
-          const kind = Object.values(KINDS).find((K) => K.m.indexOf(k) >= 0);
-          assets.tpl[k] = makeTemplate(got[k].scene, { keepXZ: kind && kind.keepXZ });
-        } catch (e) { console.warn('[world] gabarit', k, e); }
-      });
-      if (Object.keys(assets.tpl).length) {
-        assets.ready = true;
-        chapters.forEach((ch) => { if (ch) { try { redecorate(ch); } catch (e) { console.warn('[world] décor', e); } } });
-      }
+      assets.ready = true;
       if (got.boat) { try { upgradeBoat(got.boat); } catch (e) { console.warn('[world] voilier', e); } }
       if (got.man) { try { upgradeHero(got.man); } catch (e) { console.warn('[world] Ulysse', e); assets.error = String(e); } }
-      assets.status = Object.keys(got).length ? 'ok:' + Object.keys(got).length + '/' + Object.keys(MODELS).length +
-        ' tex:' + Object.keys(assets.tex).length + '/' + files.length : 'fallback';
+      assets.status = Object.keys(got).length ? 'ok:' + Object.keys(got).length + '/' + Object.keys(MODELS).length : 'fallback';
       if (World.ok && !running) renderFrame(); // une image à jour même si la boucle est en pause
     }).catch((e) => { assets.status = 'error'; assets.error = String(e); console.warn('[world] modèles', e); });
-  }
-
-  function dressCliff(ch) {
-    if (!assets.cliffTex || !ch.cliffMat || ch.cliffMat.map === assets.cliffTex) return;
-    ch.cliffMat.map = assets.cliffTex;
-    setLin(ch.cliffMat.color, THEMES[ch.c % THEMES.length] === 'dunes' ? '#f3dcb8' : '#f4ece0').multiplyScalar(1.35); // calcaire clair
-    ch.cliffMat.needsUpdate = true;
-  }
-
-  // Ciel HDRI (Poly Haven, CC0) : éclairage d'ambiance et reflets doux, préfiltrés (PMREM)
-  function loadEnvironment() {
-    if (!THREE.RGBELoader || !THREE.PMREMGenerator) return;
-    const path = TEX_DIR + 'sky.hdr';
-    const src = (window.ODY_ASSETS || {})[path] || path;
-    try {
-      new THREE.RGBELoader().setDataType(THREE.UnsignedByteType).load(src, (hdr) => {
-        try {
-          const pm = new THREE.PMREMGenerator(renderer);
-          pm.compileEquirectangularShader();
-          envMap = pm.fromEquirectangular(hdr).texture;
-          hdr.dispose(); pm.dispose();
-          scene.environment = envMap;
-          applyLight();
-          if (World.ok && !running) renderFrame();
-        } catch (e) { console.warn('[world] environnement', e); }
-      }, undefined, () => console.warn('[world] ciel HDRI indisponible'));
-    } catch (e) { console.warn('[world] environnement', e); }
   }
 
   // le voilier : le modèle remplace la coque procédurale (même groupe, même trajectoire)
@@ -1630,100 +1685,72 @@
     boat.add(mesh);
   }
 
-  function makeSheep(ch, m) {
-    const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.IcosahedronGeometry(0.2, 2), m('#fbfaf6'));
-    body.scale.set(1.25, 0.95, 0.95);
-    body.position.y = 0.22;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), m('#7d8287'));
-    head.position.set(0.25, 0.27, 0);
-    [[-0.1, -0.08], [-0.1, 0.08], [0.1, -0.08], [0.1, 0.08]].forEach(([x, z]) => {
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.14, 4), m('#7d8287'));
-      leg.position.set(x, 0.07, z);
-      g.add(leg);
-    });
-    g.add(body, head);
-    g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-    const a = ch.rng() * Math.PI * 2, d = ch.r * (0.3 + ch.rng() * 0.4);
-    g.userData = { x: Math.cos(a) * d, z: Math.sin(a) * d, tx: 0, tz: 0, wait: ch.rng() * 4, hop: 0, head };
-    g.userData.tx = g.userData.x; g.userData.tz = g.userData.z;
-    ch.group.add(g);
-    return g;
-  }
-
-  function updateSheep(ch, s, dt, t) {
-    const u = s.userData;
-    const dx = u.tx - u.x, dz = u.tz - u.z, d = Math.hypot(dx, dz);
-    if (d < 0.05) {
-      u.wait -= dt;
-      u.head.position.y = 0.27 - (Math.sin(t * 2 + u.x) > 0.3 ? 0.1 : 0); // il broute
-      if (u.wait <= 0) { // nouvelle destination, pas trop loin, hors du sentier
-        for (let k = 0; k < 10; k++) {
-          const nx = u.x + (Math.random() - 0.5) * 2.4, nz = u.z + (Math.random() - 0.5) * 2.4;
-          if (Math.hypot(nx, nz) < ch.r * 0.78 && distToPath(ch, nx, nz) > 0.45) { u.tx = nx; u.tz = nz; break; }
-        }
-        u.wait = 2 + Math.random() * 5;
-      }
-    } else {
-      const step = Math.min(d, dt * 0.45);
-      u.x += (dx / d) * step; u.z += (dz / d) * step;
-      u.hop += dt * 9;
-      u.head.position.y = 0.27;
-      s.rotation.y = Math.atan2(-dz, dx);
-    }
-    s.position.set(u.x, heightLocal(ch, u.x, u.z) + (d >= 0.05 ? Math.abs(Math.sin(u.hop)) * 0.05 : 0), u.z);
-  }
-
   // ------------------------------------------------------------------
-  // Pierres de niveau : géométries partagées (pierre, boss, anneaux d'or, couronne de laurier)
+  // Pierres de niveau, version dessin animé : galets ronds et dodus.
+  // Fait = or + étoile + laurier ; en cours = crème éclatante + anneau + flèche qui rebondit ;
+  // à venir = pastel doux ; boss = plus grand, avec un fanion.
   // ------------------------------------------------------------------
-  let STONE_GEO = null, BOSS_RING_MAT = null, LAUREL_MAT = null, CUR_RING = null;
+  let STONE_GEO = null, BOSS_RING_MAT = null, LAUREL_MAT = null, CUR_RING = null, BOUNCE = null;
   function makeShared() {
     if (STONE_GEO) return;
-    const laurel = (R) => {
+    const G = geoLib();
+    const puck = (R, H) => {
+      const prof = [[0, 0], [R * 0.9, 0], [R, H * 0.25], [R * 1.0, H * 0.6], [R * 0.9, H * 0.9], [R * 0.7, H], [0, H]].map(([r, y]) => new THREE.Vector2(r, y));
+      const g = new THREE.LatheGeometry(prof, 28);
+      g.computeVertexNormals();
+      return g;
+    };
+    // couronne de laurier + étoile, fusionnées (un seul maillage par pierre réussie)
+    const reward = (R, H, s) => {
       const parts = [];
-      const leaf = new THREE.SphereGeometry(1, 6, 4);
-      for (let k = 0; k < 22; k++) {
-        const a = (k / 22) * Math.PI * 2;
-        parts.push({ geo: leaf, color: k % 4 === 0 ? '#e3b54f' : k % 2 ? '#6f9a45' : '#86ad55',
-          m: M4(Math.cos(a) * R, 0.02 + (k % 2) * 0.01, Math.sin(a) * R, -a + Math.PI / 2, 0.07, 0.022, 0.035, 0.0, k % 2 ? 0.5 : -0.5) });
+      const leaf = G.sphere;
+      for (let k = 0; k < 20; k++) {
+        if (k === 0 || k === 19) continue; // ouverte vers l'avant, comme une couronne
+        const a = (k / 20) * Math.PI * 2;
+        parts.push({ geo: leaf, color: k % 2 ? '#4cbf3a' : '#6fd64a',
+          m: M4(Math.cos(a) * R, 0.03 + (k % 2) * 0.012, Math.sin(a) * R, -a + Math.PI / 2, 0.15, 0.05, 0.075, 0, k % 2 ? 0.5 : -0.5) });
       }
+      parts.push({ geo: G.star, color: '#fff3b0', m: M4(0, H + 0.005, 0, 0, s, s, s, -Math.PI / 2) });
       return mergeParts(parts);
     };
-    const ring = (r) => { const g = new THREE.TorusGeometry(r, 0.022, 6, 48); g.rotateX(Math.PI / 2); return g; };
-    const rings = new THREE.BufferGeometry();
-    {
-      const a = ring(0.6), b = ring(0.7);
-      const pos = [...a.toNonIndexed().attributes.position.array, ...b.toNonIndexed().attributes.position.array];
-      const nor = [...a.toNonIndexed().attributes.normal.array, ...b.toNonIndexed().attributes.normal.array];
-      rings.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-      rings.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-    }
     STONE_GEO = {
-      normal: new THREE.CylinderGeometry(0.3, 0.34, 0.12, 28),
-      boss: new THREE.CylinderGeometry(0.46, 0.52, 0.16, 32),
-      bossRings: rings,
-      laurel: laurel(0.42), laurelBoss: laurel(0.6)
+      normal: puck(0.34, 0.16),
+      boss: puck(0.5, 0.2),
+      laurel: reward(0.44, 0.165, 0.13), laurelBoss: reward(0.62, 0.205, 0.19)
     };
-    BOSS_RING_MAT = toonMat({ color: '#e0b24e', roughness: 0.35, metalness: 0.7, emissive: lin('#6b4a10'), transparent: true });
-    LAUREL_MAT = toonMat({ color: '#ffffff', vertexColors: true, roughness: 0.6 });
+    // fanion du boss : mât et drapeau (le drapeau ondule à part)
+    STONE_GEO.pole = mergeParts([{ geo: G.cyl, color: '#ffffff', m: M4(0, 0.6, 0, 0, 0.05, 1.2, 0.05) }, { geo: G.sphere, color: '#ffd23f', m: M4(0, 1.22, 0, 0, 0.1) }]);
+    const flag = new THREE.PlaneGeometry(0.5, 0.3, 6, 1);
+    flag.translate(0.25, 1.0, 0);
+    STONE_GEO.flag = flag;
+    BOSS_RING_MAT = toonMat({ color: '#ffffff', vertexColors: true, transparent: true });
+    LAUREL_MAT = toonMat({ color: '#ffffff', vertexColors: true, emissive: lin('#3a2a00').multiplyScalar(0.25) });
     // anneau fixe du niveau en cours (en plus de l'onde qui pulse)
-    CUR_RING = new THREE.Mesh(new THREE.RingGeometry(0.41, 0.47, 48),
-      new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.85, depthWrite: false, toneMapped: false }));
+    CUR_RING = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.52, 48),
+      new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, depthWrite: false, toneMapped: false }));
     CUR_RING.rotation.x = -Math.PI / 2;
     scene.add(CUR_RING);
+    // flèche qui rebondit au-dessus du prochain niveau (quand Ulysse n'est pas dessus)
+    BOUNCE = new THREE.Mesh(mergeParts([
+      { geo: G.cone, color: '#ffffff', m: M4(0, 0.16, 0, 0, 0.3, 0.32, 0.3, Math.PI) },
+      { geo: G.cyl, color: '#ffffff', m: M4(0, 0.42, 0, 0, 0.14, 0.24, 0.14) }
+    ]), toonMat({ color: '#ffd23f', vertexColors: true, emissive: lin('#ffb000').multiplyScalar(0.3) }));
+    BOUNCE.castShadow = true;
+    scene.add(BOUNCE);
   }
-  // île à l'horizon : un relief doux et quelques maisons blanches (couleurs de sommets × brume)
+  // île à l'horizon : un dôme vert sur sa plage, quelques maisons blanches (couleurs × brume)
   function horizonIsland(rng) {
     const parts = [];
     const hill = new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2);
-    parts.push({ geo: hill, color: '#c8c8c8', m: M4(0, 0, 0, 0, 9 + rng() * 4, 3.5 + rng() * 3, 6 + rng() * 2) });
-    parts.push({ geo: hill, color: '#bdbdbd', m: M4(5 + rng() * 3, 0, 2, 0, 5, 2 + rng() * 1.5, 4) });
+    parts.push({ geo: hill, color: SAND, m: M4(0, 0, 0, 0, 11 + rng() * 3, 1.0, 8) });
+    parts.push({ geo: hill, color: '#7fd06a', m: M4(0, 0.2, 0, 0, 9 + rng() * 3, 3 + rng() * 2.5, 6 + rng() * 1.5) });
+    parts.push({ geo: hill, color: '#95da74', m: M4(5 + rng() * 3, 0.2, 2, 0, 5, 2 + rng() * 1.5, 4) });
     const cube = new THREE.BoxGeometry(1, 1, 1);
-    for (let k = 0; k < 9; k++) {
+    for (let k = 0; k < 7; k++) {
       const x = (rng() - 0.5) * 9, z = 3 + rng() * 2.5;
-      const y = Math.max(0, 3.2 * Math.sqrt(Math.max(0, 1 - (x * x) / 81 - (z * z) / 49)));
+      const y = Math.max(0, 3.0 * Math.sqrt(Math.max(0, 1 - (x * x) / 81 - (z * z) / 49)));
       parts.push({ geo: cube, color: '#ffffff', m: M4(x, y + 0.2, z, rng(), 0.6 + rng() * 0.5, 0.5 + rng() * 0.3, 0.6) });
+      parts.push({ geo: cube, color: k % 2 ? '#3d8ee8' : '#ee7a4d', m: M4(x, y + 0.5, z, 0, 0.5, 0.12, 0.5) });
     }
     return mergeParts(parts);
   }
@@ -1745,112 +1772,116 @@
       if (!matCache[hex]) { matCache[hex] = lambert(hex, { transparent: true }); fadeMats.push(matCache[hex]); }
       return matCache[hex];
     };
-
-    const ch = { c, group, r, rng, accent, fadeMats, m, sheep: [], flowers: {}, fade: 0.2, phase: rng() * 6.28, open: 0 };
-    // collines
-    const theme = THEMES[c % THEMES.length];
-    ch.hills = [];
-    const nh = theme === 'dunes' ? 5 : 3 + Math.floor(rng() * 2);
-    for (let k = 0; k < nh; k++) {
-      const a = rng() * Math.PI * 2, d = rng() * r * 0.5;
-      ch.hills.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, a: (theme === 'dunes' ? 0.35 : 0.5) + rng() * 0.7, s: 0.9 + rng() * 0.9 });
+    const isle = isleOf(c);
+    const ch = { c, group, r, rng, accent, fadeMats, m, isle, sheep: [], flowers: {}, fade: 0.2, phase: rng() * 6.28, open: 0 };
+    // relief : une bosse douce au centre, deux plus petites
+    ch.hills = [{ x: (rng() - 0.5) * r * 0.3, z: (rng() - 0.5) * r * 0.3, a: 0.32 + rng() * 0.12, s: r * 0.42 }];
+    for (let k = 0; k < 2; k++) {
+      const a = rng() * Math.PI * 2, d = r * (0.3 + rng() * 0.2);
+      ch.hills.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, a: 0.12 + rng() * 0.12, s: 0.9 + rng() * 0.5 });
     }
 
-    const dunes = theme === 'dunes';
-    const colors = {
-      low: dunes ? lin('#e3c58f') : lin('#8cc06a').lerp(lin(accent), 0.05),
-      high: dunes ? lin('#efd9ab') : lin('#b3d37a'),
-      fresh: dunes ? lin('#dcc890') : lin('#70b35e'),
-      dry: dunes ? lin('#f0dcb0') : lin('#c6cf78'),
-      sand: lin('#efe2c6')
-    };
-    const groundMat = toonMat({ vertexColors: true, transparent: true, map: texture(theme === 'dunes' ? 'sable' : 'herbe', 1) });
+    const colors = { low: lin(isle.grass[0]), fresh: lin(isle.grass[1]), high: lin(isle.grass[2]), sand: lin(SAND) };
+    const groundMat = toonMat({ vertexColors: true, transparent: true });
     fadeMats.push(groundMat);
     const ground = new THREE.Mesh(terrain(ch, colors), groundMat);
     ground.receiveShadow = true;
-    ground.castShadow = true;
     ground.userData.ground = c;
     group.add(ground);
     ch.ground = ground;
 
-    // falaises jusqu'à la mer
-    const cliffGeo = new THREE.CylinderGeometry(r, r * 1.05, 2.6, 56, 3, true); // falaise légèrement évasée : elle prend la lumière
-    const cp = cliffGeo.attributes.position;
-    for (let i = 0; i < cp.count; i++) {
-      if (cp.getY(i) < 1.29) { cp.setX(i, cp.getX(i) + (rng() - 0.5) * 0.12); cp.setZ(i, cp.getZ(i) + (rng() - 0.5) * 0.12); }
-    }
-    cliffGeo.computeVertexNormals();
-    const cliffMat = lambert('#ece6db', { transparent: true, map: texture('roche', 1, 6, 1.4) });
+    // falaise de grès doré jusqu'à la mer, et sa plage au pied
+    const cliffGeo = new THREE.CylinderGeometry(r, r * 1.06, 2.6, 56, 2, true);
+    const cliffMat = lambert(CLIFF, { transparent: true });
     fadeMats.push(cliffMat);
     ch.cliffMat = cliffMat;
-    dressCliff(ch);
     const cliff = new THREE.Mesh(cliffGeo, cliffMat);
-    cliff.position.y = TOP - 1.3;
+    cliff.position.y = TOP - 0.12 - 1.3;
     cliff.receiveShadow = true;
     group.add(cliff);
-
-    // plage claire au pied des falaises
-    const beachMat = toonMat({ color: '#f1e7d2', transparent: true, map: texture('sable', 1, 10, 3) });
+    const beachMat = lambert(SAND, { transparent: true });
     fadeMats.push(beachMat);
-    const beach = new THREE.Mesh(new THREE.RingGeometry(r * 0.9, r * 1.17, 56), beachMat);
+    const beach = new THREE.Mesh(new THREE.RingGeometry(r * 0.95, r * 1.2, 56), beachMat);
     beach.rotation.x = -Math.PI / 2;
-    beach.position.y = 0.04;
+    beach.position.y = 0.05;
+    beach.receiveShadow = true;
     group.add(beach);
 
     // sentier : une seule route, de la plage d'arrivée au portique de sortie
     const entry = entryOf(c).sub(ctr), exit = exitOf(c).sub(ctr);
     layoutPath(ch, entry, exit);
     ch.gateLocal = pathAt(ch, GATE_F);
+    // le port : l'angle le plus éloigné des deux bouts du sentier
+    {
+      const S = ch.path.samp;
+      const pa = Math.atan2(S[0].z, S[0].x), pb = Math.atan2(S[S.length - 1].z, S[S.length - 1].x);
+      let best = 0, bd = -1;
+      for (let k = 0; k < 36; k++) {
+        const a = (k / 36) * Math.PI * 2;
+        const d = Math.min(Math.abs(Math.atan2(Math.sin(a - pa), Math.cos(a - pa))), Math.abs(Math.atan2(Math.sin(a - pb), Math.cos(a - pb))));
+        if (d > bd) { bd = d; best = a; }
+      }
+      ch.harborAngle = best;
+      ch.harborLand = { x: Math.cos(best) * r * 0.82, z: Math.sin(best) * r * 0.82, r: 0.7 };
+    }
     ch.nodes = [];
     for (let k = 0; k < PER; k++) {
       const p = pathAt(ch, levelF(k));
       const boss = k === PER - 1;
-      const mesh = new THREE.Mesh(boss ? STONE_GEO.boss : STONE_GEO.normal,
-        toonMat({ color: '#b9b6ae', transparent: true, map: texture('pierre', 1), roughness: 0.75 }));
-      mesh.position.set(p.x, heightLocal(ch, p.x, p.z) + 0.04, p.z);
+      const mesh = new THREE.Mesh(boss ? STONE_GEO.boss : STONE_GEO.normal, toonMat({ color: '#ffffff', transparent: true }));
+      mesh.position.set(p.x, heightLocal(ch, p.x, p.z) - 0.02, p.z);
       mesh.receiveShadow = mesh.castShadow = true;
       mesh.userData.level = c * PER + k;
       group.add(mesh);
       const n = { mesh, local: p, boss };
-      if (boss) { // double anneau d'or : le boss se repère de loin
-        n.rings = new THREE.Mesh(STONE_GEO.bossRings, BOSS_RING_MAT);
-        n.rings.position.copy(mesh.position).add(new THREE.Vector3(0, 0.05, 0));
+      if (boss) { // fanion à la couleur du jeu : le boss se repère de loin
+        n.rings = new THREE.Group();
+        const pole = new THREE.Mesh(STONE_GEO.pole, BOSS_RING_MAT);
+        const flag = new THREE.Mesh(STONE_GEO.flag.clone(), toonMat({ color: accent, side: THREE.DoubleSide, transparent: true }));
+        flag.userData.base = Float32Array.from(flag.geometry.attributes.position.array);
+        pole.castShadow = flag.castShadow = true;
+        n.rings.add(pole, flag);
+        n.flag = flag;
+        const back = pathAt(ch, levelF(k) - 0.03);
+        const sx = back.z - p.z, sz = -(back.x - p.x), sl = Math.hypot(sx, sz) || 1;
+        n.rings.position.set(p.x + sx / sl * 0.42, mesh.position.y, p.z + sz / sl * 0.42);
         group.add(n.rings);
       }
       ch.nodes.push(n);
     }
     pathRibbon(ch);
 
-    // le portique du boss, en travers du sentier
+    // le portique du boss, en travers du sentier : colonnes blanches, fronton bleu (doré une fois ouvert)
     const gate = new THREE.Group();
     gate.position.set(ch.gateLocal.x, heightLocal(ch, ch.gateLocal.x, ch.gateLocal.z) - 0.02, ch.gateLocal.z);
     const ahead = pathAt(ch, 1);
     gate.lookAt(ahead.x, gate.position.y, ahead.z);
-    const white = lambert('#f7f5f0');
-    [-0.7, 0.7].forEach((x) => {
-      const base = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.1, 0.34), white);
-      base.position.set(x, 0.05, 0);
-      const p = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 1.7, 10), white);
-      p.position.set(x, 0.95, 0);
-      const cap = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.1, 0.32), white);
-      cap.position.set(x, 1.84, 0);
-      [base, p, cap].forEach((o) => { o.castShadow = true; gate.add(o); });
+    const G = geoLib();
+    const cols = kit();
+    [-0.72, 0.72].forEach((x) => {
+      cols.add(G.box, '#f3ead8', x, 0.06, 0, 0.42, 0.12, 0.42);
+      cols.add(G.cyl, '#ffffff', x, 0.95, 0, 0.3, 1.7, 0.3);
+      cols.add(G.box, '#ffd23f', x, 1.84, 0, 0.4, 0.1, 0.4);
     });
-    const lintelMat = lambert('#f7f5f0');
-    const lintel = new THREE.Mesh(new THREE.BoxGeometry(1.84, 0.2, 0.36), lintelMat);
-    lintel.position.y = 1.98;
-    const pediment = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 1.84, 3), lintelMat);
-    pediment.rotation.z = Math.PI / 2; pediment.scale.set(1, 1, 0.45);
-    pediment.position.y = 2.2;
+    const white = lambert('#ffffff', { vertexColors: true, transparent: true });
+    fadeMats.push(white);
+    const pillars = new THREE.Mesh(mergeParts(cols.parts), white);
+    const lk = kit();
+    lk.add(G.box, '#ffffff', 0, 1.98, 0, 1.9, 0.2, 0.42);
+    lk.add(G.prism, '#ffffff', 0, 2.08, 0, 1.9, 0.4, 0.44, Math.PI / 2 * 0);
+    lk.add(G.sphere, '#ffffff', 0, 2.56, 0, 0.16);
+    const lintelMat = lambert('#4aa3df', { vertexColors: true, transparent: true });
+    fadeMats.push(lintelMat);
+    const lintel = new THREE.Mesh(mergeParts(lk.parts), lintelMat);
     const veil = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.8),
-      new THREE.MeshBasicMaterial({ color: lin('#e3b54f'), transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false }));
+      new THREE.MeshBasicMaterial({ color: lin('#ffd23f'), transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false }));
     veil.position.y = 0.95;
-    [lintel, pediment].forEach((o) => { o.castShadow = true; });
-    gate.add(lintel, pediment, veil);
+    pillars.castShadow = lintel.castShadow = true;
+    gate.add(pillars, lintel, veil);
     group.add(gate);
     Object.assign(ch, { gate, veil, lintelMat });
 
-    decorate(ch, m);
+    decorate(ch);
 
     // le ponton vers l'île suivante : il sort de l'eau, planche après planche, quand le boss est battu
     ch.stones = [];
@@ -1911,20 +1942,21 @@
     for (let c = 0; c <= need; c++) if (!chapters[c]) buildChapter(c);
   }
 
-  // niveau réussi : couronne de laurier autour de la pierre dorée (elle pousse quand on vient de gagner)
+  // niveau réussi : étoile et couronne de laurier sur la pierre dorée (elles poussent quand on vient de gagner)
   function bloom(ch, k, animate) {
     const n = ch.nodes[k];
     const g = new THREE.Mesh(n.boss ? STONE_GEO.laurelBoss : STONE_GEO.laurel, LAUREL_MAT);
-    g.position.set(n.local.x, heightLocal(ch, n.local.x, n.local.z) + 0.07, n.local.z);
+    g.position.copy(n.mesh.position);
+    g.rotation.y = Math.atan2(n.local.x, n.local.z);
     g.castShadow = true;
     if (animate) { g.scale.setScalar(0.01); g.userData.grow = true; }
     ch.group.add(g);
     ch.flowers[k] = g;
   }
 
-  // Code couleur unique et lisible : fait = pierre dorée qui luit + laurier ; en cours = pierre
-  // blanche + anneau à la couleur du jeu ; à venir = pierre grise estompée. Boss : grande pierre,
-  // double anneau d'or.
+  // Code couleur unique et lisible : fait = pierre dorée + étoile + laurier ; en cours = pierre
+  // crème éclatante + anneau à la couleur du jeu (+ flèche qui rebondit) ; à venir = pastel doux.
+  // Boss : grande pierre et fanion.
   function refresh(animate) {
     ensureChapters();
     pathU.target = done;
@@ -1934,20 +1966,19 @@
         const L = ch.c * PER + k;
         const mat = n.mesh.material;
         if (L < done) {
-          setLin(mat.color, '#f3c75e'); mat.emissive.copy(lin('#c98a1c')).multiplyScalar(0.5);
-          mat.roughness = 0.45; mat.metalness = 0.2; n.mesh.userData.alpha = 1;
+          setLin(mat.color, '#ffc531'); mat.emissive.copy(lin('#b86e00')).multiplyScalar(0.35); n.mesh.userData.alpha = 1;
           if (!ch.flowers[k]) bloom(ch, k, animate);
         } else if (L === done) {
-          setLin(mat.color, '#ffffff'); mat.emissive.setRGB(0.06, 0.06, 0.06); mat.roughness = 0.6; mat.metalness = 0; n.mesh.userData.alpha = 1;
+          setLin(mat.color, '#fffaf0'); mat.emissive.setRGB(0.12, 0.12, 0.1); n.mesh.userData.alpha = 1;
         } else {
-          setLin(mat.color, '#a9a7a1'); mat.emissive.setRGB(0, 0, 0); mat.roughness = 0.85; mat.metalness = 0; n.mesh.userData.alpha = 0.78;
+          mat.color.copy(tint(opts.levelInfo(L).accent, 0.35)); mat.emissive.setRGB(0.04, 0.04, 0.05); n.mesh.userData.alpha = 0.92;
         }
-        if (n.rings) n.rings.userData.alpha = L <= done ? 1 : 0.45;
+        if (n.rings) n.rings.userData.alpha = L <= done ? 1 : 0.6;
       });
       const beaten = done > ch.c * PER + PER - 1;
       if (beaten && !ch.opened) {
         ch.opened = true;
-        setLin(ch.lintelMat.color, '#f0d58c');
+        setLin(ch.lintelMat.color, '#ffc531');
         ch.stones.forEach((s, i) => { s.userData.delay = animate ? 1.0 + i * 0.16 : 0; if (!animate) s.userData.raise = 1; });
       }
     });
@@ -1956,7 +1987,7 @@
   function nodePos(L) {
     const ch = chapters[chapterOf(L)];
     const n = ch.nodes[L % PER];
-    return new THREE.Vector3(ch.group.position.x + n.local.x, ch.group.position.y + heightLocal(ch, n.local.x, n.local.z) + (n.boss ? 0.12 : 0.1),
+    return new THREE.Vector3(ch.group.position.x + n.local.x, ch.group.position.y + heightLocal(ch, n.local.x, n.local.z) + (n.boss ? 0.19 : 0.15),
       ch.group.position.z + n.local.z);
   }
   function groundPos(c, at) {
@@ -2189,55 +2220,70 @@
     return shieldTexCache[motif];
   }
 
-  // Ulysse animé : base « Universal Base Characters » + tenue « Modular Character Outfits »
-  // + animations « Universal Animation Library » (Quaternius, CC0), assemblés dans hero.glb.
-  // Les pièces grecques (cuirasse, jupe, casque, couronne, armes, bouclier) sont construites
-  // ici et accrochées aux os ; setSkin() ne fait que montrer/cacher et recolorer.
+  // Ulysse animé : « Adventurers Character Pack » de KayKit (Kay Lousberg, CC0) — le barbare
+  // barbu, sans son bonnet d'ours : grosse tête, silhouette trapue de dessin animé.
+  // Sa texture est une palette de pastilles en dégradé (grille 8 × 4) : la garde-robe repeint
+  // les pastilles (tunique, cape, peau, cheveux, liserés…) dans une toile. Les pièces grecques
+  // (boucles de cheveux, coiffes, armes, bouclier) sont construites ici et accrochées aux os.
+  const KK = { // [colonne, rangée] des pastilles (rangée 0 = haut de l'image, sens des UV glTF)
+    skin: [[0, 0]], hair: [[1, 0]], tunic: [[0, 1], [1, 1]], cape: [[5, 0], [7, 0]], capeSrc: [7, 0],
+    trim: [[2, 1]], leather: [[6, 0]], metal: [[3, 0]], legs: [[3, 2]], wraps: [[7, 1], [7, 2]]
+  };
   function upgradeHero(gltf) {
     const src = gltf.scene;
     const clips = gltf.animations || [];
     const clip = (n) => clips.find((c) => c.name === n || c.name.endsWith('|' + n));
-    if (!clip('Idle') || !clip('Run')) throw new Error('animations manquantes');
+    if (!clip('Idle') || !clip('Running_A')) throw new Error('animations manquantes');
+    const bone = (n) => src.getObjectByName(n) || src.getObjectByName(n.replace(/\./g, ''));
     const B = {};
-    ['Head', 'neck_01', 'spine_03', 'spine_02', 'pelvis', 'upperarm_l', 'lowerarm_l', 'hand_l', 'middle_01_l', 'upperarm_r', 'lowerarm_r',
-      'hand_r', 'middle_01_r', 'thigh_l', 'calf_l', 'foot_l', 'ball_l', 'thigh_r', 'calf_r', 'foot_r', 'ball_r'].forEach((n) => {
-      B[n] = src.getObjectByName(n);
+    ['head', 'chest', 'hips', 'upperarm.l', 'lowerarm.l', 'handslot.l', 'upperarm.r', 'lowerarm.r', 'hand.r', 'handslot.r'].forEach((n) => {
+      B[n] = bone(n);
       if (!B[n]) throw new Error('os manquant ' + n);
     });
+    const meshOf = (part) => { let f = null; src.traverse((o) => { if (o.isMesh && o.name.indexOf(part) >= 0) f = f || o; }); return f; };
 
-    const rig = new THREE.Group();
-    rig.add(src);
-    src.updateMatrixWorld(true);
-    // taille : 1,2 unité (un peu plus grand que l'ancien modèle, pour rester lisible de loin)
-    const box = new THREE.Box3();
-    src.traverse((o) => { if (o.isMesh) { o.geometry.computeBoundingBox(); box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); } });
-    const s = 1.2 / (box.max.y - box.min.y);
-    src.scale.setScalar(s);
-    src.position.set(0, -box.min.y * s, 0);
-
-    // matériaux : textures du modèle, teintes de la garde-robe
-    const mats = {};
+    // la palette, recopiée dans une toile (512 px) que la garde-robe repeint
+    let img = null;
+    src.traverse((o) => { if (o.isMesh && o.material && o.material.map && !img) img = o.material.map.image; });
+    if (!img) throw new Error('texture manquante');
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 512;
+    const g2 = cv.getContext('2d');
+    g2.drawImage(img, 0, 0, 512, 512);
+    const base = g2.getImageData(0, 0, 512, 512);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.encoding = THREE.sRGBEncoding;
+    tex.flipY = false;
+    // (deux matériaux : r128 ne compile qu'un programme par matériau, avec ou sans squelette)
+    const mat = toonMat({ color: '#ffffff', map: tex, skinning: true });
+    const matRigid = toonMat({ color: '#ffffff', map: tex });
     src.traverse((o) => {
       if (!o.isMesh) return;
-      const old = o.material, name = old.name;
-      const m = toonMat({ color: '#ffffff', map: old.map || null, skinning: true,
-        roughness: name === 'Eyes' ? 0.3 : name === 'Skin' || name === 'Hands' || name === 'Legs' ? 0.62 : 0.85 });
-      if (m.map) { m.map.encoding = THREE.sRGBEncoding; m.map.anisotropy = 2; }
-      m.name = name;
-      o.material = m;
-      mats[name] = m;
+      o.material = o.isSkinnedMesh ? mat : matRigid;
       o.castShadow = true;
       o.receiveShadow = true;
       o.frustumCulled = false; // la boîte englobante ne suit pas l'animation
     });
-    const meshOf = (name) => { let f = null; src.traverse((o) => { if (o.isMesh && o.name === name) f = o; }); return f; };
-    const parts = {};
-    ['Tunic', 'Trousers', 'Shoes', 'Legs', 'Hair', 'Beard', 'Head', 'Hands'].forEach((n) => { parts[n] = meshOf(n); });
+    // la cape prend une pastille à elle (colonne 5, libre) : sa couleur devient indépendante
+    const capeMesh = meshOf('Cape');
+    if (capeMesh) {
+      const uv = capeMesh.geometry.attributes.uv;
+      for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) - 0.25);
+      uv.needsUpdate = true;
+    }
 
-    // animations : repos, marche, course ; mélange selon le déplacement
+    const rig = new THREE.Group();
+    rig.add(src);
+    src.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(src);
+    const s = 1.12 / (box.max.y - box.min.y);
+    src.scale.setScalar(s);
+    src.position.set(0, -box.min.y * s, 0);
+
+    // animations : repos, marche, course, joie ; mélange selon le déplacement
     const mixer = new THREE.AnimationMixer(src);
     const acts = {};
-    [['idle', 'Idle'], ['walk', 'Walk'], ['run', 'Run']].forEach(([k, n]) => {
+    [['idle', 'Idle'], ['walk', 'Walking_A'], ['run', 'Running_A'], ['cheer', 'Cheer']].forEach(([k, n]) => {
       const c = clip(n);
       if (!c) return;
       const a = mixer.clipAction(c);
@@ -2249,284 +2295,182 @@
     rig.updateMatrixWorld(true);
 
     const P = (o) => o.getWorldPosition(new THREE.Vector3()); // (rig à l'origine : repère du rig)
-    const ul = P(B.upperarm_l), ur = P(B.upperarm_r);
-    const width = ul.distanceTo(ur);
-    const headBone = P(B.Head);
-    // haut du crâne : boîte de la tête (pose de liaison, à l'échelle)
-    let headTop = headBone.y + 0.14;
-    if (parts.Head) {
-      const hb = parts.Head.geometry.boundingBox || (parts.Head.geometry.computeBoundingBox(), parts.Head.geometry.boundingBox);
-      headTop = hb.max.y * s - box.min.y * s;
-    }
-    const headSize = headTop - headBone.y;
-    const unit = 1.2 / 1.84; // (le modèle mesure 1,84 m)
-    const brass = toonMat({ color: '#c9973f', roughness: 0.38, metalness: 0.75, skinning: false });
-    const bronzeDark = toonMat({ color: '#8a5f2a', roughness: 0.45, metalness: 0.7 });
-    const leather = toonMat({ color: '#7a5034', roughness: 0.8 });
-    const wood = toonMat({ color: '#a7835c', roughness: 0.8 });
-    const gold = toonMat({ color: '#e0b24e', roughness: 0.32, metalness: 0.85 });
-    const linen = toonMat({ color: '#efe7d6', roughness: 0.9, side: THREE.DoubleSide });
-    const tunicCloth = toonMat({ color: '#2f6f9f', roughness: 0.9, side: THREE.DoubleSide });
-    const leafMat = toonMat({ color: '#7f9f4a', roughness: 0.7 });
-    const crestMat = toonMat({ color: '#b03a2e', roughness: 0.95 });
-    const bandMat = toonMat({ color: '#a63a30', roughness: 0.85 });
-    const strap = toonMat({ color: '#5a3a24', roughness: 0.8 });
-    const add = (parent, geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x || 0, y || 0, z || 0); m.castShadow = true; parent.add(m); return m; };
-    // attache : on place l'objet dans le repère du rig, puis on le confie à l'os (transformation conservée)
-    const attach = (bone, obj) => { rig.add(obj); rig.updateMatrixWorld(true); bone.attach(obj); return obj; };
-
-    // tour de taille et de poitrine mesurés sur la tunique (pose de liaison)
-    const torsoAt = (y0, y1) => {
-      const g = parts.Tunic && parts.Tunic.geometry, p = g && g.attributes.position;
-      let rx = 0.16, rz = 0.11;
-      if (!p) return { rx: rx * unit / 0.6, rz };
-      let mx = 0, mz = 0, cz = 0, n = 0;
-      for (let i = 0; i < p.count; i++) {
-        const y = p.getY(i);
-        if (y < y0 || y > y1 || Math.abs(p.getX(i)) > 0.24) continue;
-        mx = Math.max(mx, Math.abs(p.getX(i))); mz = Math.max(mz, Math.abs(p.getZ(i) - 0)); cz += p.getZ(i); n++;
-      }
-      return n ? { rx: mx * s, rz: mz * s, cz: (cz / n) * s } : { rx: rx, rz: rz, cz: 0 };
-    };
-    const pelvis = P(B.pelvis), chest = P(B.spine_03);
-    const waist = torsoAt(0.95, 1.05), ribs = torsoAt(1.15, 1.3);
-    const acc = {}; // pièces de garde-robe
-
-    // cuirasse de bronze « musclée » (hoplite) : coque tournée autour du torse
-    const chestRx = Math.max(ribs.rx * 1.25, width * 0.64), chestRz = Math.max(ribs.rz * 1.35, chestRx * 0.66);
+    const headMesh = meshOf('Head'), bodyMesh = meshOf('Body');
+    const hb = headMesh ? new THREE.Box3().setFromObject(headMesh) : new THREE.Box3(new THREE.Vector3(-0.2, 0.6, -0.2), new THREE.Vector3(0.2, 1.1, 0.2));
+    const bb = bodyMesh ? new THREE.Box3().setFromObject(bodyMesh) : new THREE.Box3(new THREE.Vector3(-0.15, 0.25, -0.12), new THREE.Vector3(0.15, 0.6, 0.12));
+    const hr = (hb.max.x - hb.min.x) * 0.5;                 // demi-largeur du crâne
+    const headC = new THREE.Vector3((hb.min.x + hb.max.x) / 2, hb.max.y - hr * 0.95, (hb.min.z + hb.max.z) / 2);
+    const add = (parent, geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x || 0, y || 0, z || 0); o.castShadow = true; parent.add(o); return o; };
+    const attach = (b, obj) => { rig.add(obj); rig.updateMatrixWorld(true); b.attach(obj); return obj; };
+    const brass = toonMat({ color: '#ffc531' });
+    const bronzeDark = toonMat({ color: '#d98a2b' });
+    const leather = toonMat({ color: '#9a5a32' });
+    const wood = toonMat({ color: '#c98b4f' });
+    const leafMat = toonMat({ color: '#4cbf3a' });
+    const crestMat = toonMat({ color: '#ff4f4f' });
+    const bandMat = toonMat({ color: '#ff4f4f' });
+    const hairMat = toonMat({ color: '#6b4226' });
+    const acc = {};
+    // boucles de cheveux : une calotte de petites boules (on ne garde que le haut et l'arrière)
     {
-      const g = new THREE.Group();
-      const y0 = pelvis.y + 0.04, h = (ul.y + 0.035) - y0;
-      const prof = [[0.8, 0], [0.84, 0.12], [0.93, 0.42], [1.0, 0.68], [0.98, 0.86], [0.8, 0.97], [0.5, 1.02]]
-        .map(([r, y]) => new THREE.Vector2(r, y * h));
-      const geo = new THREE.LatheGeometry(prof, 22);
-      // bombé des pectoraux et des abdominaux, sur le devant
-      const p = geo.attributes.position;
-      for (let i = 0; i < p.count; i++) {
-        const z = p.getZ(i), y = p.getY(i) / h;
-        if (z > 0) p.setZ(i, z * (1 + 0.12 * Math.sin(Math.PI * Math.min(1, y * 1.15))));
+      const parts = [], N = 46;
+      for (let i = 0; i < N; i++) {
+        const y = 1 - (i + 0.5) / N * 2, rad = Math.sqrt(1 - y * y), a = i * 2.39996;
+        const x = Math.cos(a) * rad, z = Math.sin(a) * rad;
+        if (y < -0.05 && z > -0.35) continue;          // pas de boucles sur le visage ni le cou
+        if (z > 0.45 && y < 0.5) continue;             // le front reste dégagé
+        if (y < -0.45) continue;
+        parts.push({ geo: geoLib().ball, color: '#ffffff', m: M4(x * hr * 1.0, y * hr * 1.0 + hr * 0.08, z * hr * 1.06, 0, hr * 0.62) });
       }
-      geo.scale(chestRx, 1, chestRz);
-      geo.computeVertexNormals();
-      add(g, geo, brass, 0, 0, 0);
-      const rim = new THREE.TorusGeometry(1, 0.07, 6, 24); rim.rotateX(Math.PI / 2); rim.scale(chestRx * 0.81, 0.3, chestRz * 0.81);
-      add(g, rim, bronzeDark, 0, 0.004, 0);
-      g.position.set(0, y0, (ribs.cz || 0) + 0.005);
-      acc.cuirass = attach(B.spine_02, g);
+      const hair = new THREE.Mesh(mergeParts(parts), toonMat({ color: '#6b4226', vertexColors: true }));
+      hair.castShadow = true;
+      hair.position.copy(headC);
+      acc.hair = attach(B.head, hair);
+      acc.hairMat = hair.material;
     }
-    // ptéruges : lanières de cuir sous la cuirasse
-    {
-      const g = new THREE.Group();
-      const n = 18, r = chestRx * 0.8, rz = chestRz * 0.8, len = 0.15;
-      for (let k = 0; k < n; k++) {
-        const a = (k / n) * Math.PI * 2;
-        const piv = new THREE.Group();
-        piv.position.set(Math.sin(a) * r, 0, Math.cos(a) * rz);
-        piv.rotation.order = 'YXZ';
-        piv.rotation.y = a;
-        piv.rotation.x = -0.22; // les lanières s'évasent vers l'extérieur
-        g.add(piv);
-        add(piv, new THREE.BoxGeometry(0.036, len, 0.008), k % 2 ? leather : linen, 0, -len / 2, 0);
-        add(piv, new THREE.BoxGeometry(0.036, 0.014, 0.011), brass, 0, -len + 0.007, 0);
-      }
-      g.position.set(0, pelvis.y + 0.05, (ribs.cz || 0) + 0.005);
-      acc.pteruges = attach(B.pelvis, g);
-    }
-    // jupe de chiton (marin : courte ; roi et pèlerin : longue) — couleur de la tunique
-    const skirt = (len, flare, mat) => {
-      const g = new THREE.Group();
-      const geo = new THREE.CylinderGeometry(1, flare, len, 22, 4, true);
-      geo.scale(waist.rx * 1.02, 1, waist.rz * 1.18);
-      // plis : ondulation douce du bas
-      const p = geo.attributes.position;
-      for (let i = 0; i < p.count; i++) {
-        const y = p.getY(i), k = (len / 2 - y) / len, a = Math.atan2(p.getZ(i), p.getX(i));
-        const f = 1 + Math.sin(a * 11) * 0.06 * k;
-        p.setX(i, p.getX(i) * f); p.setZ(i, p.getZ(i) * f);
-      }
-      geo.computeVertexNormals();
-      add(g, geo, mat, 0, -len / 2, 0);
-      const hem = new THREE.TorusGeometry(1, 0.03, 5, 28); hem.rotateX(Math.PI / 2); hem.scale(waist.rx * 1.02 * flare, 0.5, waist.rz * 1.18 * flare);
-      const hemM = add(g, hem, gold, 0, -len + 0.004, 0);
-      const belt = new THREE.TorusGeometry(1, 0.05, 5, 24); belt.rotateX(Math.PI / 2); belt.scale(waist.rx * 1.0, 0.45, waist.rz * 1.12);
-      add(g, belt, leather, 0, 0.005, 0);
-      g.userData.hem = hemM;
-      g.position.set(0, pelvis.y + 0.07, waist.cz || 0);
-      return attach(B.pelvis, g);
-    };
-    acc.skirtShort = skirt(0.2, 1.45, tunicCloth);
-    acc.skirtLong = skirt(0.43, 1.75, tunicCloth);
-    // jambières de bronze (cnémides)
-    acc.greaves = [];
-    ['l', 'r'].forEach((sd) => {
-      const a = P(B['calf_' + sd]), b = P(B['foot_' + sd]);
-      const len = a.distanceTo(b) * 0.78;
-      const geo = new THREE.CylinderGeometry(0.042, 0.034, len, 12, 1, true, -Math.PI * 0.75, Math.PI * 1.5);
-      const m = new THREE.Mesh(geo, brass);
-      m.castShadow = true;
-      m.position.copy(a).lerp(b, 0.5);
-      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), a.clone().sub(b).normalize());
-      m.rotateY(Math.PI); // l'ouverture vers l'arrière du mollet
-      acc.greaves.push(attach(B['calf_' + sd], m));
-    });
-    // sandales : semelle et lanières croisées
-    acc.sandals = [];
-    ['l', 'r'].forEach((sd) => {
-      const f = P(B['foot_' + sd]), t = P(B['ball_' + sd]);
-      const g = new THREE.Group();
-      const len = Math.hypot(t.x - f.x, t.z - f.z) * 1.9;
-      add(g, new THREE.BoxGeometry(0.07, 0.012, len), leather, 0, 0.006, len * 0.18);
-      [0.035, 0.07, 0.11].forEach((y, i) => {
-        const ring = new THREE.TorusGeometry(0.036 - i * 0.002, 0.005, 4, 14); ring.rotateX(Math.PI / 2);
-        add(g, ring, strap, 0, y + 0.01, 0);
-      });
-      g.position.set(f.x, 0, f.z);
-      g.lookAt(t.x, 0, t.z + 1e-4);
-      acc.sandals.push(attach(B['foot_' + sd], g));
-    });
-    // coiffes
-    const headC = new THREE.Vector3(headBone.x, headBone.y + headSize * 0.52, headBone.z + headSize * 0.04);
-    const hr = headSize * 0.62; // rayon approximatif du crâne
     {
       const g = new THREE.Group(); // couronne de laurier
       const leaf = new THREE.SphereGeometry(1, 6, 4);
-      for (let k = 0; k < 26; k++) {
-        if (k === 12 || k === 13) continue; // ouverte sur la nuque
-        const a = (k / 26) * Math.PI * 2 + Math.PI / 2;
-        const l = add(g, leaf, k % 3 ? leafMat : gold, Math.cos(a) * hr * 1.06, (k % 2) * 0.008, Math.sin(a) * hr * 1.12);
-        l.scale.set(0.022, 0.008, 0.012);
+      for (let k = 0; k < 22; k++) {
+        if (k === 10 || k === 11 || k === 12) continue; // ouverte sur la nuque
+        const a = (k / 22) * Math.PI * 2 + Math.PI / 2;
+        const l = add(g, leaf, k % 3 ? leafMat : brass, Math.cos(a) * hr * 1.12, (k % 2) * hr * 0.05, Math.sin(a) * hr * 1.16);
+        l.scale.set(hr * 0.26, hr * 0.09, hr * 0.14);
         l.rotation.set(0.5, -a, (k % 2 ? 0.6 : -0.6));
       }
-      g.position.copy(headC).add(new THREE.Vector3(0, hr * 0.32, 0));
-      g.rotation.x = -0.18;
-      acc.laurel = attach(B.Head, g);
+      g.position.copy(headC).add(new THREE.Vector3(0, hr * 0.5, 0));
+      g.rotation.x = -0.15;
+      acc.laurel = attach(B.head, g);
     }
     {
-      const ring = new THREE.TorusGeometry(1, 0.06, 6, 30); ring.rotateX(Math.PI / 2);
-      ring.scale(hr * 1.02, 0.35, hr * 1.1);
+      const ring = new THREE.TorusGeometry(1, 0.09, 6, 30); ring.rotateX(Math.PI / 2);
+      ring.scale(hr * 1.08, 1, hr * 1.12);
       const g = new THREE.Group();
       add(g, ring, bandMat);
-      g.position.copy(headC).add(new THREE.Vector3(0, hr * 0.18, 0));
-      g.rotation.x = -0.15;
-      acc.band = attach(B.Head, g);
+      g.position.copy(headC).add(new THREE.Vector3(0, hr * 0.38, 0));
+      g.rotation.x = -0.12;
+      acc.band = attach(B.head, g);
     }
     {
-      const g = new THREE.Group(); // casque corinthien à crête
-      // porté relevé sur le front, à la manière des statues de Périclès : le visage reste lisible
-      const dome = new THREE.SphereGeometry(hr * 1.06, 20, 14, 0, Math.PI * 2, 0, Math.PI * 0.6);
-      dome.scale(0.95, 1.0, 1.1);
-      add(g, dome, brass);
-      // garde-joues et nasal, relevés au-dessus du front
-      const cheeks = new THREE.CylinderGeometry(hr * 1.0, hr * 0.95, hr * 0.45, 20, 1, true, Math.PI * 0.15, Math.PI * 1.7);
-      cheeks.scale(0.97, 1, 1.1);
-      add(g, cheeks, brass, 0, -hr * 0.18, 0);
-      add(g, new THREE.BoxGeometry(hr * 0.14, hr * 0.32, hr * 0.1), brass, 0, -hr * 0.2, hr * 1.06);
-      // crête de crin, d'avant en arrière
-      const crest = new THREE.CylinderGeometry(hr * 0.9, hr * 0.9, hr * 0.16, 18, 1, false, -Math.PI * 0.02, Math.PI * 1.04);
+      const g = new THREE.Group(); // casque grec à crête, relevé : le visage reste visible
+      add(g, new THREE.SphereGeometry(hr * 1.14, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), brass);
+      add(g, new THREE.TorusGeometry(hr * 1.1, hr * 0.08, 6, 26), bronzeDark).rotation.x = Math.PI / 2;
+      const crest = new THREE.CylinderGeometry(hr * 0.95, hr * 0.95, hr * 0.3, 18, 1, false, -Math.PI * 0.05, Math.PI * 1.1);
       crest.rotateZ(Math.PI / 2);
-      add(g, crest, crestMat, 0, hr * 1.05, -hr * 0.12);
-      add(g, new THREE.BoxGeometry(hr * 0.1, hr * 0.3, hr * 0.9), bronzeDark, 0, hr * 1.0, -hr * 0.12);
-      g.position.copy(headC).add(new THREE.Vector3(0, hr * 0.42, -hr * 0.08));
-      g.rotation.x = -0.32;
-      acc.helmet = attach(B.Head, g);
+      add(g, crest, crestMat, 0, hr * 1.0, -hr * 0.05);
+      g.position.copy(headC).add(new THREE.Vector3(0, hr * 0.12, 0));
+      acc.helmet = attach(B.head, g);
     }
     {
       const g = new THREE.Group(); // pétase : chapeau de voyageur à large bord
-      const brim = new THREE.CylinderGeometry(hr * 2.0, hr * 2.15, hr * 0.08, 26);
-      add(g, brim, toonMat({ color: '#b48a5a', roughness: 0.9 }), 0, 0, 0);
-      const crown = new THREE.SphereGeometry(hr * 0.98, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2);
-      add(g, crown, toonMat({ color: '#a37b4c', roughness: 0.9 }), 0, 0.01, 0);
-      g.position.copy(headC).add(new THREE.Vector3(0, hr * 0.45, -hr * 0.05));
-      g.rotation.x = -0.1;
-      acc.petasos = attach(B.Head, g);
+      add(g, new THREE.CylinderGeometry(hr * 1.95, hr * 2.05, hr * 0.12, 26), toonMat({ color: '#d9a35a' }));
+      add(g, new THREE.SphereGeometry(hr * 1.02, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), toonMat({ color: '#c98b4f' }), 0, 0.01, 0);
+      g.position.copy(headC).add(new THREE.Vector3(0, hr * 0.55, 0));
+      g.rotation.x = -0.12;
+      acc.petasos = attach(B.head, g);
     }
-    // armes : tenues dans la main droite (position calculée dans la pose de repos)
-    const hand = P(B.hand_r), fing = P(B.middle_01_r);
-    const grip = hand.clone().lerp(fing, 0.6);
-    const holdUp = (obj, below) => { // tige verticale passant par la main
-      obj.position.set(grip.x, grip.y - below, grip.z);
-      return attach(B.hand_r, obj);
-    };
+    // armes : tenues dans la main droite (tige verticale passant par la main, pose de repos)
+    const grip = P(B['handslot.r']);
+    const holdUp = (obj, below) => { obj.position.set(grip.x, grip.y - below, grip.z); return attach(B['handslot.r'], obj); };
     {
-      const g = new THREE.Group(); // lance : hampe de frêne, pointe de bronze
-      add(g, new THREE.CylinderGeometry(0.012, 0.014, 1.32, 6), wood, 0, 0.66, 0);
-      add(g, new THREE.ConeGeometry(0.028, 0.13, 8), brass, 0, 1.38, 0).scale.set(1, 1, 0.45);
-      add(g, new THREE.CylinderGeometry(0.018, 0.016, 0.04, 8), bronzeDark, 0, 1.31, 0);
-      add(g, new THREE.ConeGeometry(0.014, 0.06, 6), bronzeDark, 0, -0.02, 0).rotation.x = Math.PI;
-      acc.spear = holdUp(g, 0.42);
+      const g = new THREE.Group(); // lance : hampe de bois, grosse pointe dorée
+      add(g, new THREE.CylinderGeometry(0.022, 0.024, 1.25, 7), wood, 0, 0.62, 0);
+      add(g, new THREE.ConeGeometry(0.06, 0.18, 8), brass, 0, 1.33, 0).scale.set(1, 1, 0.5);
+      add(g, new THREE.SphereGeometry(0.035, 8, 6), bronzeDark, 0, 1.24, 0);
+      acc.spear = holdUp(g, 0.3);
     }
     {
       const g = new THREE.Group(); // bâton de pèlerin à crosse
-      add(g, new THREE.CylinderGeometry(0.016, 0.019, 1.15, 7), wood, 0, 0.575, 0);
-      const hook = new THREE.TorusGeometry(0.06, 0.016, 6, 12, Math.PI * 1.2);
-      add(g, hook, wood, -0.06, 1.15, 0).rotation.z = -0.1;
-      acc.staff = holdUp(g, 0.4);
+      add(g, new THREE.CylinderGeometry(0.026, 0.03, 1.05, 7), wood, 0, 0.52, 0);
+      add(g, new THREE.TorusGeometry(0.07, 0.026, 6, 12, Math.PI * 1.2), wood, -0.07, 1.05, 0);
+      acc.staff = holdUp(g, 0.28);
     }
     {
-      const g = new THREE.Group(); // xiphos au côté (fourreau à la hanche gauche)
-      add(g, new THREE.BoxGeometry(0.04, 0.3, 0.018), leather, 0, -0.15, 0);
-      add(g, new THREE.BoxGeometry(0.1, 0.018, 0.03), gold, 0, 0.01, 0);
-      add(g, new THREE.CylinderGeometry(0.012, 0.012, 0.08, 6), wood, 0, 0.06, 0);
-      add(g, new THREE.SphereGeometry(0.018, 8, 6), gold, 0, 0.105, 0);
-      g.position.set(pelvis.x + waist.rx * 1.15, pelvis.y + 0.03, (waist.cz || 0) + 0.02);
-      g.rotation.z = 0.35;
-      acc.sword = attach(B.pelvis, g);
+      const g = new THREE.Group(); // xiphos au côté
+      add(g, new THREE.BoxGeometry(0.06, 0.3, 0.03), leather, 0, -0.15, 0);
+      add(g, new THREE.BoxGeometry(0.14, 0.03, 0.05), brass, 0, 0.01, 0);
+      add(g, new THREE.SphereGeometry(0.03, 8, 6), brass, 0, 0.07, 0);
+      g.position.set(bb.max.x * 1.02, P(B.hips).y, (bb.min.z + bb.max.z) / 2);
+      g.rotation.z = 0.3;
+      acc.sword = attach(B.hips, g);
     }
     {
       const g = new THREE.Group(); // arc et carquois dans le dos
-      const arc = new THREE.TorusGeometry(0.38, 0.011, 6, 26, Math.PI * 0.9);
-      const bow = add(g, arc, wood); bow.rotation.z = Math.PI * 0.55;
-      const str = new THREE.CylinderGeometry(0.002, 0.002, 0.72, 3);
-      add(g, str, linen, 0.06, 0, 0).rotation.z = 0.02;
-      const quiver = add(g, new THREE.CylinderGeometry(0.035, 0.03, 0.34, 10), leather, -0.07, 0.02, -0.02);
-      quiver.rotation.z = -0.5;
-      for (let k = 0; k < 3; k++) add(g, new THREE.ConeGeometry(0.015, 0.05, 4), crestMat, -0.15 - k * 0.012, 0.18 + k * 0.005, -0.02 + k * 0.01).rotation.z = -0.5;
-      g.position.set(0, chest.y + 0.02, -(ribs.rz + 0.06) + (ribs.cz || 0));
+      const bow = add(g, new THREE.TorusGeometry(0.3, 0.018, 6, 22, Math.PI * 0.9), wood); bow.rotation.z = Math.PI * 0.55;
+      const quiver = add(g, new THREE.CylinderGeometry(0.06, 0.05, 0.32, 10), leather, -0.07, 0.02, -0.03); quiver.rotation.z = -0.5;
+      for (let k = 0; k < 3; k++) add(g, new THREE.ConeGeometry(0.03, 0.07, 5), crestMat, -0.15 - k * 0.02, 0.18 + k * 0.01, -0.03).rotation.z = -0.5;
+      g.position.set(0, P(B.chest).y + 0.05, bb.min.z - 0.04);
       g.rotation.y = Math.PI;
-      g.scale.setScalar(0.72);
-      acc.bow = attach(B.spine_03, g);
+      acc.bow = attach(B.chest, g);
     }
     // bouclier rond (aspis) dans le dos, motif peint
-    const shieldFace = toonMat({ color: '#ffffff', roughness: 0.6, map: shieldTexture('chouette') });
+    const shieldFace = toonMat({ color: '#ffffff', map: shieldTexture('chouette') });
     {
       const g = new THREE.Group();
       const R = 0.22;
-      const disc = new THREE.CylinderGeometry(R, R, 0.03, 32); disc.rotateX(Math.PI / 2);
+      const disc = new THREE.CylinderGeometry(R, R, 0.04, 28); disc.rotateX(Math.PI / 2);
       add(g, disc, bronzeDark);
-      const face = new THREE.CircleGeometry(R * 0.96, 32);
-      add(g, face, shieldFace, 0, 0, -0.017).rotation.y = Math.PI;
-      const rim = new THREE.TorusGeometry(R, 0.022, 6, 32);
-      add(g, rim, brass);
-      g.position.set(0, chest.y - 0.02, -(ribs.rz + 0.07) + (ribs.cz || 0));
-      acc.shield = attach(B.spine_03, g);
+      add(g, new THREE.CircleGeometry(R * 0.94, 28), shieldFace, 0, 0, -0.022).rotation.y = Math.PI;
+      add(g, new THREE.TorusGeometry(R, 0.03, 6, 28), brass);
+      g.position.set(0, P(B.chest).y + 0.02, bb.min.z - 0.06);
+      acc.shield = attach(B.chest, g);
     }
-
-    // cape : accrochée au torse, à hauteur d'épaules
-    const holder = new THREE.Group();
-    const sy = (ul.y + ur.y) / 2;
-    holder.position.set(0, sy - 0.01, (ribs.cz || 0) - ribs.rz * 0.35);
-    const k = Math.max(0.6, Math.min(1.8, width / 0.27));
-    holder.scale.set(k * 0.86, sy / 0.88 * 0.8, k * 0.92);
-    hero.cape.position.set(0, 0, 0);
-    holder.add(hero.cape);
-    attach(B.spine_03, holder);
     // repère au centre de la tête (caméra du mode concentration, lueur de la pensée)
     const anchor = new THREE.Object3D();
     anchor.position.copy(headC);
-    attach(B.Head, anchor);
+    attach(B.head, anchor);
     rig.add(hero.mind);
     hero.mind.position.copy(anchor.position);
     rig.traverse((o) => { if (o.isMesh) o.castShadow = true; });
 
     hero.group.remove(hero.body);
     if (hero.spear.parent) hero.spear.parent.remove(hero.spear);
+    hero.group.scale.setScalar(1);
     hero.group.add(rig);
     _ik = { a: new THREE.Vector3(), b: new THREE.Vector3(), c: new THREE.Vector3(), t: new THREE.Vector3(), h: new THREE.Vector3(),
       q: new THREE.Quaternion(), w: new THREE.Quaternion(), p: new THREE.Quaternion() };
-    const arm = (side) => ({ upper: B['upperarm_' + side], lower: B['lowerarm_' + side], end: B['middle_01_' + side], qa: [new THREE.Quaternion(), new THREE.Quaternion()] });
-    Object.assign(hero, { body: rig, head: anchor, rig: { mixer, acts, arms: [arm('l'), arm('r')], headBone: B.Head, headSize: headSize * 0.9 },
-      skin: { mats, parts, acc, tunicCloth, shieldFace, capeHolder: holder } });
+    const arm = (side) => ({ upper: B['upperarm.' + side], lower: B['lowerarm.' + side], end: B['handslot.' + side], qa: [new THREE.Quaternion(), new THREE.Quaternion()] });
+    Object.assign(hero, { body: rig, head: anchor, rig: { mixer, acts, arms: [arm('l'), arm('r')], headBone: B.head, headSize: hr * 2 * 0.9 },
+      skin: { kk: true, cv, g2, base, tex, acc, capeMesh, shieldFace, mats: {}, parts: {} } });
     applySkin();
+  }
+
+  // tenues : couleurs des liserés, du cuir, du métal, des jambes et des lanières
+  const OUTFIT_COL = {
+    voyageur: { trim: '#f6ead0', leather: '#9a5a32', metal: '#ffcc4d', legs: '#7a5236', wraps: '#c98b4f' },
+    hoplite: { trim: '#fff1d0', leather: '#8a5a32', metal: '#ffcc4d', legs: null, wraps: '#8a5a32', chest: '#f0b23a' },
+    roi: { trim: '#ffcc4d', leather: '#ffcc4d', metal: '#ffffff', legs: null, wraps: '#ffcc4d' },
+    marin: { trim: '#ffffff', leather: '#ead7ad', metal: '#b9c4cc', legs: null, wraps: '#c98b4f' },
+    pelerin: { trim: '#ead9b5', leather: '#8a6a4c', metal: '#d9c08a', legs: '#9c7a5a', wraps: '#8a6a4c' }
+  };
+  // repeint les pastilles de la palette KayKit (dégradé d'origine × couleur choisie)
+  function paintPalette(K, colors) {
+    const W = 512, cw = W / 8, chh = W / 4;
+    const out = new ImageData(new Uint8ClampedArray(K.base.data), W, W);
+    const S = K.base.data, D = out.data;
+    const cell = (dst, srcCell, hex) => {
+      if (!hex) return;
+      const t = new THREE.Color(hex);
+      const [sx, sy] = srcCell || dst;
+      let sum = 0, n = 0;
+      for (let y = 0; y < chh; y += 4) for (let x = 0; x < cw; x += 4) {
+        const i = ((sy * chh + y) * W + sx * cw + x) * 4; sum += S[i] + S[i + 1] + S[i + 2]; n++;
+      }
+      const ref = Math.max(1, sum / n);
+      for (let y = 0; y < chh; y++) for (let x = 0; x < cw; x++) {
+        const si = ((sy * chh + y) * W + sx * cw + x) * 4, di = ((dst[1] * chh + y) * W + dst[0] * cw + x) * 4;
+        const k = Math.min(1.25, (S[si] + S[si + 1] + S[si + 2]) / ref);
+        D[di] = t.r * 255 * k; D[di + 1] = t.g * 255 * k; D[di + 2] = t.b * 255 * k; D[di + 3] = 255;
+      }
+    };
+    Object.keys(colors).forEach((key) => {
+      const c = colors[key];
+      if (!c || !KK[key]) return;
+      KK[key].forEach((dst) => cell(dst, key === 'cape' ? KK.capeSrc : null, c));
+    });
+    if (colors.chest) cell(KK.tunic[0], null, colors.chest);
+    K.g2.putImageData(out, 0, 0);
+    K.tex.needsUpdate = true;
   }
 
   // applique skinState au héros (modèle animé ou héros procédural de secours) : peu coûteux
@@ -2551,39 +2495,24 @@
       return;
     }
     const outfit = skinOpt('outfit', st.outfit).id;
-    const tunicHex = col('tunic');
-    // textures en niveaux de gris (moyenne ≈ 0,82) : la couleur choisie les teinte
-    if (K.mats.Tunic) setLin(K.mats.Tunic.color, tunicHex).multiplyScalar(1.2);
-    setLin(K.tunicCloth.color, tunicHex);
-    ['Hair', 'Beard', 'Brows'].forEach((n) => { if (K.mats[n]) setLin(K.mats[n].color, col('hair')).multiplyScalar(1.25); });
-    // peau : la texture est déjà hâlée (≈ #c98f66) ; on la multiplie vers le ton choisi
-    const ref = lin('#d29a72'), tgt = lin(col('skin'));
-    ['Skin', 'Hands', 'Legs'].forEach((n) => {
-      if (K.mats[n]) K.mats[n].color.setRGB(tgt.r / ref.r, tgt.g / ref.g, tgt.b / ref.b);
+    const O = OUTFIT_COL[outfit] || OUTFIT_COL.voyageur;
+    const skinHex = col('skin'), hairHex = col('hair');
+    paintPalette(K, {
+      skin: skinHex, hair: hairHex, tunic: col('tunic'), cape: capeId === 'none' ? col('tunic') : capeHex,
+      trim: O.trim, leather: O.leather, metal: O.metal, legs: O.legs || skinHex, wraps: O.wraps, chest: O.chest
     });
-    const A = K.acc, P = K.parts;
-    const greek = outfit !== 'voyageur';
-    if (P.Trousers) P.Trousers.visible = !greek;
-    if (P.Shoes) P.Shoes.visible = !greek;
-    if (P.Legs) P.Legs.visible = greek;
-    A.sandals.forEach((o) => { o.visible = greek; });
-    A.greaves.forEach((o) => { o.visible = outfit === 'hoplite'; });
-    A.cuirass.visible = outfit === 'hoplite';
-    A.pteruges.visible = outfit === 'hoplite';
-    A.skirtShort.visible = outfit === 'marin';
-    A.skirtLong.visible = outfit === 'roi' || outfit === 'pelerin';
-    // le roi porte un ourlet d'or, le pèlerin un simple lin
-    A.skirtLong.userData.hem.visible = outfit === 'roi';
+    if (K.capeMesh) K.capeMesh.visible = capeId !== 'none';
+    const A = K.acc;
+    setLin(A.hairMat.color, hairHex);
     const accId = skinOpt('accessory', st.accessory).id;
     ['laurel', 'helmet', 'band', 'petasos'].forEach((n) => { A[n].visible = accId === n; });
-    setLin(A.band.children[0].material.color, capeId === 'none' || capeId === 'blanc' ? '#a63a30' : capeHex);
+    A.hair.visible = accId !== 'helmet';
+    setLin(A.band.children[0].material.color, capeId === 'none' || capeId === 'blanc' ? '#ff4f4f' : capeHex);
     const w = skinOpt('weapon', st.weapon).id;
     ['spear', 'staff', 'bow', 'sword'].forEach((n) => { A[n].visible = w === n; A[n].userData.hidden = false; });
     const sh = skinOpt('shield', st.shield).id;
     A.shield.visible = sh !== 'none';
     if (sh !== 'none' && K.shieldFace.map !== shieldTexture(sh)) { K.shieldFace.map = shieldTexture(sh); K.shieldFace.needsUpdate = true; }
-    // carquois et bouclier se disputent le dos : le bouclier passe devant l'arc
-    if (A.bow.visible && A.shield.visible) A.shield.position.z -= 0; // (le bouclier, plus large, recouvre l'arc)
     if (World.ok && !running) renderFrame();
   }
 
@@ -2621,16 +2550,16 @@
 
   function updateRig(dt, t, moving, speed, lift) {
     const r = hero.rig;
-    const target = { idle: moving ? 0 : 1, walk: 0, run: moving ? 1 : 0 };
+    const cheer = !moving && hero.celebrate > 0.05 ? 1 : 0;
+    const target = { idle: moving || cheer ? 0 : 1, walk: 0, run: moving ? 1 : 0, cheer };
     const kk = 1 - Math.exp(-dt * 10);
     Object.keys(r.acts).forEach((k) => {
       const A = r.acts[k];
       A.w += ((target[k] || 0) - A.w) * kk;
       A.a.setEffectiveWeight(A.w);
     });
-    if (r.acts.run) r.acts.run.a.timeScale = speed ? 1.12 : 0.8;
+    if (r.acts.run) r.acts.run.a.timeScale = speed ? 1.0 : 0.8;
     r.mixer.update(dt);
-    hero.cape.rotation.x = moving ? -0.42 + Math.sin(t * 7) * 0.07 : -0.06 + Math.sin(t * 1.2) * 0.03;
     // en concentration, l'arme tenue en main s'efface (les mains montent vers la tête)
     const A = hero.skin && hero.skin.acc;
     if (A) HAND_WEAPONS.forEach((n) => { if (A[n].visible || A[n].userData.hidden) { const on = hero.focus < 0.3; A[n].visible = on; A[n].userData.hidden = !on; } });
@@ -2882,16 +2811,27 @@
         }
       });
       ch.sheep.forEach((s) => { s.visible = reached; if (reached) updateSheep(ch, s, dt, t); });
-      // vie de l'île : ailes du moulin, barques qui tanguent, feu du phare la nuit
+      // fanion du boss qui flotte au vent
+      ch.nodes.forEach((n) => {
+        if (!n.flag || !n.rings.visible || calm) return;
+        const P = n.flag.geometry.attributes.position, B0 = n.flag.userData.base;
+        for (let i = 0; i < P.count; i++) { const x = B0[i * 3]; P.setZ(i, Math.sin(t * 4 - x * 9) * 0.05 * x * 2); }
+        P.needsUpdate = true;
+      });
+      // vie de l'île : ailes des moulins, barques qui tanguent, brumes, tourbillon
       const life = ch.life;
-      if (life) {
-        if (life.sails && !calm) life.sails.rotation.z -= dt * 0.6;
+      if (life && !calm) {
+        life.sails.forEach((s) => { s.rotation.z -= dt * 0.8; });
         life.boats.forEach((b) => {
           b.position.y = Math.sin(t * 1.3 + b.userData.phase) * 0.03 - 0.02;
           b.rotation.z = Math.sin(t * 1.1 + b.userData.phase) * 0.05;
           b.rotation.y = b.userData.base + Math.sin(t * 0.3 + b.userData.phase) * 0.08;
         });
-        if (life.lamp) life.lamp.material.opacity = isDark && reached ? 0.75 + Math.sin(t * 2.2) * 0.15 : 0;
+        life.mist.forEach((m) => {
+          m.position.y = m.userData.y + Math.sin(t * 0.6 + m.userData.phase) * 0.12;
+          m.material.opacity = (0.45 + Math.sin(t * 0.8 + m.userData.phase) * 0.15) * ch.fade;
+        });
+        if (life.whirl) life.whirl.rotation.z += dt * 1.2;
       }
     });
     // le sentier s'illumine jusqu'à Ulysse
@@ -2915,6 +2855,17 @@
         setLin(CUR_RING.material.color, opts.levelInfo(done).accent);
       }
     }
+    // flèche qui rebondit au-dessus du prochain niveau, quand Ulysse n'y est pas encore
+    if (BOUNCE) {
+      const away = !!cur && (selected !== done || hero.free || hero.route) && !cine;
+      BOUNCE.visible = away;
+      if (away) {
+        const hop = Math.abs(Math.sin(t * 3.2));
+        BOUNCE.position.set(cur.x, cur.y + 0.35 + hop * 0.3, cur.z);
+        BOUNCE.scale.set(1 + (1 - hop) * 0.12, 1 - (1 - hop) * 0.12, 1 + (1 - hop) * 0.12);
+        BOUNCE.rotation.y = t * 1.5;
+      }
+    }
     const sel = nodePos(selected);
     const camD = camera.position.distanceTo(sel);
     const ms = Math.max(0.28, Math.min(1.15, camD * 0.075));
@@ -2931,6 +2882,7 @@
       u.a += dt * u.speed;
       c.position.set(focus.x + Math.cos(u.a) * u.r, u.y, focus.z + Math.sin(u.a) * u.r);
       c.rotation.y = -u.a;
+      c.visible = c.position.distanceTo(camera.position) > 8; // jamais de nuage plaqué contre l'objectif
     });
     birds.forEach((b) => {
       const u = b.userData;
@@ -2959,7 +2911,7 @@
       const head = new THREE.Vector3();
       hero.head.getWorldPosition(head);
       goal.tx = head.x; goal.ty = head.y + 0.02; goal.tz = head.z;
-      goal.radius = 1.25; goal.elev = 0.12;
+      goal.radius = 1.8; goal.elev = 0.14; // (grosse tête de dessin animé : on recule un peu)
       const ry = hero.group.rotation.y;
       goal.theta = Math.atan2(Math.cos(ry), Math.sin(ry)) + 0.35;
       setLin(hero.mind.material.color, cine.accent);
@@ -3185,7 +3137,7 @@
           'uniform sampler2D tDiffuse; uniform vec2 texel; uniform float focus; uniform float strength; varying vec2 vUv;',
           'void main() {',
           '  float d = abs(vUv.y - focus);',
-          '  float blur = smoothstep(0.16, 0.55, d) * 7.0 * strength;', // net au centre, flou vers les bords
+          '  float blur = smoothstep(0.22, 0.6, d) * 3.5 * strength;', // net au centre, flou vers les bords
           '  vec4 col = texture2D(tDiffuse, vUv) * 0.2;',
           '  for (int i = 0; i < 8; i++) {',
           '    float a = float(i) * 2.39996;',                              // angle d'or : échantillons bien répartis
@@ -3194,13 +3146,13 @@
           '  }',
           '  vec3 c = col.rgb;',
           '  float l = dot(c, vec3(0.299, 0.587, 0.114));',
-          '  c = mix(vec3(l), c, 1.1);',                                      // un peu plus de couleur
-          '  c = (c - 0.5) * 1.03 + 0.5;',                                    // un peu plus de contraste
+          '  c = mix(vec3(l), c, 1.12);',                                      // un peu plus de couleur
+          '  c = (c - 0.5) * 1.02 + 0.5;',                                    // un peu plus de contraste
           // étalonnage chaud et doux : ombres légèrement bleutées, lumières dorées
           '  float s = smoothstep(0.0, 0.55, l), hi = smoothstep(0.45, 1.0, l);',
           '  c += vec3(-0.012, 0.0, 0.022) * (1.0 - s) + vec3(0.03, 0.012, -0.022) * hi;',
           '  c = max(c, vec3(0.0));',
-          '  vec2 q = vUv - 0.5; c *= 1.0 - dot(q, q) * 0.42 * strength;',    // vignettage doux
+          '  vec2 q = vUv - 0.5; c *= 1.0 - dot(q, q) * 0.12 * strength;',    // vignettage doux
           '  gl_FragColor = vec4(c, 1.0);',
           '}'
         ].join('\n'),
@@ -3328,9 +3280,8 @@
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     // chaîne de rendu linéaire → tone mapping filmique → sRGB
     renderer.outputEncoding = THREE.sRGBEncoding;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.75;
-    renderer.physicallyCorrectLights = true;
+    renderer.toneMapping = THREE.NoToneMapping; // couleurs franches, sans tone mapping filmique
+    renderer.physicallyCorrectLights = false;
     renderer.domElement.className = 'world-canvas';
     renderer.info.autoReset = false; // (statistiques de la scène complète, pas de la seule passe finale)
     setupPost();
@@ -3387,7 +3338,6 @@
     resize();
     World.ok = true;
     applyLight();
-    loadEnvironment(); // ciel HDRI en arrière-plan ; sans lui, l'hémisphère éclaire seule
     loadAssets(); // modèles 3D en arrière-plan ; le monde procédural reste en place s'ils manquent
     return true;
   };
