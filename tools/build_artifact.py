@@ -31,13 +31,23 @@ html = html.replace('<script src="vendor/three.min.js"></script>',
                     '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>')
 # Modèles 3D (CC0) : chargeur depuis le CDN, et les fichiers .glb intégrés en data URI
 # (la page de test est un fichier unique ; world.js lit window.ODY_ASSETS avant le réseau).
+MIME = {".glb": "model/gltf-binary", ".jpg": "image/jpeg", ".png": "image/png", ".hdr": "application/octet-stream"}
+# Textures (Stylized Nature MegaKit, ≤ 512 px) et ciel HDRI (256×128) : intégrés aussi.
+# Si une texture manque, world.js omet le feuillage concerné ; sans HDRI, l'hémisphère éclaire seule.
+MAX_TEXTURE = 400 * 1024  # garde-fou : une texture plus lourde reste hors de la page de test
 models = {}
-for f in sorted((WWW / "assets" / "models").rglob("*.glb")):
-    rel = f.relative_to(WWW).as_posix()
-    models[rel] = "data:model/gltf-binary;base64," + base64.b64encode(f.read_bytes()).decode("ascii")
+for sub, pattern in [("models", "*.glb"), ("textures", "*.jpg"), ("textures", "*.png"), ("textures", "*.hdr")]:
+    for f in sorted((WWW / "assets" / sub).rglob(pattern)):
+        if sub == "textures" and f.stat().st_size > MAX_TEXTURE:
+            print(f"(texture ignorée, trop lourde : {f.name})")
+            continue
+        rel = f.relative_to(WWW).as_posix()
+        models[rel] = "data:" + MIME[f.suffix] + ";base64," + base64.b64encode(f.read_bytes()).decode("ascii")
 html = html.replace('<script src="vendor/GLTFLoader.js"></script>',
                     '<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>\n'
                     '<script>window.ODY_ASSETS = ' + json.dumps(models) + ';</script>')
+html = html.replace('<script src="vendor/RGBELoader.js"></script>',
+                    '<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/RGBELoader.js"></script>')
 
 # La page publiée reçoit déjà son squelette (doctype, head, body, meta).
 for pattern in [r"<!doctype html>\s*", r"<html[^>]*>\s*", r"</html>\s*", r"<head>\s*", r"</head>\s*",
