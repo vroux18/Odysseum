@@ -143,7 +143,7 @@
     const initial = new Uint8Array(N);
     puzzle.opens.forEach((o) => flood(initial, o, num, nb, 2));
     let state = initial.slice();
-    let mistakes = 0, won = false;
+    let mistakes = 0, won = false, wrecked = false;
     const history = [];
 
     const grid = document.createElement('div');
@@ -208,14 +208,36 @@
           d.classList.remove('hit', 'pop'); void d.offsetWidth; d.classList.add('hit');
           setTimeout(() => d.classList.remove('hit'), 700);
         });
+        wreck();
       } else if (delay.size) {
         if (delay.size > 1) C.sfx.place(); else C.sfx.tap();
       }
       return hits;
     }
 
+    // naufrage : tous les écueils apparaissent, puis on propose de reprendre avant le choc ou de recommencer
+    let wreckBox = null;
+    function wreck() {
+      wrecked = true;
+      grid.classList.add('wrecked');
+      for (let i = 0; i < N; i++) if (mine[i] && state[i] !== 3) cells[i].classList.add('reveal-reef');
+      wreckBox = document.createElement('div');
+      wreckBox.className = 'dm-wreck';
+      wreckBox.innerHTML = '<p><b>Écueil !</b> Ton navire a heurté Charybde.</p>' +
+        '<div><button class="dm-undo">Revenir avant le choc</button><button class="dm-restart">Recommencer</button></div>';
+      setTimeout(() => { if (wreckBox) grid.appendChild(wreckBox); }, 650);
+      wreckBox.querySelector('.dm-undo').addEventListener('click', (e) => { e.stopPropagation(); unwreck(); if (history.length) state = history.pop(); render(); api.onChange(); });
+      wreckBox.querySelector('.dm-restart').addEventListener('click', (e) => { e.stopPropagation(); unwreck(); history.length = 0; state = initial.slice(); render(); api.onChange(); C.sfx.tap(); });
+    }
+    function unwreck() {
+      wrecked = false;
+      grid.classList.remove('wrecked');
+      cells.forEach((d) => d.classList.remove('reveal-reef'));
+      if (wreckBox) { wreckBox.remove(); wreckBox = null; }
+    }
+
     function act(i, long) {
-      if (won) return;
+      if (won || wrecked) return;
       const flagMode = long || (api.tool && api.tool() === 'cross');
       const s = state[i];
       if (flagMode) {
@@ -286,17 +308,20 @@
         return 'Écueils ' + flags + '/' + total + (mistakes ? ' · heurtés ' + mistakes : '');
       },
       undo() {
+        if (wrecked) unwreck();
         if (!history.length || won) return;
         state = history.pop();
         render(); api.onChange();
       },
       reset() {
+        if (wrecked) unwreck();
         if (won) return;
         history.push(state.slice());
         state = initial.slice();
         render(); api.onChange();
       },
       solve() {
+        if (wrecked) unwreck();
         if (won) return;
         history.push(state.slice());
         for (let i = 0; i < N; i++) if (mine[i] && state[i] === 0) state[i] = 1;
@@ -314,6 +339,7 @@
       },
       hint() {
         if (won) return false;
+        if (wrecked) { unwreck(); if (history.length) state = history.pop(); render(); api.onChange(); }
         // un fanion posé sur une case sûre fausse tout : on le retire d'abord
         for (let i = 0; i < N; i++) {
           if (state[i] === 1 && !mine[i]) {
@@ -384,7 +410,7 @@
     { art: art(tg(3, (r, c) => T3[r][c])),
       text: 'Pour poser un <b>fanion</b> sur un écueil, appuie longuement ou choisis l\'outil <b>×</b>.' },
     { art: art(tg(3, (r, c) => (r === 1 && c === 1 ? 'x' : r === 0 ? 'h' : 1))),
-      text: 'Ouvre toutes les cases sûres. <b>Tout se déduit</b>, sans deviner. Un écueil heurté est juste noté : continue.' }
+      text: 'Ouvre toutes les cases sûres. <b>Tout se déduit</b>, sans deviner. Heurter un écueil fait chavirer : tu peux revenir avant le choc ou recommencer.' }
   ];
 
   C.register({

@@ -70,3 +70,16 @@
   .cell-grid.demineur .cell { transition-delay: 0ms; }
   .demineur .cell .num, .demineur .cell .pennant, .demineur .cell .rock, .cell-grid.demineur .cell.hit, .cell-grid.demineur .cell.why { animation: none; }
 }
+
+/* naufrage : les écueils cachés apparaissent, panneau pour reprendre */
+.demineur.wrecked .cell.reveal-reef { position: relative; }
+.demineur.wrecked .cell.reveal-reef::after { content: ''; position: absolute; inset: 28%; border-radius: 40% 50% 45% 55%; background: #6d5a48; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .25);
+  animation: dm-pop .45s var(--spring) both; animation-delay: calc(var(--i, 0) * 25ms); }
+@keyframes dm-pop { from { transform: scale(0); opacity: 0; } }
+.dm-wreck { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 5; width: min(86%, 300px); padding: 16px; border-radius: 20px; text-align: center;
+  background: var(--surface); color: var(--ink); box-shadow: 0 20px 50px -20px rgba(0, 0, 0, .6); animation: dm-in .45s var(--spring); filter: none; }
+@keyframes dm-in { from { transform: translate(-50%, -40%) scale(.9); opacity: 0; } }
+.dm-wreck p { margin: 0 0 12px; font-size: 15px; line-height: 1.35; }
+.dm-wreck div { display: flex; flex-direction: column; gap: 8px; }
+.dm-wreck button { padding: 11px; border-radius: 14px; font-size: 14px; background: var(--tile); color: var(--ink); }
+.dm-wreck .dm-restart { background: var(--game); color: #fffaf0; }
