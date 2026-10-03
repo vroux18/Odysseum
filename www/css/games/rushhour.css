@@ -1,0 +1,68 @@
+/* Port (Rush Hour) : un bassin vu de dessus, un quai de pierre, une passe à droite */
+:root {
+  --rh-quay: var(--tile, #e6dccb);
+  --rh-quay-edge: var(--tile-edge, #d2c4ad);
+  --rh-sea: #bfdde1;
+  --rh-sea-deep: #a8cfd6;
+  --rh-spot: rgba(255, 255, 255, .26);
+  --rh-shadow: rgba(20, 60, 80, .22);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --rh-sea: #1f4b5c; --rh-sea-deep: #173d4d; --rh-spot: rgba(255, 255, 255, .05); --rh-shadow: rgba(0, 0, 0, .45);
+  }
+}
+:root[data-theme="dark"] {
+  --rh-sea: #1f4b5c; --rh-sea-deep: #173d4d; --rh-spot: rgba(255, 255, 255, .05); --rh-shadow: rgba(0, 0, 0, .45);
+}
+
+.rh {
+  position: relative; flex: none; border-radius: 22px; touch-action: none;
+  background: var(--rh-quay);
+  box-shadow: inset 0 0 0 1px var(--rh-quay-edge), 0 24px 50px -32px var(--shade, rgba(0, 0, 0, .3));
+}
+/* le bassin */
+.rh-sea {
+  position: absolute; inset: var(--pad); border-radius: 12px;
+  background: linear-gradient(160deg, var(--rh-sea), var(--rh-sea-deep));
+  box-shadow: inset 0 2px 6px -2px var(--rh-shadow);
+  display: grid; grid-template-columns: repeat(6, 1fr); grid-template-rows: repeat(6, 1fr);
+  padding: calc(var(--cell) * .09); gap: calc(var(--cell) * .18);
+}
+.rh-spot { border-radius: 30%; background: var(--rh-spot); }
+/* la passe : le quai s'interrompt à droite de la 3e rangée */
+.rh-exit {
+  position: absolute; right: -2px; width: calc(var(--pad) + 6px);
+  background: linear-gradient(90deg, var(--rh-sea-deep), var(--rh-sea) 70%, color-mix(in srgb, var(--rh-sea) 0%, transparent));
+}
+.rh-exit::before, .rh-exit::after {
+  content: ''; position: absolute; right: calc(var(--pad) * .35); width: 6px; height: 6px; border-radius: 50%;
+  background: var(--game, #b8864a); opacity: .85;
+}
+.rh-exit::before { top: -9px; }
+.rh-exit::after { bottom: -9px; }
+
+/* les bateaux : glissement au doigt, puis retour élastique sur la case */
+.rh-boat {
+  position: absolute; left: 0; top: 0; cursor: grab; will-change: transform;
+  transition: transform .42s var(--spring, cubic-bezier(.34, 1.56, .64, 1));
+}
+.rh-boat svg {
+  display: block; overflow: visible; stroke: none;
+  filter: drop-shadow(0 2px 2px var(--rh-shadow));
+  transition: transform .25s var(--spring, ease), filter .25s ease;
+}
+/* arrivée des bateaux, une seule fois au début de la partie */
+.rh.enter .rh-boat svg { animation: rh-in .55s var(--spring, ease) both; animation-delay: calc(var(--k, 0) * 40ms); }
+.rh-boat.drag { transition: none; cursor: grabbing; z-index: 2; }
+.rh-boat.drag svg { transform: scale(1.04); filter: drop-shadow(0 6px 6px var(--rh-shadow)); }
+.rh.still .rh-boat { transition: none; }
+@keyframes rh-in { from { transform: scale(.6); opacity: 0; } }
+
+/* victoire : le navire prend le large par la passe et s'efface */
+.rh-boat.sail { z-index: 3; transition: transform 1.3s cubic-bezier(.5, 0, .75, .35), opacity .9s ease .5s; opacity: 0; }
+.rh.won .rh-boat:not(.hero) { cursor: default; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rh-boat, .rh-boat svg { transition: none; animation: none; }
+}
