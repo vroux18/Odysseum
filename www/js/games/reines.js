@@ -165,7 +165,8 @@
       const auto = blocked();
       cells.forEach((d, i) => {
         const v = state[i];
-        d.innerHTML = v === 2 ? CROWN : v === 1 || auto[i] ? '<span class="mark"></span>' : '';
+        const k = v === 2 ? 'c' : v === 1 || auto[i] ? 'm' : '';
+        if (d.dataset.k !== k) { d.dataset.k = k; d.innerHTML = k === 'c' ? CROWN : k === 'm' ? '<span class="mark"></span>' : ''; } // seul le symbole qui change s'anime
         d.classList.toggle('bad', bad.has(i));
       });
     }

@@ -168,31 +168,38 @@
     const overlap = (a, b) => a.r < b.r + b.h && b.r < a.r + a.h && a.c < b.c + b.w && b.c < a.c + a.w;
 
     let preview = null;
+    const rectEls = new Map(); // clé r,c,w,h -> élément : un rectangle déjà posé ne rejoue pas son apparition
+    let previewEl = null;
     function render() {
-      layer.innerHTML = '';
       // un chiffre posé sur un rectangle coloré passe en foncé, pour rester lisible
       clueLayer.querySelectorAll('.clue').forEach((d) => {
         const c = +d.dataset.cell, r = Math.floor(c / n), col = c % n;
         d.classList.toggle('on-fill', rects.some((rc) => valid(rc) && r >= rc.r && r < rc.r + rc.h && col >= rc.c && col < rc.c + rc.w));
       });
       let color = 0;
+      const keep = new Set();
       rects.forEach((rc) => {
-        const d = document.createElement('div');
+        const key = rc.r + ',' + rc.c + ',' + rc.w + ',' + rc.h;
+        keep.add(key);
+        let d = rectEls.get(key);
+        if (!d) {
+          d = document.createElement('div');
+          d.style.gridRow = (rc.r + 1) + ' / span ' + rc.h;
+          d.style.gridColumn = (rc.c + 1) + ' / span ' + rc.w;
+          rectEls.set(key, d);
+          layer.insertBefore(d, previewEl);
+        }
         const ok = valid(rc);
         d.className = 'rect' + (ok ? '' : ' invalid');
-        d.style.gridRow = (rc.r + 1) + ' / span ' + rc.h;
-        d.style.gridColumn = (rc.c + 1) + ' / span ' + rc.w;
-        if (ok) d.style.background = FILLS[color++ % FILLS.length];
-        layer.appendChild(d);
+        d.style.background = ok ? FILLS[color++ % FILLS.length] : '';
       });
+      rectEls.forEach((d, key) => { if (!keep.has(key)) { d.remove(); rectEls.delete(key); } });
       if (preview) {
-        const d = document.createElement('div');
-        d.className = 'rect preview';
-        d.style.gridRow = (preview.r + 1) + ' / span ' + preview.h;
-        d.style.gridColumn = (preview.c + 1) + ' / span ' + preview.w;
-        d.dataset.size = preview.w * preview.h;
-        layer.appendChild(d);
-      }
+        if (!previewEl) { previewEl = document.createElement('div'); previewEl.className = 'rect preview'; layer.appendChild(previewEl); }
+        previewEl.style.gridRow = (preview.r + 1) + ' / span ' + preview.h;
+        previewEl.style.gridColumn = (preview.c + 1) + ' / span ' + preview.w;
+        previewEl.dataset.size = preview.w * preview.h;
+      } else if (previewEl) { previewEl.remove(); previewEl = null; }
     }
 
     function cellAt(e) {

@@ -180,7 +180,8 @@
     function render() {
       const { bad, badEdges } = errors();
       cells.forEach((d, i) => {
-        d.innerHTML = state[i] === SUN ? SUN_SVG : state[i] === MOON ? MOON_SVG : '';
+        const k = String(state[i] || '');
+        if (d.dataset.k !== k) { d.dataset.k = k; d.innerHTML = state[i] === SUN ? SUN_SVG : state[i] === MOON ? MOON_SVG : ''; } // seul le symbole qui change s'anime
         d.classList.toggle('sun', state[i] === SUN);
         d.classList.toggle('moon', state[i] === MOON);
         d.classList.toggle('bad', bad.has(i));

@@ -62,6 +62,8 @@
     let cur = [];
     let locked = new Map(); // positions révélées par indice
     let over = false;
+    let fresh = -1;      // case qui vient de recevoir un jeton
+    let freshRow = false; // un essai vient d'être validé : ses témoins apparaissent
 
     const box = document.createElement('div');
     box.className = 'coffre' + (isLock ? ' lock' : '');
@@ -92,7 +94,7 @@
       }
       const { exact, near } = score(code, guess);
       let h = '';
-      for (let i = 0; i < L; i++) h += '<i class="peg ' + (i < exact ? 'exact' : i < exact + near ? 'near' : '') + '"></i>';
+      for (let i = 0; i < L; i++) h += '<i class="peg ' + (i < exact ? 'exact' : i < exact + near ? 'near' : '') + '" style="--k:' + i + '"></i>';
       return h;
     }
 
@@ -102,12 +104,13 @@
       const shown = over ? rows.length : rows.length + 1;
       for (let r = 0; r < shown; r++) {
         const row = document.createElement('div');
-        row.className = 'coffre-row' + (r === rows.length && !over ? ' current' : '');
+        row.className = 'coffre-row' + (r === rows.length && !over ? ' current' : '') + (freshRow && r === rows.length - 1 ? ' fresh' : '');
         const guess = r < rows.length ? rows[r] : cur;
         let slots = '';
         for (let i = 0; i < L; i++) {
           const v = r === rows.length && locked.has(i) && guess[i] == null ? locked.get(i) : guess[i];
-          slots += '<button class="slot' + (v == null ? ' empty' : '') + '" data-i="' + i + '"' + (r !== rows.length ? ' disabled' : '') + '>' + tokenHTML(v) + '</button>';
+          const isNew = r === rows.length && i === fresh;
+          slots += '<button class="slot' + (v == null ? ' empty' : '') + (isNew ? ' new' : '') + '" data-i="' + i + '"' + (r !== rows.length ? ' disabled' : '') + '>' + tokenHTML(v) + '</button>';
         }
         row.innerHTML = '<div class="slots">' + slots + '</div>' +
           '<div class="fb">' + (r < rows.length ? feedbackHTML(rows[r]) : '') + '</div>';
@@ -129,6 +132,7 @@
         board.appendChild(reveal);
         reveal.querySelector('#coffre-retry').addEventListener('click', () => newCode());
       }
+      fresh = -1; freshRow = false;
       const curRow = board.querySelector('.coffre-row.current');
       if (curRow) curRow.scrollIntoView({ block: 'nearest' });
     }
@@ -168,7 +172,7 @@
     function put(v) {
       if (over) return;
       for (let i = 0; i < L; i++) {
-        if (cur[i] == null && !locked.has(i)) { cur[i] = v; C.sfx.tap(); render(); api.onChange(); return; }
+        if (cur[i] == null && !locked.has(i)) { cur[i] = v; fresh = i; C.sfx.tap(); render(); api.onChange(); return; }
       }
     }
 
@@ -178,6 +182,7 @@
       if (g.some((v) => v == null)) { C.sfx.error(); return; }
       rows.push(g);
       cur = [];
+      freshRow = true;
       const won = g.every((v, i) => v === code[i]);
       if (won) { over = true; render(); api.onWin(); return; }
       C.sfx.place();

@@ -209,6 +209,8 @@
       if (grid) {
         const n = +getComputedStyle(grid).getPropertyValue('--n') || 1;
         grid.querySelectorAll('.cell, .nono-cell, .bulb').forEach((el, k) => el.style.setProperty('--i', Math.floor(k / n) + (k % n)));
+        // une fois la cascade jouée, la grille est « prête » : effacer une case ne relance plus l'apparition
+        setTimeout(() => grid.classList.add('ready'), 2 * n * 18 + 800);
       }
       host.addEventListener('pointerdown', (e) => {
         const t = e.target.closest('.cell, .bulb, .nono-cell');
@@ -244,7 +246,7 @@
             if (info.t0) info.penalty += 10; // compet : chaque indice coûte 10 secondes
           }
         },
-        // outil de test temporaire : résout la grille d'un coup (sans XP)
+        // outil de test temporaire : résout la grille d'un coup
         solve() {
           if (won) return;
           auto = true;
@@ -291,7 +293,7 @@
 
   // Récapitulatif animé : chaque capacité travaillée, son gain d'XP, sa barre qui se remplit.
   // ------------------------- Mode chill / compet -------------------------
-  const isCompet = () => C.store.settings.playMode === 'compet';
+  const isCompet = () => false; // jeu uniquement en mode chill pour l'instant (compet gardé de côté)
   const levelTime = (info) => (performance.now() - info.t0) / 1000 + (info.penalty || 0);
   function renderPlayMode() {
     document.querySelectorAll('.play-mode button').forEach((b) => b.classList.toggle('on', b.dataset.playMode === (isCompet() ? 'compet' : 'chill')));
@@ -391,10 +393,10 @@
   }
 
   // ------------------------------ Expérience ------------------------------
-  // L'XP dépend de la façon de jouer : rapidité, indices utilisés ; l'autosolve n'en donne pas.
+  // L'XP dépend de la façon de jouer : rapidité, indices utilisés. L'autosolve (outil de dev) en donne, sans notification.
   function gainXp(g, level, boss, elapsed, hints, auto) {
     const sk = SKILLS.find((s) => s.games.includes(g.id));
-    if (!sk || auto) return;
+    if (!sk) return;
     const base = 10 + Math.floor(level / 2);
     const par = 25 + level * 5;                                   // temps « attendu » en secondes
     const speed = Math.max(0.6, Math.min(1.4, 1.4 - 0.6 * (elapsed / par)));
@@ -403,7 +405,7 @@
     const before = skillStats(sk).level;
     C.store.xp[sk.id] = (C.store.xp[sk.id] || 0) + gain;
     const after = skillStats(sk).level;
-    showXp('+' + gain + ' <b>' + sk.name.toLowerCase() + '</b>' + (after > before ? ' · niveau ' + after : ''), ACCENT[sk.games[0]]);
+    if (!auto) showXp('+' + gain + ' <b>' + sk.name.toLowerCase() + '</b>' + (after > before ? ' · niveau ' + after : ''), ACCENT[sk.games[0]]);
   }
   function showXp(html, accent) {
     const t = $('#xp-toast');

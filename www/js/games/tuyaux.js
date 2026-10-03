@@ -60,7 +60,19 @@
     // état : masque courant de chaque pièce (la solution tournée de `turns` quarts de tour)
     let cur = puzzle.solution.map((m, i) => { let x = m; for (let t = 0; t < puzzle.turns[i]; t++) x = rot(x); return x; });
     const history = [];
-    const anim = new Float32Array(n * n); // rotation visuelle en cours (en quarts de tour)
+    // rotation visuelle fluide : chaque pièce garde l'angle restant au moment du toucher et l'heure de départ ;
+    // l'angle restant décroît avec une courbe douce et un très léger rebond à l'arrivée
+    const SPIN = 260; // durée d'un quart de tour, en ms
+    const spinFrom = new Float32Array(n * n), spinT0 = new Float64Array(n * n);
+    const glow = new Float32Array(n * n); // remplissage visuel (0 à 1) de chaque pièce
+    const easeOutBack = (x) => { const c1 = 1.25, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+    function remaining(i, now) {
+      if (!spinFrom[i]) return 0;
+      const k = (now - spinT0[i]) / SPIN;
+      if (k >= 1) { spinFrom[i] = 0; return 0; }
+      return spinFrom[i] * (1 - easeOutBack(k));
+    }
+    function spin(i) { const now = performance.now(); spinFrom[i] = remaining(i, now) + 1; spinT0[i] = now; }
     let won = false, raf = 0;
 
     const canvas = document.createElement('canvas');
@@ -110,6 +122,7 @@
     const css = (v) => getComputedStyle(host).getPropertyValue(v).trim();
 
     function draw() {
+      const frameNow = performance.now();
       const accent = css('--game') || '#d18fc4';
       const outline = css('--muted') || '#9aa3ad';
       const bg = css('--bg') || '#161b22';
@@ -132,10 +145,13 @@
         const deg = [1, 2, 4, 8].filter((b) => m & b).length;
         ctx.save();
         ctx.translate(cx, cy);
-        ctx.rotate(-anim[i] * Math.PI / 2); // la pièce finit de tourner
+        ctx.rotate(-remaining(i, frameNow) * Math.PI / 2); // la pièce finit de tourner
         const arms = [];
         DIRS.forEach(([bit, dr, dc]) => { if (m & bit) arms.push([dc, dr]); });
-        const lit = on[i];
+        // l'eau arrive en douceur : le niveau de remplissage glisse vers 0 ou 1
+        glow[i] += ((on[i] ? 1 : 0) - glow[i]) * 0.22;
+        if (Math.abs((on[i] ? 1 : 0) - glow[i]) < 0.02) glow[i] = on[i] ? 1 : 0;
+        const lit = glow[i] > 0.5;
         // tuyau « creux » : un trait épais (contour) puis un trait plus fin (intérieur)
         const half = cell * 0.5;
         const stroke = (width, color) => {
@@ -155,8 +171,13 @@
           const r = deg === 1 ? cell * 0.21 + (width - w) / 2 : width / 2;
           ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
         };
-        stroke(w + 4, lit ? accent : outline);
-        stroke(w, lit ? accent : bg);
+        stroke(w + 4, outline);
+        stroke(w, bg);
+        if (glow[i] > 0) { // la couleur du réseau se fond par-dessus
+          ctx.globalAlpha = glow[i];
+          stroke(w + 4, accent);
+          ctx.globalAlpha = 1;
+        }
         if (i === puzzle.src) { // la source : pleine, avec un œil
           ctx.beginPath(); ctx.arc(0, 0, cell * 0.27, 0, Math.PI * 2); ctx.fillStyle = accent; ctx.fill();
           ctx.beginPath(); ctx.arc(0, 0, cell * 0.09, 0, Math.PI * 2); ctx.fillStyle = bg; ctx.fill();
@@ -168,19 +189,17 @@
     }
 
     function animate() {
-      let busy = false;
-      for (let i = 0; i < anim.length; i++) {
-        if (anim[i] > 0) { anim[i] = Math.max(0, anim[i] - 0.18); busy = true; }
-      }
       draw();
-      raf = busy ? requestAnimationFrame(animate) : 0;
+      const on = powered();
+      const fading = glow.some((v, i) => v !== (on[i] ? 1 : 0));
+      raf = spinFrom.some((v) => v) || fading ? requestAnimationFrame(animate) : 0;
     }
 
     function turn(i) {
       if (won) return;
       history.push(cur.slice());
       cur[i] = rot(cur[i]);
-      anim[i] = Math.min(1, anim[i] + 1);
+      spin(i);
       if (!raf) raf = requestAnimationFrame(animate);
       C.sfx.tap();
       check();
@@ -198,6 +217,7 @@
     });
     window.addEventListener('resize', resize);
     resize();
+    raf = requestAnimationFrame(animate); // le réseau déjà relié se colore en douceur
 
     // la bonne orientation d'une pièce (les pièces symétriques ont plusieurs bonnes positions)
     const correct = (i) => cur[i] === puzzle.solution[i];
@@ -215,14 +235,14 @@
           if (correct(i)) continue;
           history.push(cur.slice());
           cur[i] = puzzle.solution[i];
-          anim[i] = 1;
+          spin(i);
           if (!raf) raf = requestAnimationFrame(animate);
           check();
           return true;
         }
         return false;
       },
-      solve() { history.push(cur.slice()); cur = puzzle.solution.slice(); draw(); check(); },
+      solve() { history.push(cur.slice()); cur = puzzle.solution.slice(); if (!raf) raf = requestAnimationFrame(animate); check(); },
       redraw: draw,
       destroy() { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); }
     };
