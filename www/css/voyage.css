@@ -355,3 +355,8 @@
 .lc-chip svg { width: 17px !important; height: 17px !important; }
 .lvcard .lc-games { flex-wrap: nowrap !important; gap: 7px !important; }
 .lvcard .lc-stars { align-self: center; }
+
+/* onglet « Vue » actif : simple pastille douce dans la barre (plus de grosse bulle qui déborde) */
+#home #cam-mode.on { background: color-mix(in srgb, var(--k-sea, #1d9be0) 20%, transparent) !important; box-shadow: none !important; border: 0 !important;
+  color: var(--k-sea, #1d9be0) !important; transform: none !important; height: 48px !important; }
+#home #cam-mode.on svg { color: var(--k-sea, #1d9be0) !important; }
