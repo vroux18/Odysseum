@@ -1124,7 +1124,13 @@
     const row = document.createElement('button');
     row.className = 'daily-row' + (dd.rec ? ' done' : '');
     row.setAttribute('aria-label', 'Défi du jour · ' + game(dd.info.id).name);
-    row.innerHTML = dd.html + '<span class="daily-go">' + UI('play') + '</span>';
+    // pastille du jeu du jour (couleur pleine), titre, puis étoiles / série, et le bouton Play
+    row.style.setProperty('--c', dd.info.accent);
+    row.innerHTML = '<span class="dr-ic">' + icon(dd.info.id) + '</span>' +
+      '<span class="dr-mid"><b>Défi du jour</b><small>' + game(dd.info.id).name + '</small></span>' +
+      '<span class="dr-badges">' + (dd.rec ? starRow(dd.rec.stars, 'mini-stars dr-stars') : '') +
+      (dd.streak > 0 ? '<i class="dr-flame">' + FLAME + '<b>' + dd.streak + '</b></i>' : '') + '</span>' +
+      '<span class="daily-go">' + (dd.rec ? CHECK : UI('play')) + '</span>';
     row.addEventListener('click', startDaily);
     gl.appendChild(row);
     // rangés par capacité : un petit titre coloré, puis les cartes de ses mini-jeux
