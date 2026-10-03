@@ -298,3 +298,11 @@
 .event-tile.locked .event-badge { background: #9aa3ad; box-shadow: none; }
 .event-tile .tile-name { font-size: 14px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .event-tile .tile-lvl { font-size: 11px !important; white-space: nowrap; }
+
+/* carte du niveau v4 : île, niveau, étoiles puis mini-jeux en colonne à gauche ; Play à droite ; tout plus étroit */
+#home { --W: min(300px, calc(100vw - 72px)); --lc-h: 104px; }
+.lvcard { grid-template-columns: 1fr !important; grid-template-rows: auto auto auto auto; row-gap: 3px !important; padding: 10px 96px 10px 20px !important; align-content: center; }
+.lvcard .lc-games { grid-column: 1 !important; grid-row: 4 !important; justify-self: start !important; margin-top: 3px !important; }
+.lvcard .lc-games i { width: 24px !important; height: 24px !important; }
+.lvcard .lc-games svg { width: 14px !important; height: 14px !important; }
+.lvcard { justify-items: start !important; text-align: left !important; }
