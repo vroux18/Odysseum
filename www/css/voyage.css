@@ -348,3 +348,10 @@
 .lc-chip i { width: 22px !important; height: 22px !important; border-radius: 50%; display: grid; place-items: center; background: var(--c); }
 .lc-chip svg { width: 13px !important; height: 13px !important; fill: none; stroke: #fff; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
 .lc-chip svg .f { fill: #fff; }
+
+/* mini-jeux de la carte : icônes seules (pas de nom), sur une ligne */
+.lc-chip { font-size: 0 !important; padding: 0 !important; background: none !important; gap: 0 !important; }
+.lc-chip i { width: 30px !important; height: 30px !important; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .15); }
+.lc-chip svg { width: 17px !important; height: 17px !important; }
+.lvcard .lc-games { flex-wrap: nowrap !important; gap: 7px !important; }
+.lvcard .lc-stars { align-self: center; }
