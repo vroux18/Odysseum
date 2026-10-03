@@ -245,11 +245,13 @@
 
   const sfx = {
     // carillons feutrés, jamais agressifs
-    tap: () => { chime(midi(84), 0.5, 0.025); },
-    place: () => { chime(midi(79), 1.4, 0.045); vibrate(5); },
-    error: () => { chime(midi(62), 0.9, 0.03); vibrate(12); },
+    // sons très feutrés : graves, courts et bas ; le toucher est à peine audible,
+    // et on n'en joue pas deux à moins de 90 ms d'écart (pas de crépitement en glissant)
+    tap: () => { const now = Date.now(); if (now - (sfx.lastTap || 0) < 90) return; sfx.lastTap = now; chime(midi(67), 0.35, 0.009); },
+    place: () => { chime(midi(72), 1.2, 0.022); vibrate(4); },
+    error: () => { chime(midi(55), 0.7, 0.016); vibrate(8); },
     win: () => {
-      [72, 76, 79, 83, 84].forEach((m, i) => setTimeout(() => chime(midi(m), 3, 0.05), i * 220));
+      [60, 64, 67, 72].forEach((m, i) => setTimeout(() => chime(midi(m), 3.2, 0.028), i * 320));
       vibrate(15);
     }
   };

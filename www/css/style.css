@@ -588,3 +588,89 @@ svg .f { fill: currentColor; stroke: none; }
 /* bouton caméra libre */
 .cam-btn { position: fixed; left: 14px; bottom: calc(52px + env(safe-area-inset-bottom, 0px)); z-index: 5; background: var(--glass); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 .cam-btn.on { color: var(--surface); background: var(--p2); }
+
+/* =====================================================================
+   Animations douces et boutons plus discrets
+   ===================================================================== */
+:root { --slow: cubic-bezier(.22, .8, .24, 1); }
+
+/* boutons d'action plus petits */
+#play .actions { gap: 10px; max-width: 300px; margin: 0 auto; width: 100%; }
+#play .actions .ghost-icon { height: 48px; border-radius: 14px; }
+#play .actions .ghost-icon svg { width: 22px; height: 22px; }
+.go { width: 66px; height: 66px; }
+.go svg { width: 28px; height: 28px; }
+.go.boss { width: 76px; height: 76px; }
+
+/* la grille arrive en cascade, case par case */
+.board > * { animation: board-in .9s var(--slow) both; }
+.cell-grid > .cell, .nono > .nono-cell, .lumieres > .bulb {
+  animation: tile-in .7s var(--slow) both;
+  animation-delay: calc(var(--i, 0) * 18ms);
+}
+@keyframes board-in { from { opacity: 0; transform: translateY(14px) scale(.97); } }
+@keyframes tile-in { from { opacity: 0; transform: scale(.6); } }
+
+/* rebond doux au toucher */
+.cell.pop, .bulb.pop, .nono-cell.pop { animation: tile-pop .45s var(--slow); }
+@keyframes tile-pop { 35% { transform: scale(.9); } 70% { transform: scale(1.04); } }
+.cell, .bulb, .nono-cell { transition: background .45s var(--slow), border-color .45s var(--slow), transform .3s var(--slow); }
+.cell svg, .crown, .mark { animation: sym-in .5s var(--slow); }
+@keyframes sym-in { from { transform: scale(.4); opacity: 0; } }
+
+/* victoire : une vague lumineuse traverse la grille, plus lentement */
+.board.solved .cell, .board.solved .nono-cell, .board.solved .bulb {
+  animation: win-wave 1.4s var(--slow) both;
+  animation-delay: calc(var(--i, 0) * 30ms);
+}
+@keyframes win-wave { 40% { transform: scale(1.08); filter: brightness(1.18); } }
+.board.solved > * { animation: none; }
+.board.solved .board-canvas { animation: win-glow 1.6s var(--slow); }
+@keyframes win-glow { 40% { transform: scale(1.03); filter: brightness(1.15); } }
+
+/* transitions d'écran plus posées */
+.screen { animation: appear .9s var(--slow); }
+.sheet { animation: rise .8s var(--slow); }
+.overlay { animation: appear .6s var(--slow); }
+.steps i { transition: background .8s var(--slow), box-shadow .8s var(--slow); }
+@media (prefers-reduced-motion: reduce) {
+  .board > *, .cell-grid > .cell, .nono > .nono-cell, .lumieres > .bulb, .cell.pop, .board.solved .cell { animation: none !important; }
+}
+
+/* ---------- Carte du cerveau v2 : bandeau, zones, zoom ---------- */
+.level-band {
+  width: 100%; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px;
+  padding: 12px 16px; border-radius: 16px; background: var(--tile); color: var(--ink);
+}
+.lb-label { font-size: 15px; letter-spacing: .06em; }
+.lb-label b { font-size: 22px; font-weight: 500; margin-left: 4px; }
+.lb-bar { height: 6px; border-radius: 6px; background: var(--line); overflow: hidden; }
+.lb-bar i { display: block; height: 100%; background: var(--p2); border-radius: 6px; transition: width .9s var(--slow); }
+.level-band small { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.games-detail { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; animation: appear .5s var(--slow); }
+.gd-game, .zp-game { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px; border-radius: 14px; background: var(--tile); color: var(--game); }
+.gd-game svg, .zp-game svg { width: 24px; height: 24px; }
+.gd-game span, .zp-game span { font-size: 13px; color: var(--ink); }
+.gd-game small, .zp-game small { font-size: 11px; color: var(--muted); }
+.brain-wrap { position: relative; width: 100%; display: flex; justify-content: center; }
+.brain-back { position: absolute; left: 0; top: 0; }
+.brain { max-width: 360px; }
+.brain .zone { cursor: pointer; }
+.brain .zone-hit { opacity: .07; transition: opacity .6s var(--slow); }
+.brain .zone:hover .zone-hit { opacity: .14; }
+.brain .zone.focus .zone-hit { opacity: .2; }
+.brain .zone-name { font-size: 9px; fill: currentColor; opacity: 0; transition: opacity .6s var(--slow); }
+.brain .zone-game, .brain .zone-lvl { opacity: 0; transition: opacity .6s var(--slow); }
+.brain .zone-game { color: inherit; }
+.brain .zone-lvl { font-size: 6px; fill: var(--muted); }
+.brain.zoomed .zone.focus .zone-name, .brain.zoomed .zone.focus .zone-game, .brain.zoomed .zone.focus .zone-lvl { opacity: 1; }
+.brain.zoomed .zone:not(.focus) { opacity: .35; }
+.zone-panel { width: 100%; display: flex; flex-direction: column; gap: 10px; animation: appear .6s var(--slow); }
+.zp-head { display: flex; justify-content: space-between; align-items: baseline; }
+.zp-head b { font-weight: 500; font-size: 18px; color: var(--game); }
+.zp-head small { color: var(--muted); font-size: 12px; }
+.zp-games { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.zp-go { padding: 13px; border-radius: 14px; background: var(--game); color: #15191e; font-weight: 500; }
+.skills .skill { padding: 10px 12px; }
+.brain-wrap { overflow: hidden; border-radius: 18px; }
+.brain { overflow: hidden; width: 100%; height: auto; aspect-ratio: 320 / 250; }

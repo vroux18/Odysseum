@@ -113,11 +113,22 @@
   <!-- carte du cerveau : les facultés qui se développent -->
   <div id="brain" class="overlay" hidden>
     <div class="sheet brain-sheet">
-      <p class="brain-level">niveau<b id="brain-level">1</b></p>
-      <div class="xp-global"><div class="skill-bar"><i id="brain-xp-bar"></i></div><small id="brain-xp">0 / 100 xp</small></div>
-      <svg id="brain-svg" class="brain" viewBox="0 0 320 250" aria-hidden="true"></svg>
+      <!-- bandeau du niveau global : un toucher affiche le niveau de chaque mini-jeu -->
+      <button id="brain-band" class="level-band" aria-expanded="false">
+        <span class="lb-label">niveau <b id="brain-level">1</b></span>
+        <span class="lb-bar"><i id="brain-xp-bar"></i></span>
+        <small id="brain-xp">0 / 100</small>
+      </button>
+      <div id="games-detail" class="games-detail" hidden></div>
+      <div class="brain-wrap">
+        <button id="brain-back" class="ghost-icon brain-back" aria-label="Vue d'ensemble" hidden>
+          <svg viewBox="0 0 24 24"><path d="M14.5 6 8.5 12l6 6"/></svg>
+        </button>
+        <svg id="brain-svg" class="brain" viewBox="0 0 320 250" role="img" aria-label="Carte du cerveau"></svg>
+      </div>
       <div id="skills" class="skills"></div>
-      <p class="brain-note">Ces jauges reflètent ta pratique dans le jeu. Touche une capacité pour activer le mode concentration.</p>
+      <!-- zone choisie : ses mini-jeux et le mode concentration -->
+      <div id="zone-panel" class="zone-panel" hidden></div>
     </div>
   </div>
 

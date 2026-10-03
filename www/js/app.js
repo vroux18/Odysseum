@@ -44,6 +44,7 @@
   //   difficiles, mêlant les capacités, de plus en plus souvent en variante.
   // ------------------------------------------------------------------
   const PER = 10;
+  const VARIANTS_ON = false; // variantes mises de côté pour l'instant (le code reste prêt)
   const ORDER = ['flux', 'reines', 'tuyaux', 'astres', 'paves', 'pixels', 'serpent', 'lumieres', 'coffre'];
   const POOL_SIZE = [3, 5, 7, 9]; // jeux disponibles dans les mondes 1, 2, 3, 4 et suivants
   const poolOf = (c) => ORDER.slice(0, POOL_SIZE[Math.min(c, POOL_SIZE.length - 1)]);
@@ -58,7 +59,7 @@
       const g = game(id);
       // une variante seulement pour un jeu présent depuis au moins un monde
       const known = c > 0 && poolOf(c - 1).includes(id);
-      return g.variants && g.variants[1] && known && rng() < chance ? g.variants[1].id : 'classic';
+      return VARIANTS_ON && g.variants && g.variants[1] && known && rng() < chance ? g.variants[1].id : 'classic';
     };
     const skillOf = (id) => (SKILLS.find((s) => s.games.includes(id)) || {}).id;
     let ids;
@@ -181,13 +182,24 @@
           host.classList.add('solved');
           if (stepIndex + 1 < info.steps.length) {
             // boss : la grille suivante arrive après une respiration
-            setTimeout(() => playStep(info, stepIndex + 1), 1500);
+            setTimeout(() => playStep(info, stepIndex + 1), 2100);
           } else {
             finishLevel(info);
           }
         }
       };
       const inst = g.create(host, puzzle, api);
+      // animations : apparition en cascade (en diagonale) et petit rebond au toucher
+      const grid = host.querySelector('.cell-grid, .nono');
+      if (grid) {
+        const n = +getComputedStyle(grid).getPropertyValue('--n') || 1;
+        grid.querySelectorAll('.cell, .nono-cell, .bulb').forEach((el, k) => el.style.setProperty('--i', Math.floor(k / n) + (k % n)));
+      }
+      host.addEventListener('pointerdown', (e) => {
+        const t = e.target.closest('.cell, .bulb, .nono-cell');
+        if (!t) return;
+        t.classList.remove('pop'); void t.offsetWidth; t.classList.add('pop');
+      });
 
       const tools = $('#tools');
       if (inst.tools) {
@@ -236,7 +248,7 @@
         if (screens.play.hidden) return;
         if (info.focus) startFocus(SKILLS.find((sk) => sk.id === info.focus)); // focus : un autre jeu de la même capacité
         else startFree(game(s.id), s.variant);
-      }, 1600);
+      }, 2300);
       return;
     }
     if (info.L === J.done) {
@@ -251,7 +263,7 @@
     clearTimeout(finishLevel.timer);
     finishLevel.timer = setTimeout(() => {
       if (!screens.play.hidden) startLevel(next);
-    }, 1600);
+    }, 2300);
   }
 
   // Tutoriel illustré : une page = un petit dessin + une phrase ; la flèche avance.
@@ -333,11 +345,12 @@
   try { libMode = localStorage.getItem('odysseum.libmode') || 'classic'; } catch (e) { /* ignore */ }
 
   function renderLibrary() {
+    document.querySelector('.lib-mode').hidden = !VARIANTS_ON;
     document.querySelectorAll('.lib-mode button').forEach((b) => b.classList.toggle('on', b.dataset.mode === libMode));
     const gl = $('#game-list');
     gl.innerHTML = '';
     C.games.forEach((g) => {
-      const v = libMode === 'variant' && g.variants && g.variants[1] ? g.variants[1].id : 'classic';
+      const v = VARIANTS_ON && libMode === 'variant' && g.variants && g.variants[1] ? g.variants[1].id : 'classic';
       const b = document.createElement('button');
       b.className = 'tile';
       b.style.setProperty('--game', ACCENT[g.id]);
@@ -353,7 +366,7 @@
   function startFocus(sk) {
     focusTurn++;
     const g = game(sk.games[focusTurn % sk.games.length]);
-    const v = g.variants && g.variants[1] && Math.random() < 0.4 ? g.variants[1].id : 'classic';
+    const v = VARIANTS_ON && g.variants && g.variants[1] && Math.random() < 0.4 ? g.variants[1].id : 'classic';
     const d = C.gameData(dataKey(g, v));
     $('#brain').hidden = true;
     playStep({ L: -1, free: true, focus: sk.id, seed: 'focus:' + g.id + ':' + v + ':' + d.level, steps: [{ id: g.id, variant: v, level: d.level }] }, 0);
@@ -413,8 +426,11 @@
   function renderBrain() {
     const p = playerStats();
     $('#brain-level').textContent = p.level;
-    $('#brain-xp').textContent = p.cur + ' / ' + p.need + ' xp';
+    $('#brain-xp').textContent = p.cur + ' / ' + p.need;
     $('#brain-xp-bar').style.width = Math.round(p.frac * 100) + '%';
+    zoomBrain(null, true);
+    $('#games-detail').hidden = true;
+    $('#brain-band').setAttribute('aria-expanded', 'false');
     const ns = 'http://www.w3.org/2000/svg';
     const svg = $('#brain-svg');
     svg.innerHTML =
@@ -459,13 +475,72 @@
         c.setAttribute('class', 'node' + (i < st.lit ? ' on' : ''));
         svg.appendChild(c);
       });
+      // la zone de la capacité : touchable, avec ses mini-jeux à l'intérieur (lisibles une fois zoomé)
+      const zone = document.createElementNS(ns, 'g');
+      zone.setAttribute('class', 'zone');
+      zone.dataset.skill = sk.id;
+      zone.style.color = accent;
+      let inner = '<ellipse class="zone-hit" cx="' + sk.at[0] + '" cy="' + sk.at[1] + '" rx="46" ry="36" fill="' + accent + '"/>' +
+        '<text class="zone-name" x="' + sk.at[0] + '" y="' + (sk.at[1] - 24) + '" text-anchor="middle">' + sk.name + '</text>';
+      sk.games.forEach((id, k) => {
+        const x = sk.at[0] + (k - (sk.games.length - 1) / 2) * 26, y = sk.at[1] + 4;
+        inner += '<g class="zone-game" transform="translate(' + (x - 8) + ' ' + (y - 8) + ') scale(.66)">' +
+          '<circle cx="12" cy="12" r="15" fill="var(--surface)" stroke="currentColor" stroke-width="1.2"/>' + ICON[id] + '</g>' +
+          '<text class="zone-lvl" x="' + x + '" y="' + (y + 20) + '" text-anchor="middle">' + gameLevel(id) + '</text>';
+      });
+      zone.innerHTML = inner;
+      svg.appendChild(zone);
     });
+    // capacités : nom, niveau et barre, sans description
     $('#skills').innerHTML = SKILLS.map((sk) => {
       const st = skillStats(sk);
-      return '<button class="skill" data-skill="' + sk.id + '" aria-label="Activer le mode concentration : ' + sk.name + '" style="--game:' + ACCENT[sk.games[0]] + '"><div class="skill-head"><span>' + sk.name +
-        '</span><small>niv. ' + st.level + '</small></div><p class="skill-desc">' + sk.desc + '</p><div class="skill-bar"><i style="width:' + Math.round(st.frac * 100) + '%"></i></div>' +
-        '<small class="skill-xp">' + st.cur + ' / ' + st.need + ' xp <span class="focus-go">concentration →</span></small></button>';
+      return '<button class="skill" data-skill="' + sk.id + '" style="--game:' + ACCENT[sk.games[0]] + '"><div class="skill-head"><span>' + sk.name +
+        '</span><small>niv. ' + st.level + '</small></div><div class="skill-bar"><i style="width:' + Math.round(st.frac * 100) + '%"></i></div></button>';
     }).join('');
+  }
+
+  // niveau d'un mini-jeu : une marche toutes les 3 grilles réussies
+  const gameLevel = (id) => 1 + Math.floor(solvedOf(id) / 3);
+
+  // Zoom animé sur une zone du cerveau (null = vue d'ensemble)
+  const BRAIN_VIEW = [0, 0, 320, 250];
+  let brainView = BRAIN_VIEW.slice(), brainAnim = 0, zoomed = null;
+  function zoomBrain(skillId, instant) {
+    const sk = SKILLS.find((s) => s.id === skillId);
+    zoomed = sk ? sk.id : null;
+    const target = sk ? [sk.at[0] - 75, sk.at[1] - 56, 150, 117] : BRAIN_VIEW;
+    const svg = $('#brain-svg');
+    svg.classList.toggle('zoomed', !!sk);
+    svg.querySelectorAll('.zone').forEach((z) => z.classList.toggle('focus', z.dataset.skill === zoomed));
+    $('#brain-back').hidden = !sk;
+    $('#skills').hidden = !!sk;
+    const panel = $('#zone-panel');
+    panel.hidden = !sk;
+    if (sk) {
+      const st = skillStats(sk);
+      panel.style.setProperty('--game', ACCENT[sk.games[0]]);
+      panel.innerHTML = '<div class="zp-head"><b>' + sk.name + '</b><small>niv. ' + st.level + ' · ' + st.cur + ' / ' + st.need + ' xp</small></div>' +
+        '<div class="skill-bar"><i style="width:' + Math.round(st.frac * 100) + '%"></i></div>' +
+        '<div class="zp-games">' + sk.games.map((id) => '<span class="zp-game" style="--game:' + ACCENT[id] + '">' + icon(id) +
+          '<span>' + game(id).name + '</span><small>niv. ' + gameLevel(id) + '</small></span>').join('') + '</div>' +
+        '<button class="zp-go" data-skill="' + sk.id + '">activer le mode concentration</button>';
+    }
+    cancelAnimationFrame(brainAnim);
+    if (instant) { brainView = target.slice(); svg.setAttribute('viewBox', brainView.join(' ')); return; }
+    const from = brainView.slice(), t0 = performance.now(), D = 700;
+    const step = (now) => {
+      const k = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - k, 3);
+      brainView = from.map((v, i) => v + (target[i] - v) * e);
+      svg.setAttribute('viewBox', brainView.join(' '));
+      if (k < 1) brainAnim = requestAnimationFrame(step);
+    };
+    brainAnim = requestAnimationFrame(step);
+  }
+
+  // détail par mini-jeu (sous le bandeau) : un toucher ramène au cerveau, sur la bonne zone
+  function renderGamesDetail() {
+    $('#games-detail').innerHTML = ORDER.map((id) => '<button class="gd-game" data-game="' + id + '" style="--game:' + ACCENT[id] + '">' + icon(id) +
+      '<span>' + game(id).name + '</span><small>niv. ' + gameLevel(id) + '</small></button>').join('');
   }
 
   // ------------------------------ Thème ------------------------------
@@ -520,9 +595,31 @@
   $('#btn-rules').addEventListener('click', () => session && openTutorial(session.g, session.variant, false));
   $('#rules-close').addEventListener('click', nextTuto);
   // carte du cerveau : toucher une capacité lance le mode focus
+  // carte du cerveau : une capacité (bouton ou zone) → zoom sur sa zone ; le bandeau → détail par jeu
   $('#skills').addEventListener('click', (e) => {
     const b = e.target.closest('.skill');
+    if (b) { zoomBrain(b.dataset.skill); C.sfx.tap(); }
+  });
+  $('#brain-svg').addEventListener('click', (e) => {
+    const z = e.target.closest('.zone');
+    if (z && zoomed !== z.dataset.skill) { zoomBrain(z.dataset.skill); C.sfx.tap(); }
+  });
+  $('#brain-back').addEventListener('click', () => zoomBrain(null));
+  $('#zone-panel').addEventListener('click', (e) => {
+    const b = e.target.closest('.zp-go');
     if (b) concentrate(SKILLS.find((sk) => sk.id === b.dataset.skill));
+  });
+  $('#brain-band').addEventListener('click', () => {
+    const d = $('#games-detail');
+    d.hidden = !d.hidden;
+    $('#brain-band').setAttribute('aria-expanded', String(!d.hidden));
+    if (!d.hidden) { renderGamesDetail(); zoomBrain(null); }
+  });
+  $('#games-detail').addEventListener('click', (e) => {
+    const b = e.target.closest('.gd-game');
+    if (!b) return;
+    $('#games-detail').hidden = true;
+    zoomBrain(SKILLS.find((s) => s.games.includes(b.dataset.game)).id);
   });
 
   // Activer le mode concentration : Ulysse se prend la tête, la caméra plonge, puis la lumière.
