@@ -170,6 +170,34 @@
     }
   };
 
+  // Tuyaux : pièces à faire tourner
+  const pipe = (x, y, dirs, color, lit) => {
+    const s = 26, arms = { u: [0, -1], r: [1, 0], d: [0, 1], l: [-1, 0] };
+    let out = '';
+    dirs.split('').forEach((k) => {
+      const [dx, dy] = arms[k];
+      out += '<line x1="' + x + '" y1="' + y + '" x2="' + (x + dx * s / 2) + '" y2="' + (y + dy * s / 2) + '" stroke="' + color + '" stroke-width="10"/>' +
+        '<line x1="' + x + '" y1="' + y + '" x2="' + (x + dx * s / 2) + '" y2="' + (y + dy * s / 2) + '" stroke="' + (lit ? color : 'var(--bg)') + '" stroke-width="6"/>';
+    });
+    if (dirs.length === 1) out += '<circle cx="' + x + '" cy="' + y + '" r="7" fill="' + color + '"/>';
+    return out;
+  };
+  T.tuyaux = {
+    steps: [
+      { art: svg(pipe(47, 60, 'r', 'var(--game)', true) + pipe(73, 60, 'ul', 'var(--muted)') +
+          '<path d="M86 40a14 14 0 1 1-4-10" fill="none" stroke="var(--muted)" stroke-width="1.5"/><path d="M82 26l1 5-5 0" fill="none" stroke="var(--muted)" stroke-width="1.5"/>' + finger(73, 60)),
+        text: 'Touche une pièce pour la faire <b>tourner</b> d\'un quart de tour.' },
+      { art: svg(pipe(34, 60, 'r', 'var(--game)', true) + pipe(60, 60, 'lrd', 'var(--game)', true) + pipe(86, 60, 'l', 'var(--game)', true) + pipe(60, 86, 'u', 'var(--game)', true) +
+          '<circle cx="34" cy="60" r="3" fill="var(--bg)"/>'),
+        text: 'Raccorde <b>toutes les pièces à la source</b> : le réseau se colore quand il est relié. Aucun tuyau ne doit rester ouvert.' }
+    ],
+    variants: {
+      tore: { art: svg(pipe(24, 60, 'l', 'var(--game)', true) + pipe(96, 60, 'r', 'var(--game)', true) +
+          '<path d="M8 50v20M112 50v20" stroke="var(--muted)" stroke-dasharray="2 3"/>'),
+        text: '<b>Variante Tore</b> : un tuyau peut sortir par un bord et revenir par le bord opposé.' }
+    }
+  };
+
   // pages à montrer : tout le tutoriel, ou seulement la page de variante si le jeu est déjà connu
   C.tutorial = function (id, variant, knowsBase) {
     const t = T[id];

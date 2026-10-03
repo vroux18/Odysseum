@@ -8,7 +8,8 @@
   // Teintes douces propres à chaque jeu.
   const ACCENT = {
     flux: '#5f9fd8', reines: '#e8887a', astres: '#eeb043', paves: '#5fb8a5',
-    pixels: '#9b84e0', serpent: '#4fb5a6', lumieres: '#efbd45', coffre: '#7f95c4'
+    pixels: '#9b84e0', serpent: '#4fb5a6', lumieres: '#efbd45', coffre: '#7f95c4',
+    tuyaux: '#d18fc4'
   };
   // Icônes au trait, toutes sur la même grille 24×24.
   const ICON = {
@@ -19,6 +20,7 @@
     pixels: '<rect x="4" y="4" width="4.5" height="4.5" rx="1" class="f"/><rect x="9.75" y="9.75" width="4.5" height="4.5" rx="1" class="f"/><rect x="15.5" y="4" width="4.5" height="4.5" rx="1"/><rect x="4" y="15.5" width="4.5" height="4.5" rx="1"/><rect x="15.5" y="15.5" width="4.5" height="4.5" rx="1" class="f"/>',
     serpent: '<circle cx="5" cy="5" r="1.6" class="f"/><path d="M5 5h14v4.7H5v4.6h14V19H6.5"/>',
     lumieres: '<circle cx="12" cy="12" r="4" class="f"/><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4M16.6 16.6 18 18M6 18l1.4-1.4M16.6 7.4 18 6"/>',
+    tuyaux: '<path d="M4 8h6v8h10M14 4v4h6"/><circle cx="10" cy="8" r="2.2" class="f"/>',
     coffre: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.4"/><path d="M12 4v3M4 12h1.5M18.5 12H20"/>'
   };
   const icon = (id) => '<svg viewBox="0 0 24 24">' + ICON[id] + '</svg>';
@@ -34,7 +36,7 @@
 
   // ------------------------------------------------------------------
   // La quête principale :
-  // - Chaque monde (île) ajoute des mini-jeux : 3 au premier, puis 5, 6, et les 8 au 4e monde.
+  // - Chaque monde (île) ajoute des mini-jeux : 3 au premier (Flux, Reines, Tuyaux), puis 5, 7, et les 9 au 4e monde.
   // - Un niveau = une petite série de 2 à 3 mini-jeux enchaînés (2 au tout début).
   // - Les nouveaux jeux d'un monde ouvrent ses premiers niveaux (avec leur tutoriel).
   // - La difficulté monte d'île en île et au fil de chaque île.
@@ -42,8 +44,8 @@
   //   difficiles, mêlant les capacités, de plus en plus souvent en variante.
   // ------------------------------------------------------------------
   const PER = 10;
-  const ORDER = ['flux', 'reines', 'astres', 'paves', 'pixels', 'serpent', 'lumieres', 'coffre'];
-  const POOL_SIZE = [3, 5, 6, 8]; // jeux disponibles dans les mondes 1, 2, 3, 4 et suivants
+  const ORDER = ['flux', 'reines', 'tuyaux', 'astres', 'paves', 'pixels', 'serpent', 'lumieres', 'coffre'];
+  const POOL_SIZE = [3, 5, 7, 9]; // jeux disponibles dans les mondes 1, 2, 3, 4 et suivants
   const poolOf = (c) => ORDER.slice(0, POOL_SIZE[Math.min(c, POOL_SIZE.length - 1)]);
 
   function levelInfo(L) {
@@ -371,7 +373,7 @@
   const SKILLS = [
     { id: 'logique', name: 'Déduction', games: ['reines', 'astres'], at: [108, 92],
       desc: 'Tirer des certitudes des règles, une case après l\'autre, sans jamais deviner.' },
-    { id: 'espace', name: 'Espace', games: ['paves', 'pixels'], at: [196, 74],
+    { id: 'espace', name: 'Espace', games: ['paves', 'pixels', 'tuyaux'], at: [196, 74],
       desc: 'Se représenter les formes et la place qu\'elles occupent avant de les tracer.' },
     { id: 'anticipation', name: 'Anticipation', games: ['flux', 'serpent'], at: [132, 160],
       desc: 'Prévoir plusieurs coups à l\'avance pour ne pas se fermer de chemin.' },
