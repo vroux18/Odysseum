@@ -104,6 +104,13 @@ svg .f { fill: currentColor; stroke: none; }
 .orb-btn { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, .8); box-shadow: 0 10px 24px -16px rgba(0, 0, 0, .4); }
 .orb-btn span { width: 14px; height: 14px; border-radius: 50%; background: var(--game); box-shadow: 0 0 14px 4px color-mix(in srgb, var(--game) 60%, transparent); animation: breathe 3s ease-in-out infinite; }
 .fallback { padding-top: 40px; }
+/* le nom apparaît dans la brume puis s'efface */
+.title {
+  position: fixed; left: 0; right: 0; top: 22%; z-index: 4; margin: 0; text-align: center; pointer-events: none;
+  font-weight: 300; font-size: clamp(22px, 7vw, 34px); letter-spacing: .55em; text-indent: .55em; color: rgba(75, 80, 84, .7);
+  opacity: 0; animation: title-in 6.5s var(--ease) .4s forwards;
+}
+@keyframes title-in { 25% { opacity: 1; letter-spacing: .45em; } 70% { opacity: 1; } 100% { opacity: 0; letter-spacing: .6em; } }
 @keyframes rise-in { from { opacity: 0; transform: translate(-50%, 20px); } }
 
 /* ---------- Partie ---------- */
@@ -286,6 +293,7 @@ svg .f { fill: currentColor; stroke: none; }
 @keyframes soft-pop { 50% { transform: scale(.92); } }
 @media (prefers-reduced-motion: reduce) {
   .disc, .loading span, .bloom, .board.solved > *, .screen, .sheet, .overlay, .calm-inner { animation: none; }
+  .title { animation: none; opacity: 0; }
 }
 @media (max-width: 360px) {
   .game-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
