@@ -121,10 +121,14 @@
     // lu sur l'hôte : la teinte du jeu (--game) est posée sur l'écran de partie
     const css = (v) => getComputedStyle(host).getPropertyValue(v).trim();
 
+    // mélange de deux couleurs #rrggbb (k = part de b) : remplissage opaque, sans taches aux raccords
+    const hex = (c) => { const m = /^#?([0-9a-f]{6})$/i.exec(c); if (!m) return null; const v = parseInt(m[1], 16); return [v >> 16, (v >> 8) & 255, v & 255]; };
+    const mix = (a, b, k) => { const A = hex(a), B = hex(b); if (!A || !B) return a; return 'rgb(' + A.map((x, i) => Math.round(x + (B[i] - x) * k)).join(',') + ')'; };
+
     function draw() {
       const frameNow = performance.now();
       const accent = css('--game') || '#d18fc4';
-      const outline = css('--muted') || '#9aa3ad';
+      const outline = css('--ink') || '#d8d4cc'; // trait fin et clair, comme un dessin au trait
       const bg = css('--bg') || '#161b22';
       const on = powered();
       ctx.clearRect(0, 0, size, size);
@@ -138,7 +142,8 @@
         }
         ctx.setLineDash([]);
       }
-      const w = cell * 0.3;
+      const w = cell * 0.36;                 // tuyaux larges et creux
+      const lw = Math.max(1.6, cell * 0.035); // épaisseur du contour
       for (let i = 0; i < n * n; i++) {
         const cx = pad + ((i % n) + 0.5) * cell, cy = pad + (Math.floor(i / n) + 0.5) * cell;
         const m = cur[i];
@@ -168,21 +173,23 @@
           }
           arms.forEach(([dx, dy]) => { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(dx * half, dy * half); ctx.stroke(); });
           // terminal : un rond, dont l'anneau extérieur reste visible (le tracé large dépasse le fin)
-          const r = deg === 1 ? cell * 0.21 + (width - w) / 2 : width / 2;
+          const r = deg === 1 ? cell * 0.25 + (width - w) / 2 : width / 2;
           ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
         };
-        stroke(w + 4, outline);
+        ctx.globalAlpha = 0.78;
+        stroke(w + lw * 2, outline);
+        ctx.globalAlpha = 1;
         stroke(w, bg);
-        if (glow[i] > 0) { // la couleur du réseau se fond par-dessus
-          ctx.globalAlpha = glow[i];
-          stroke(w + 4, accent);
-          ctx.globalAlpha = 1;
+        if (glow[i] > 0) { // l'eau remplit l'intérieur du tuyau (teinte opaque qui monte), le contour reste visible
+          stroke(w, mix(bg, accent, glow[i] * 0.85));
         }
         if (i === puzzle.src) { // la source : pleine, avec un œil
-          ctx.beginPath(); ctx.arc(0, 0, cell * 0.27, 0, Math.PI * 2); ctx.fillStyle = accent; ctx.fill();
+          ctx.beginPath(); ctx.arc(0, 0, cell * 0.25 + lw, 0, Math.PI * 2); ctx.globalAlpha = 0.78; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
+          ctx.beginPath(); ctx.arc(0, 0, cell * 0.25, 0, Math.PI * 2); ctx.fillStyle = accent; ctx.fill();
+          ctx.beginPath(); ctx.arc(0, 0, cell * 0.09 + lw, 0, Math.PI * 2); ctx.globalAlpha = 0.78; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
           ctx.beginPath(); ctx.arc(0, 0, cell * 0.09, 0, Math.PI * 2); ctx.fillStyle = bg; ctx.fill();
         } else if (deg === 1 && lit) { // terminal alimenté
-          ctx.beginPath(); ctx.arc(0, 0, cell * 0.08, 0, Math.PI * 2); ctx.fillStyle = bg; ctx.fill();
+          ctx.beginPath(); ctx.arc(0, 0, cell * 0.08, 0, Math.PI * 2); ctx.globalAlpha = 0.78; ctx.fillStyle = outline; ctx.fill(); ctx.globalAlpha = 1;
         }
         ctx.restore();
       }

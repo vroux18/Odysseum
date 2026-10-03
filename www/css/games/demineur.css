@@ -1,0 +1,72 @@
+/* Démineur : la mer (cases cachées, en relief) se retire sur le sable (cases ouvertes, à plat). */
+.cell-grid.demineur {
+  --sea: #a9cddb; --sea-hi: #bcd9e4; --sea-edge: #86b2c4;
+  --sand: #f4ecdd; --sand-edge: #ebe0cc; --rock: #5b6670;
+  --n1: #3f7fbf; --n2: #4f9a6a; --n3: #c4622d; --n4: #7d64b0; --n5: #b04a5e; --n6: #2f8f86; --n7: #5b6670; --n8: #8a8f94;
+  gap: clamp(3px, calc(40px / var(--n)), 7px);
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+:root[data-theme="dark"] .cell-grid.demineur {
+  --sea: #2d5f86; --sea-hi: #376d97; --sea-edge: #4479a3;
+  --sand: #22394e; --sand-edge: #2a4359; --rock: #c9d3dc;
+  --n1: #84b8ea; --n2: #8acb9e; --n3: #ef9f74; --n4: #b8a6e4; --n5: #e78fa0; --n6: #74d0c4; --n7: #c3ccd4; --n8: #e2e4e6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .cell-grid.demineur {
+    --sea: #2d5f86; --sea-hi: #376d97; --sea-edge: #4479a3;
+    --sand: #22394e; --sand-edge: #2a4359; --rock: #c9d3dc;
+    --n1: #84b8ea; --n2: #8acb9e; --n3: #ef9f74; --n4: #b8a6e4; --n5: #e78fa0; --n6: #74d0c4; --n7: #c3ccd4; --n8: #e2e4e6;
+  }
+}
+
+/* case cachée : une tuile de mer en relief */
+.cell-grid.demineur .cell {
+  border-width: 2px; border-radius: 10px; cursor: pointer;
+  background: var(--sea); border-color: var(--sea-edge);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .14), inset 0 3px 0 var(--sea-hi);
+  transition: background .42s var(--slow), border-color .42s var(--slow), box-shadow .42s var(--slow), transform .3s var(--slow);
+  transition-delay: var(--d, 0ms);
+}
+/* case ouverte : sable à plat, la cascade se propage avec un léger décalage */
+.cell-grid.demineur .cell.open {
+  background: var(--sand); border-color: var(--sand-edge); box-shadow: none; cursor: default;
+}
+.demineur .cell .num {
+  font-family: Jost, sans-serif; font-weight: 600; font-size: calc(min(100vw, 480px) / var(--n) * .42); line-height: 1;
+  color: var(--ink); animation: dm-num .5s var(--spring) both; animation-delay: var(--d, 0ms);
+}
+.demineur .cell[data-v="1"] .num { color: var(--n1); }
+.demineur .cell[data-v="2"] .num { color: var(--n2); }
+.demineur .cell[data-v="3"] .num { color: var(--n3); }
+.demineur .cell[data-v="4"] .num { color: var(--n4); }
+.demineur .cell[data-v="5"] .num { color: var(--n5); }
+.demineur .cell[data-v="6"] .num { color: var(--n6); }
+.demineur .cell[data-v="7"] .num { color: var(--n7); }
+.demineur .cell[data-v="8"] .num { color: var(--n8); }
+@keyframes dm-num { from { transform: scale(.3); opacity: 0; } }
+
+/* fanion */
+.demineur .cell.flag { color: var(--ink); }
+.demineur .cell .pennant { width: 66%; height: 66%; transform-origin: 35% 85%; animation: dm-plant .45s var(--spring); }
+@keyframes dm-plant { from { transform: translateY(-30%) scale(.5); opacity: 0; } }
+
+/* écueil heurté : la case se creuse doucement, le rocher affleure */
+.cell-grid.demineur .cell.reef {
+  background: color-mix(in srgb, var(--bad) 22%, var(--sand)); border-color: color-mix(in srgb, var(--bad) 45%, var(--sand-edge)); box-shadow: none;
+}
+.demineur .cell.reef .rock { width: 70%; height: 70%; color: var(--rock); animation: dm-rock .5s var(--spring); }
+@keyframes dm-rock { from { transform: translateY(35%); opacity: 0; } }
+.cell-grid.demineur .cell.hit { animation: dm-shake .55s var(--slow); }
+@keyframes dm-shake {
+  15% { transform: translateX(-4px) rotate(-2deg); } 35% { transform: translateX(4px) rotate(2deg); }
+  55% { transform: translateX(-3px); } 75% { transform: translateX(2px); }
+}
+
+/* astuce : les nombres qui justifient la déduction s'illuminent */
+.cell-grid.demineur .cell.why { box-shadow: 0 0 0 3px var(--game, #c27b5a); animation: dm-why 1.2s var(--slow) 2; }
+@keyframes dm-why { 50% { transform: scale(1.06); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .cell-grid.demineur .cell { transition-delay: 0ms; }
+  .demineur .cell .num, .demineur .cell .pennant, .demineur .cell .rock, .cell-grid.demineur .cell.hit, .cell-grid.demineur .cell.why { animation: none; }
+}

@@ -1,0 +1,122 @@
+/* Sirènes : coquilles chantantes en couronne autour d'une lyre */
+.simon {
+  --s: 320px;
+  --r: calc(var(--s) * .33);   /* rayon de la couronne */
+  --p: calc(var(--s) * .34);   /* taille d'une coquille */
+  --shell-op: .5;
+  position: relative; width: var(--s); height: var(--s); flex: 0 0 auto;
+  touch-action: none; user-select: none; -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.simon.n5 { --p: calc(var(--s) * .3); }
+.simon.n6 { --p: calc(var(--s) * .27); }
+
+.simon-ring { position: absolute; inset: 0; }
+/* halo marin très léger derrière la couronne */
+.simon-ring::before {
+  content: ''; position: absolute; inset: 6%; border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--game) 9%, transparent) 0%, transparent 70%);
+  transition: opacity .8s var(--slow, ease); opacity: .6;
+}
+.simon.turn .simon-ring::before { opacity: 1; }
+
+/* --- coquilles --- */
+.simon-pad {
+  position: absolute; left: 50%; top: 50%; width: var(--p); height: var(--p);
+  margin: calc(var(--p) / -2) 0 0 calc(var(--p) / -2); padding: 0; border: 0; background: none;
+  transform: rotate(var(--a)) translateX(var(--r)) rotate(90deg);
+  cursor: pointer; outline: none; touch-action: none;
+}
+.simon-shell {
+  display: block; width: 100%; height: 100%;
+  transform-origin: 50% 70%;
+  transition: transform .42s var(--spring, ease), filter .35s ease;
+}
+/* apparition en cascade (sur le dessin, pour ne pas gêner les autres animations) */
+.simon-shell svg {
+  display: block; width: 100%; height: 100%; overflow: visible; transform-origin: 50% 70%;
+  animation: simon-in .6s var(--spring, ease) both; animation-delay: calc(var(--k, 0) * 70ms);
+}
+.simon-shell .sh-body, .simon-shell .sh-ear { fill: var(--c); fill-opacity: var(--shell-op); stroke: none; transition: fill-opacity .3s ease; }
+.simon-shell .sh-ridge { fill: none; stroke: #fff; stroke-opacity: .55; stroke-width: 3.2; stroke-linecap: round; }
+
+/* appui : la coquille s'enfonce, puis rebondit au relâcher */
+.simon-pad.down .simon-shell { transform: scale(.9); transition: transform .08s ease-out, filter .2s ease; }
+/* chant : la coquille s'allume et rayonne */
+.simon-pad.lit .sh-body, .simon-pad.lit .sh-ear { fill-opacity: 1; transition: fill-opacity .05s; }
+.simon-pad.lit .simon-shell {
+  filter: drop-shadow(0 0 calc(var(--s) * .04) var(--c)) brightness(1.05);
+  transition: transform .42s var(--spring, ease), filter .06s;
+}
+.simon-pad.lit:not(.down) .simon-shell { transform: scale(1.07); }
+.simon-pad:focus-visible .sh-body { stroke: var(--c); stroke-width: 3; }
+
+/* indice : la coquille attendue scintille doucement */
+.simon-pad.hinted .simon-shell { animation: simon-hint 1.4s ease-in-out infinite; }
+/* erreur : la coquille pâlit et frissonne */
+.simon-pad.miss .simon-shell { filter: saturate(.3); animation: simon-shiver .5s ease; }
+
+/* --- centre : la lyre --- */
+.simon-core {
+  position: absolute; left: 50%; top: 50%;
+  width: calc(var(--s) * .2); height: calc(var(--s) * .2);
+  transform: translate(-50%, -50%);
+  border-radius: 50%; background: var(--surface);
+  border: 2px solid var(--faint);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  transition: border-color .6s var(--slow, ease), box-shadow .6s var(--slow, ease);
+  pointer-events: none;
+}
+.simon-lyre { width: 46%; height: 46%; fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; transition: stroke .6s; }
+.simon.turn .simon-core {
+  border-color: var(--game);
+  box-shadow: 0 0 0 calc(var(--s) * .018) color-mix(in srgb, var(--game) 16%, transparent),
+              0 0 calc(var(--s) * .09) color-mix(in srgb, var(--game) 45%, transparent);
+  animation: simon-breathe 2.6s ease-in-out infinite;
+}
+.simon.turn .simon-lyre { stroke: var(--game); }
+
+/* perles de vie : trois points discrets sous la lyre */
+.simon-lives { display: flex; gap: 4px; }
+.simon-lives i { width: 5px; height: 5px; border-radius: 50%; background: var(--game); opacity: .75; transition: background .5s, opacity .5s, transform .5s var(--spring, ease); }
+.simon-lives i.lost { background: var(--faint); opacity: 1; transform: scale(.7); }
+
+/* progression : une perle par note visée */
+.simon-prog { position: absolute; inset: 0; pointer-events: none; }
+.simon-prog i {
+  position: absolute; left: 50%; top: 50%; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; border-radius: 50%;
+  background: var(--faint); opacity: .7;
+  transform: rotate(var(--a)) translateX(calc(var(--s) * .138));
+  transition: background .4s, opacity .4s, transform .45s var(--spring, ease);
+}
+.simon-prog i.in { background: var(--game); opacity: .35; }
+.simon-prog i.done { background: var(--game); opacity: 1; transform: rotate(var(--a)) translateX(calc(var(--s) * .138)) scale(1.3); }
+
+/* erreur : toute la couronne ondule, sans brusquerie */
+.simon-ring.wobble { animation: simon-wobble .65s ease; }
+/* nouvelle mélodie : la couronne respire une fois */
+.simon.renew .simon-ring { animation: simon-renew .9s var(--slow, ease); }
+
+@keyframes simon-in { from { opacity: 0; transform: scale(.4); } }
+@keyframes simon-hint {
+  0%, 100% { filter: drop-shadow(0 0 0 var(--c)); transform: scale(1); }
+  50% { filter: drop-shadow(0 0 calc(var(--s) * .045) var(--c)); transform: scale(1.08); }
+}
+@keyframes simon-shiver { 25% { transform: rotate(-5deg); } 50% { transform: rotate(4deg); } 75% { transform: rotate(-2deg); } }
+@keyframes simon-wobble { 20% { transform: rotate(-2.2deg); } 45% { transform: rotate(1.6deg); } 70% { transform: rotate(-.8deg); } 100% { transform: none; } }
+@keyframes simon-breathe { 50% { box-shadow: 0 0 0 calc(var(--s) * .028) color-mix(in srgb, var(--game) 10%, transparent), 0 0 calc(var(--s) * .12) color-mix(in srgb, var(--game) 35%, transparent); } }
+@keyframes simon-renew { 40% { transform: scale(.95); opacity: .6; } }
+
+/* thème sombre : coquilles un peu plus discrètes, nervures moins blanches */
+:root[data-theme="dark"] .simon { --shell-op: .5; }
+:root[data-theme="dark"] .simon-shell .sh-ridge { stroke: #0e1a26; stroke-opacity: .35; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .simon { --shell-op: .5; }
+  :root:not([data-theme="light"]) .simon-shell .sh-ridge { stroke: #0e1a26; stroke-opacity: .35; }
+}
+
+/* moins d'animations si demandé */
+:root.a11y-motion .simon-shell, :root.a11y-motion .simon-shell svg, :root.a11y-motion .simon-ring, :root.a11y-motion .simon-core { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .simon-shell, .simon-shell svg, .simon-ring, .simon-core { animation: none !important; }
+}
