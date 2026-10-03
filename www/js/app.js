@@ -317,6 +317,7 @@
   function renderHints(left) {
     $('#hint-left').textContent = left;
     $('#btn-hint').classList.toggle('empty', left <= 0);
+    const ex = $('#btn-explain'); if (ex) ex.classList.toggle('empty', left <= 0);
   }
 
   // bulle d'explication d'une astuce. L'astuce d'un jeu est soit un texte, soit
@@ -335,7 +336,7 @@
     $('#hint-tip').hidden = true;
     clearHintFx();
   }
-  function showTip(res) {
+  function showTip(res, explain) {
     const r = typeof res === 'string' ? { text: res } : res;
     const tip = $('#hint-tip');
     if (!showTip.bound) {
@@ -346,9 +347,11 @@
       ['#btn-undo', '#btn-reset', '#back'].forEach((s) => { const b = $(s); if (b) b.addEventListener('click', later); });
     }
     clearHintFx();
-    // pas de phrase : l'astuce se lit sur la grille (anneau doré, surlignages)
-    tip.textContent = '';
-    tip.hidden = true;
+    // indice direct : pas de phrase, l'astuce se lit sur la grille (anneau doré, surlignages) ;
+    // bouton « explication » : la même astuce, avec sa phrase dans une bulle
+    tip.textContent = explain && r.text ? r.text : '';
+    tip.hidden = !(explain && r.text);
+    if (!tip.hidden) { tip.classList.remove('in'); void tip.offsetWidth; tip.classList.add('in'); }
     const els = [];
     const mark = (list, cls) => (list || []).forEach((el) => {
       if (!el || !el.classList) return;
@@ -359,7 +362,7 @@
     mark(r.where, 'hint-where');
     clearHintFx.cur = { els, clear: r.clear };
     clearTimeout(showTip.timer);
-    showTip.timer = setTimeout(hideTip, 7000);
+    showTip.timer = setTimeout(hideTip, explain && r.text ? Math.max(9000, Math.min(16000, r.text.length * 80)) : 7000);
   }
   // Surlignages posés par-dessus un plateau dessiné (canvas) ou une zone de plusieurs cases :
   // boxes = [{ x, y, w, h, kind: 'where' | 'why', round, label }] en pixels CSS relatifs à `ref`.
@@ -717,13 +720,13 @@
         g, variant, inst, info, target,
         // (tests) lire ou régler le temps écoulé sur la grille en cours
         elapsed(v) { if (v != null) elapsed = v; return elapsed; },
-        hint() {
+        hint(explain) {
           if (won || hints >= MAX_HINTS) { C.sfx.error && C.sfx.error(); return; }
           const res = inst.hint();
           if (res) {
             hints++;
             renderHints(MAX_HINTS - hints);
-            if (typeof res === 'string' || (res && typeof res === 'object')) showTip(res); // l'astuce montre où, explique pourquoi
+            if (typeof res === 'string' || (res && typeof res === 'object')) showTip(res, explain); // l'astuce montre où (et, sur demande, explique pourquoi)
             if (info.t0) info.penalty += 10; // compet : chaque indice coûte 10 secondes
           }
         },
@@ -1746,7 +1749,8 @@
   $('#back').addEventListener('click', goHome);
   $('#btn-undo').addEventListener('click', () => session && session.inst.undo());
   $('#btn-reset').addEventListener('click', () => session && session.inst.reset());
-  $('#btn-hint').addEventListener('click', () => session && session.hint());
+  $('#btn-hint').addEventListener('click', () => session && session.hint(false));
+  $('#btn-explain').addEventListener('click', () => session && session.hint(true));
   $('#btn-autosolve').addEventListener('click', () => session && session.solve());
   $('#hint-tip').addEventListener('click', hideTip);
   $('#btn-rules').addEventListener('click', () => session && openTutorial(session.g, session.variant, false));

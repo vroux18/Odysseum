@@ -144,3 +144,9 @@
 #home #prev-level, #home #next-level { width: 46px !important; height: 46px !important; bottom: calc(var(--lc-b) + (var(--lc-h) - 46px) / 2 + 3px) !important; }
 #home #prev-level { left: calc(50% - var(--lc-w) / 2 - 56px) !important; }
 #home #next-level { right: calc(50% - var(--lc-w) / 2 - 56px) !important; }
+
+/* bouton « explication » (bulle) à côté de l'indice : même compteur de 3 astuces */
+#btn-explain { color: #2f7fc4 !important; }
+:root[data-theme="dark"] #btn-explain { color: #8cc4ff !important; }
+#btn-explain.empty { opacity: .45 !important; }
+#btn-explain svg.ic { width: 26px; height: 26px; }
