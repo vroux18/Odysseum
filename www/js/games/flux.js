@@ -8,7 +8,8 @@
   const COLORS = ['#e59a9a', '#7fa9cc', '#e2bf74', '#8fbf8a', '#b39ddb', '#eda77c',
     '#6fb5ad', '#d595bd', '#a9b878', '#8f9fd9', '#d9c46a', '#b3a08f'];
 
-  const DIRS = [[-1, 0], [1, 0], [0, -1], [0, 1]]; // haut, bas, gauche, droite
+  const GLYPHS = ['●', '▲', '■', '◆', '★', '✚', '♥', '✿', '◐', '✕', '☾', '◇'];
+  const DIRS =[[-1, 0], [1, 0], [0, -1], [0, 1]]; // haut, bas, gauche, droite
 
   // --- Graphe : une case normale = 1 nœud, une case pont = 2 nœuds (h et v). ---
   function buildGraph(n, bridges, wrap) {
@@ -458,7 +459,13 @@
           const [x, y] = center(v);
           ctx.fillStyle = COLORS[k];
           ctx.beginPath(); ctx.arc(x, y, cell * 0.3, 0, Math.PI * 2); ctx.fill();
-          if (isComplete(k)) {
+          if (document.documentElement.classList.contains('a11y-cb')) {
+            // accessibilité : un symbole par couleur, pour ne pas dépendre des teintes
+            ctx.fillStyle = 'rgba(255,255,255,.95)';
+            ctx.font = Math.round(cell * 0.32) + 'px sans-serif';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(GLYPHS[k % GLYPHS.length], x, y + 1);
+          } else if (isComplete(k)) {
             ctx.fillStyle = 'rgba(255,255,255,.85)';
             ctx.beginPath(); ctx.arc(x, y, cell * 0.08, 0, Math.PI * 2); ctx.fill();
           }

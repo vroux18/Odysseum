@@ -82,10 +82,13 @@
   </main>
 
   <div id="rules" class="overlay" hidden>
-    <div class="sheet">
+    <!-- tutoriel illustré : une page = un dessin + une phrase -->
+    <div class="sheet tuto-sheet">
       <span id="rules-icon" class="rules-icon" aria-hidden="true"></span>
-      <ul id="rules-list" class="rules-list"></ul>
-      <button id="rules-close" class="next-btn" aria-label="Commencer">
+      <div id="tuto-art" class="tuto-art-wrap"></div>
+      <p id="tuto-text" class="tuto-text"></p>
+      <div id="tuto-dots" class="tuto-dots"></div>
+      <button id="rules-close" class="next-btn" aria-label="Suivant">
         <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
       </button>
     </div>
@@ -106,8 +109,10 @@
   <div id="brain" class="overlay" hidden>
     <div class="sheet brain-sheet">
       <p class="brain-level">niveau<b id="brain-level">1</b></p>
+      <div class="xp-global"><div class="skill-bar"><i id="brain-xp-bar"></i></div><small id="brain-xp">0 / 100 xp</small></div>
       <svg id="brain-svg" class="brain" viewBox="0 0 320 250" aria-hidden="true"></svg>
       <div id="skills" class="skills"></div>
+      <p class="brain-note">Ces jauges reflètent ta pratique dans le jeu. Touche une capacité pour activer le mode concentration.</p>
     </div>
   </div>
 
@@ -129,8 +134,18 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17V6l10-2v11"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="15" r="2"/></svg>
       </div>
       <label class="toggle"><span>Vibrations</span><input type="checkbox" id="opt-vibrate"><i></i></label>
+      <p class="sheet-label">Accessibilité</p>
+      <label class="toggle"><span>Texte agrandi</span><input type="checkbox" class="opt-a11y" data-a11y="text"><i></i></label>
+      <label class="toggle"><span>Contraste renforcé</span><input type="checkbox" class="opt-a11y" data-a11y="contrast"><i></i></label>
+      <label class="toggle"><span>Animations réduites</span><input type="checkbox" class="opt-a11y" data-a11y="motion"><i></i></label>
+      <label class="toggle"><span>Symboles sur les couleurs</span><input type="checkbox" class="opt-a11y" data-a11y="cb"><i></i></label>
     </div>
   </div>
+
+  <!-- gain d'expérience après une victoire -->
+  <div id="xp-toast" class="xp-toast" aria-live="polite" hidden></div>
+  <!-- fondu lumineux du mode concentration -->
+  <div id="flash" class="flash" hidden></div>
 </div>
 
 <script src="vendor/three.min.js"></script>
@@ -143,6 +158,7 @@
 <script src="js/games/serpent.js"></script>
 <script src="js/games/lumieres.js"></script>
 <script src="js/games/coffre.js"></script>
+<script src="js/tutorials.js"></script>
 <script src="js/world.js"></script>
 <script src="js/app.js"></script>
 </body>

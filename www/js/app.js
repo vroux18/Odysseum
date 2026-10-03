@@ -33,36 +33,59 @@
   const dataKey = (g, v) => (v === 'classic' ? g.id : g.id + ':' + v);
 
   // ------------------------------------------------------------------
-  // Le parcours : chaque île introduit un mini-jeu, puis mélange ceux découverts.
-  // Le dernier niveau de chaque île est un boss : trois grilles d'affilée.
+  // La quête principale : tous les mini-jeux en alternance, difficulté croissante.
+  // - La première île présente les 8 jeux un par un (avec leur tutoriel).
+  // - Ensuite, les jeux tournent par cycles de 8 dans un ordre mélangé, sans répétition.
+  // - La difficulté monte d'île en île et au fil de chaque île.
+  // - Le dernier niveau de chaque île est un boss : 2, puis 3, puis 4 grilles d'affilée,
+  //   plus difficiles que le reste de l'île, de plus en plus souvent en variante.
   // ------------------------------------------------------------------
   const PER = 10;
   const ORDER = ['flux', 'reines', 'astres', 'paves', 'pixels', 'serpent', 'lumieres', 'coffre'];
 
+  const cycles = [ORDER.slice()];
+  function cyclePerm(n) {
+    while (cycles.length <= n) {
+      const prev = cycles[cycles.length - 1];
+      const perm = C.makeRng('cycle:' + cycles.length).shuffle(ORDER.slice());
+      if (perm[0] === prev[prev.length - 1]) [perm[0], perm[1]] = [perm[1], perm[0]]; // pas deux fois le même jeu d'affilée
+      cycles.push(perm);
+    }
+    return cycles[n];
+  }
+  // n-ième niveau « normal » (hors boss) → mini-jeu
+  const rotation = (n) => cyclePerm(Math.floor(n / ORDER.length))[n % ORDER.length];
+
   function levelInfo(L) {
     const c = Math.floor(L / PER), k = L % PER;
     const rng = C.makeRng('sentier:' + L);
-    const featured = ORDER[c % ORDER.length];
-    const known = ORDER.slice(0, Math.min(ORDER.length, c + 1));
     const boss = k === PER - 1;
-    const base = 1 + Math.floor(L * 0.5);
+    const normals = L - c; // niveaux normaux avant celui-ci (un boss par île)
+    const met = ORDER.slice(0, Math.min(ORDER.length, normals + (boss ? 0 : 1)));
     const pickVariant = (id, chance) => {
       const g = game(id);
-      // une variante seulement pour un jeu déjà connu depuis au moins une île
-      const ok = g.variants && g.variants[1] && (ORDER.indexOf(id) < c || c >= ORDER.length);
-      return ok && rng() < chance ? g.variants[1].id : 'classic';
+      // une variante seulement pour un jeu déjà rencontré au moins une fois avant
+      const seen = ORDER.indexOf(id) < normals - 1 || normals > ORDER.length;
+      return g.variants && g.variants[1] && seen && rng() < chance ? g.variants[1].id : 'classic';
     };
-    const vChance = c >= 2 ? 0.3 : 0;
     let steps;
     if (boss) {
-      const others = known.filter((id) => id !== featured);
-      const ids = [featured, others.length ? rng.pick(others) : featured, featured];
-      steps = ids.map((id) => ({ id, variant: pickVariant(id, c >= 2 ? 0.5 : 0), level: base + 6 }));
+      const count = 2 + Math.min(2, Math.floor(c / 2));
+      // des jeux différents, si possible de capacités différentes
+      const pool = rng.shuffle(met.slice());
+      const ids = [];
+      const skillOf = (id) => (SKILLS.find((s) => s.games.includes(id)) || {}).id;
+      pool.forEach((id) => { if (ids.length < count && !ids.some((x) => skillOf(x) === skillOf(id))) ids.push(id); });
+      pool.forEach((id) => { if (ids.length < count && !ids.includes(id)) ids.push(id); });
+      while (ids.length < count) ids.push(rng.pick(met));
+      const level = 4 + c * 4 + 6 + c; // nettement au-dessus du reste de l'île, et de plus en plus
+      steps = ids.map((id) => ({ id, variant: pickVariant(id, Math.min(0.7, 0.25 + c * 0.1)), level }));
     } else {
-      const id = k === 0 || rng() < 0.45 ? featured : rng.pick(known);
-      steps = [{ id, variant: pickVariant(id, vChance), level: base }];
+      const id = rotation(normals);
+      const level = 1 + c * 4 + Math.floor(k * 0.7); // montée douce au fil de l'île
+      steps = [{ id, variant: pickVariant(id, c >= 1 ? Math.min(0.55, 0.12 + c * 0.08) : 0), level }];
     }
-    return { L, c, k, boss, id: steps[0].id, accent: ACCENT[boss ? featured : steps[0].id], steps };
+    return { L, c, k, boss, id: steps[0].id, accent: ACCENT[steps[0].id], steps };
   }
 
   const J = (C.store.journey = C.store.journey || { done: 0, selected: 0 });
@@ -127,13 +150,19 @@
     host.innerHTML = '<div class="loading"><span></span></div>';
 
     const rulesKey = dataKey(g, variant) + ':rules';
-    if (!C.store.games[rulesKey]) { C.store.games[rulesKey] = 1; C.save(); openRules(g, variant); }
+    if (!C.store.games[rulesKey]) {
+      // première fois : tutoriel illustré (seulement la page de variante si le jeu est déjà connu)
+      const knowsBase = variant !== 'classic' && !!C.store.games[g.id + ':rules'];
+      C.store.games[rulesKey] = 1;
+      C.save();
+      openTutorial(g, variant, knowsBase);
+    }
 
     setTimeout(() => {
       const seed = (info.seed || 'odysseum:' + info.L) + ':' + stepIndex;
       const puzzle = g.generate(C.makeRng(seed), g.params(step.level, variant));
       host.innerHTML = '';
-      let elapsed = 0, won = false, tool = 'fill';
+      let elapsed = 0, won = false, tool = 'fill', hints = 0, auto = false;
       const tick = setInterval(() => {
         if (!document.hidden && !won && $('#rules').hidden) elapsed++;
       }, 1000);
@@ -148,6 +177,7 @@
           const d = C.gameData(dataKey(g, variant));
           d.solved++;
           d.totalTime += elapsed;
+          gainXp(g, step.level, !!info.boss, elapsed, hints, auto);
           C.save();
           host.classList.add('solved');
           if (stepIndex + 1 < info.steps.length) {
@@ -180,10 +210,11 @@
 
       session = {
         g, variant, inst, info,
-        hint() { if (!won) inst.hint(); },
-        // outil de test temporaire : résout la grille d'un coup
+        hint() { if (!won && inst.hint()) hints++; },
+        // outil de test temporaire : résout la grille d'un coup (sans XP)
         solve() {
           if (won) return;
+          auto = true;
           if (inst.solve) { inst.solve(); return; }
           for (let i = 0; i < 400 && !won; i++) if (!inst.hint()) break;
         },
@@ -202,7 +233,11 @@
       C.save();
       $('#play').classList.add('done');
       clearTimeout(finishLevel.timer);
-      finishLevel.timer = setTimeout(() => { if (!screens.play.hidden) startFree(game(s.id), s.variant); }, 1600);
+      finishLevel.timer = setTimeout(() => {
+        if (screens.play.hidden) return;
+        if (info.focus) startFocus(SKILLS.find((sk) => sk.id === info.focus)); // focus : un autre jeu de la même capacité
+        else startFree(game(s.id), s.variant);
+      }, 1600);
       return;
     }
     if (info.L === J.done) {
@@ -220,11 +255,51 @@
     }, 1600);
   }
 
-  function openRules(g, variant) {
+  // Tutoriel illustré : une page = un petit dessin + une phrase ; la flèche avance.
+  let tuto = null;
+  function openTutorial(g, variant, knowsBase) {
+    let pages = C.tutorial ? C.tutorial(g.id, variant, knowsBase) : [];
+    if (!pages.length) pages = rulesOf(g, variant).map((r) => ({ art: '', text: r }));
+    tuto = { pages, i: 0 };
+    $('#rules').style.setProperty('--game', ACCENT[g.id]);
     $('#rules-icon').innerHTML = icon(g.id);
-    $('#rules-icon').style.setProperty('--game', ACCENT[g.id]);
-    $('#rules-list').innerHTML = rulesOf(g, variant).map((r) => '<li>' + r + '</li>').join('');
+    renderTuto();
     $('#rules').hidden = false;
+  }
+  function renderTuto() {
+    const p = tuto.pages[tuto.i];
+    $('#tuto-art').innerHTML = p.art;
+    $('#tuto-text').innerHTML = p.text;
+    $('#tuto-dots').innerHTML = tuto.pages.length > 1 ? tuto.pages.map((_, i) => '<i class="' + (i === tuto.i ? 'on' : '') + '"></i>').join('') : '';
+    $('#rules-close').setAttribute('aria-label', tuto.i < tuto.pages.length - 1 ? 'Suivant' : 'Commencer');
+  }
+  function nextTuto() {
+    if (tuto && tuto.i < tuto.pages.length - 1) { tuto.i++; renderTuto(); C.sfx.tap(); }
+    else $('#rules').hidden = true;
+  }
+
+  // ------------------------------ Expérience ------------------------------
+  // L'XP dépend de la façon de jouer : rapidité, indices utilisés ; l'autosolve n'en donne pas.
+  function gainXp(g, level, boss, elapsed, hints, auto) {
+    const sk = SKILLS.find((s) => s.games.includes(g.id));
+    if (!sk || auto) return;
+    const base = 10 + Math.floor(level / 2);
+    const par = 25 + level * 5;                                   // temps « attendu » en secondes
+    const speed = Math.max(0.6, Math.min(1.4, 1.4 - 0.6 * (elapsed / par)));
+    const help = Math.max(0.25, 1 - 0.25 * hints);
+    const gain = Math.max(1, Math.round(base * speed * help * (boss ? 1.5 : 1)));
+    const before = skillStats(sk).level;
+    C.store.xp[sk.id] = (C.store.xp[sk.id] || 0) + gain;
+    const after = skillStats(sk).level;
+    showXp('+' + gain + ' <b>' + sk.name.toLowerCase() + '</b>' + (after > before ? ' · niveau ' + after : ''), ACCENT[sk.games[0]]);
+  }
+  function showXp(html, accent) {
+    const t = $('#xp-toast');
+    t.innerHTML = html;
+    t.style.setProperty('--game', accent);
+    t.hidden = true; void t.offsetWidth; t.hidden = false;
+    clearTimeout(showXp.timer);
+    showXp.timer = setTimeout(() => { t.hidden = true; }, 2700);
   }
 
   const screens = { home: $('#home'), play: $('#play') };
@@ -240,6 +315,7 @@
     session = null;
     show('home');
     if (worldReady) {
+      C.world.endConcentrate();
       C.world.start();
       if (pendingProgress) {
         C.world.progress(J.done, true);
@@ -273,6 +349,17 @@
     });
   }
 
+  // Mode focus : on n'enchaîne que les mini-jeux d'une capacité, en alternant jeux et variantes.
+  let focusTurn = 0;
+  function startFocus(sk) {
+    focusTurn++;
+    const g = game(sk.games[focusTurn % sk.games.length]);
+    const v = g.variants && g.variants[1] && Math.random() < 0.4 ? g.variants[1].id : 'classic';
+    const d = C.gameData(dataKey(g, v));
+    $('#brain').hidden = true;
+    playStep({ L: -1, free: true, focus: sk.id, seed: 'focus:' + g.id + ':' + v + ':' + d.level, steps: [{ id: g.id, variant: v, level: d.level }] }, 0);
+  }
+
   function startFree(g, variant) {
     const d = C.gameData(dataKey(g, variant));
     $('#library').hidden = true;
@@ -281,21 +368,41 @@
 
   // ------------------------ Carte du cerveau ------------------------
   // Chaque faculté se nourrit de deux mini-jeux ; les grilles réussies allument ses neurones.
+  // Capacités sollicitées par les jeux, d'après docs/fondements-cognitifs.md :
+  // déduction sur contraintes (Gf), traitement visuo-spatial (Gv), planification, test d'hypothèses.
+  // Les jauges reflètent la pratique dans le jeu, pas une mesure des capacités.
   const SKILLS = [
-    { id: 'logique', name: 'Logique', games: ['reines', 'astres'], at: [108, 92] },
-    { id: 'espace', name: 'Espace', games: ['paves', 'pixels'], at: [196, 74] },
-    { id: 'anticipation', name: 'Anticipation', games: ['flux', 'serpent'], at: [132, 160] },
-    { id: 'raisonnement', name: 'Raisonnement', games: ['lumieres', 'coffre'], at: [240, 128] }
+    { id: 'logique', name: 'Déduction', games: ['reines', 'astres'], at: [108, 92],
+      desc: 'Tirer des certitudes des règles, une case après l\'autre, sans jamais deviner.' },
+    { id: 'espace', name: 'Espace', games: ['paves', 'pixels'], at: [196, 74],
+      desc: 'Se représenter les formes et la place qu\'elles occupent avant de les tracer.' },
+    { id: 'anticipation', name: 'Anticipation', games: ['flux', 'serpent'], at: [132, 160],
+      desc: 'Prévoir plusieurs coups à l\'avance pour ne pas se fermer de chemin.' },
+    { id: 'raisonnement', name: 'Hypothèses', games: ['lumieres', 'coffre'], at: [240, 128],
+      desc: 'Proposer une idée, l\'éprouver, et retenir ce que chaque essai révèle.' }
   ];
   const NODES = 10;
   const solvedOf = (id) => { const g = game(id); return variantsOf(g).reduce((s, v) => s + C.gameData(dataKey(g, v.id)).solved, 0); };
+  // première ouverture avec le système d'XP : on convertit les grilles déjà réussies
+  if (!C.store.xp) {
+    C.store.xp = {};
+    SKILLS.forEach((sk) => { C.store.xp[sk.id] = sk.games.reduce((s, id) => s + solvedOf(id), 0) * 12; });
+    C.save();
+  }
+  // chaque niveau demande un peu plus d'XP que le précédent
+  function levelFrom(xp, step) {
+    let n = 1, rest = xp;
+    while (rest >= step * n) { rest -= step * n; n++; }
+    return { level: n, cur: rest, need: step * n, frac: rest / (step * n) };
+  }
   const skillStats = (sk) => {
-    const solved = sk.games.reduce((s, id) => s + solvedOf(id), 0);
-    return { solved, level: 1 + Math.floor(solved / 5), frac: (solved % 5) / 5, lit: Math.min(NODES, Math.floor(solved / 2)) };
+    const xp = C.store.xp[sk.id] || 0;
+    const L = levelFrom(xp, 40);
+    return Object.assign({ xp }, L, { lit: Math.min(NODES, L.level - 1 + (L.frac >= 0.5 ? 1 : 0)) });
   };
   function playerStats() {
-    const total = C.games.reduce((s, g) => s + solvedOf(g.id), 0);
-    return { total, level: 1 + Math.floor(total / 8), frac: (total % 8) / 8 };
+    const total = SKILLS.reduce((s, sk) => s + (C.store.xp[sk.id] || 0), 0);
+    return Object.assign({ total }, levelFrom(total, 100));
   }
 
   function renderBadge() {
@@ -307,6 +414,8 @@
   function renderBrain() {
     const p = playerStats();
     $('#brain-level').textContent = p.level;
+    $('#brain-xp').textContent = p.cur + ' / ' + p.need + ' xp';
+    $('#brain-xp-bar').style.width = Math.round(p.frac * 100) + '%';
     const ns = 'http://www.w3.org/2000/svg';
     const svg = $('#brain-svg');
     svg.innerHTML =
@@ -354,8 +463,9 @@
     });
     $('#skills').innerHTML = SKILLS.map((sk) => {
       const st = skillStats(sk);
-      return '<div class="skill" style="--game:' + ACCENT[sk.games[0]] + '"><div class="skill-head"><span>' + sk.name +
-        '</span><small>' + st.level + '</small></div><div class="skill-bar"><i style="width:' + Math.round(st.frac * 100) + '%"></i></div></div>';
+      return '<button class="skill" data-skill="' + sk.id + '" aria-label="Activer le mode concentration : ' + sk.name + '" style="--game:' + ACCENT[sk.games[0]] + '"><div class="skill-head"><span>' + sk.name +
+        '</span><small>niv. ' + st.level + '</small></div><p class="skill-desc">' + sk.desc + '</p><div class="skill-bar"><i style="width:' + Math.round(st.frac * 100) + '%"></i></div>' +
+        '<small class="skill-xp">' + st.cur + ' / ' + st.need + ' xp <span class="focus-go">concentration →</span></small></button>';
     }).join('');
   }
 
@@ -399,8 +509,43 @@
   $('#btn-reset').addEventListener('click', () => session && session.inst.reset());
   $('#btn-hint').addEventListener('click', () => session && session.hint());
   $('#btn-autosolve').addEventListener('click', () => session && session.solve());
-  $('#btn-rules').addEventListener('click', () => session && openRules(session.g, session.variant));
-  $('#rules-close').addEventListener('click', () => { $('#rules').hidden = true; });
+  $('#btn-rules').addEventListener('click', () => session && openTutorial(session.g, session.variant, false));
+  $('#rules-close').addEventListener('click', nextTuto);
+  // carte du cerveau : toucher une capacité lance le mode focus
+  $('#skills').addEventListener('click', (e) => {
+    const b = e.target.closest('.skill');
+    if (b) concentrate(SKILLS.find((sk) => sk.id === b.dataset.skill));
+  });
+
+  // Activer le mode concentration : Ulysse se prend la tête, la caméra plonge, puis la lumière.
+  function concentrate(sk) {
+    $('#brain').hidden = true;
+    if (!worldReady || screens.home.hidden) { startFocus(sk); return; }
+    $('#go').hidden = true;
+    const accent = ACCENT[sk.games[0]];
+    showXp('mode concentration · <b>' + sk.name.toLowerCase() + '</b>', accent);
+    C.world.concentrate(accent, () => {
+      const fl = $('#flash');
+      fl.style.setProperty('--game', accent);
+      fl.hidden = true; void fl.offsetWidth; fl.hidden = false;
+      setTimeout(() => startFocus(sk), 420);
+      setTimeout(() => { fl.hidden = true; }, 1300);
+    });
+  }
+
+  // Accessibilité : texte agrandi, contraste renforcé, animations réduites, symboles sur les couleurs
+  C.store.settings.a11y = C.store.settings.a11y || {};
+  function applyA11y() {
+    const a = C.store.settings.a11y;
+    ['text', 'contrast', 'motion', 'cb'].forEach((k) => document.documentElement.classList.toggle('a11y-' + k, !!a[k]));
+    if (worldReady && C.world.setCalm) C.world.setCalm(!!a.motion);
+    if (session && session.inst.redraw) session.inst.redraw();
+  }
+  document.querySelectorAll('.opt-a11y').forEach((box) => {
+    box.checked = !!C.store.settings.a11y[box.dataset.a11y];
+    box.addEventListener('change', () => { C.store.settings.a11y[box.dataset.a11y] = box.checked; C.save(); applyA11y(); });
+  });
+  applyA11y();
   $('#rules').addEventListener('click', (e) => { if (e.target.id === 'rules') $('#rules').hidden = true; });
   $('#win-next').addEventListener('click', goHome);
 
@@ -425,6 +570,7 @@
 
   initWorld();
   applyTheme();
+  applyA11y();
   show('home');
   renderPlay();
   renderBadge();

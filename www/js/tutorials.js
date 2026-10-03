@@ -1,0 +1,181 @@
+// Tutoriels illustrés : quelques pages courtes par mini-jeu, chacune avec un petit
+// exemple dessiné. Une page de plus pour la variante.
+(function () {
+  'use strict';
+  const C = window.Carnet;
+
+  // --- petits outils de dessin (viewBox 0 0 120 120) ---
+  const A = '#e59a9a', B = '#7fa9cc', Y = '#e2bf74', G = '#8fbf8a';
+  const svg = (body) => '<svg viewBox="0 0 120 120" class="tuto-art">' + body + '</svg>';
+  function grid(n, opt) {
+    opt = opt || {};
+    const s = 96 / n;
+    let out = '<rect x="12" y="12" width="96" height="96" rx="10" fill="var(--board)" stroke="var(--line)"/>';
+    for (let i = 1; i < n; i++) {
+      out += '<line x1="' + (12 + i * s) + '" y1="12" x2="' + (12 + i * s) + '" y2="108" stroke="var(--grid-line)"/>';
+      out += '<line x1="12" y1="' + (12 + i * s) + '" x2="108" y2="' + (12 + i * s) + '" stroke="var(--grid-line)"/>';
+    }
+    return out;
+  }
+  const cx = (n, c) => 12 + (c + 0.5) * (96 / n);
+  const fillCell = (n, r, c, color, op) => '<rect x="' + (12 + c * 96 / n + 1) + '" y="' + (12 + r * 96 / n + 1) + '" width="' + (96 / n - 2) +
+    '" height="' + (96 / n - 2) + '" rx="3" fill="' + color + '" opacity="' + (op || 1) + '"/>';
+  const dot = (n, r, c, color, rad) => '<circle cx="' + cx(n, c) + '" cy="' + cx(n, r) + '" r="' + (rad || 96 / n * 0.3) + '" fill="' + color + '"/>';
+  const path = (n, cells, color, w) => '<polyline fill="none" stroke="' + color + '" stroke-width="' + (w || 96 / n * 0.26) +
+    '" stroke-linecap="round" stroke-linejoin="round" points="' + cells.map(([r, c]) => cx(n, c) + ',' + cx(n, r)).join(' ') + '"/>';
+  const text = (n, r, c, t, color) => '<text x="' + cx(n, c) + '" y="' + (cx(n, r) + 5) + '" text-anchor="middle" font-size="' + (96 / n * 0.42) +
+    '" font-family="Jost, sans-serif" fill="' + (color || 'var(--ink)') + '">' + t + '</text>';
+  const cross = (x, y) => '<path d="M' + (x - 9) + ' ' + (y - 9) + 'l18 18M' + (x + 9) + ' ' + (y - 9) + 'l-18 18" stroke="var(--bad-ink)" stroke-width="3" stroke-linecap="round"/>';
+  const sun = (n, r, c) => '<circle cx="' + cx(n, c) + '" cy="' + cx(n, r) + '" r="' + (96 / n * 0.28) + '" fill="#e6c98c"/>';
+  const moon = (n, r, c) => {
+    const x = cx(n, c), y = cx(n, r), s = 96 / n * 0.3;
+    return '<path d="M' + (x + s * 0.3) + ' ' + (y - s) + 'a' + s + ' ' + s + ' 0 1 0 ' + (s * 0.75) + ' ' + (s * 1.6) + 'a' + (s * 0.8) + ' ' + (s * 0.8) + ' 0 0 1 ' + (-s * 0.75) + ' ' + (-s * 1.6) + 'z" fill="#9db8d4"/>';
+  };
+  const finger = (x, y) => '<g opacity=".75"><circle cx="' + x + '" cy="' + y + '" r="7" fill="var(--ink)" opacity=".18"/><circle cx="' + x + '" cy="' + y + '" r="3" fill="var(--ink)"/></g>';
+
+  const T = {};
+
+  T.flux = {
+    steps: [
+      { art: svg(grid(4) + path(4, [[0, 0], [1, 0], [2, 0], [2, 1], [2, 2]], A) + dot(4, 0, 0, A) + dot(4, 2, 2, A) + dot(4, 0, 3, B) + dot(4, 3, 3, B) + finger(cx(4, 2), cx(4, 2))),
+        text: 'Glisse le doigt d\'un point à l\'autre pour relier <b>les deux points de même couleur</b>.' },
+      { art: svg(grid(4) + path(4, [[0, 0], [1, 0], [2, 0], [2, 1], [2, 2]], A) + path(4, [[0, 1], [0, 2], [0, 3], [1, 3], [2, 3], [3, 3]], B) +
+          path(4, [[1, 1], [1, 2]], Y) + path(4, [[3, 0], [3, 1], [3, 2]], G) +
+          dot(4, 0, 0, A) + dot(4, 2, 2, A) + dot(4, 0, 1, B) + dot(4, 3, 3, B) + dot(4, 1, 1, Y) + dot(4, 1, 2, Y) + dot(4, 3, 0, G) + dot(4, 3, 2, G)),
+        text: 'Relie toutes les paires et <b>remplis toute la grille</b>. Les tuyaux ne se croisent pas.' },
+      { art: svg(grid(3) + '<rect x="45" y="45" width="30" height="30" fill="none" stroke="var(--faint)" stroke-dasharray="3 3"/>' +
+          path(3, [[0, 1], [1, 1], [2, 1]], B) + '<line x1="44" y1="60" x2="76" y2="60" stroke="var(--board)" stroke-width="13"/>' +
+          path(3, [[1, 0], [1, 1], [1, 2]], A) + dot(3, 1, 0, A) + dot(3, 1, 2, A) + dot(3, 0, 1, B) + dot(3, 2, 1, B)),
+        text: 'Sur un <b>pont</b>, deux tuyaux peuvent se croiser : l\'un à l\'horizontale, l\'autre à la verticale.' }
+    ],
+    variants: {
+      tore: { art: svg(grid(4) + path(4, [[1, 2], [1, 3]], A) + '<line x1="96" y1="' + cx(4, 1) + '" x2="112" y2="' + cx(4, 1) + '" stroke="' + A + '" stroke-width="6" stroke-linecap="round"/>' +
+          '<line x1="8" y1="' + cx(4, 1) + '" x2="' + cx(4, 0) + '" y2="' + cx(4, 1) + '" stroke="' + A + '" stroke-width="6" stroke-linecap="round"/>' + dot(4, 1, 2, A) + dot(4, 1, 0, A) +
+          '<path d="M108 30 q8 -10 0 -18M12 30 q-8 -10 0 -18" fill="none" stroke="var(--muted)" stroke-width="1.5"/>'),
+        text: '<b>Variante Tore</b> : les bords communiquent. Un tuyau qui sort à droite ressort à gauche (glisse juste au-delà du bord).' }
+    }
+  };
+
+  T.reines = {
+    steps: [
+      { art: svg(grid(4) + fillCell(4, 0, 0, '#f3dcd7') + fillCell(4, 0, 1, '#f3dcd7') + fillCell(4, 1, 0, '#f3dcd7') +
+          fillCell(4, 0, 2, '#d9e6ef') + fillCell(4, 0, 3, '#d9e6ef') + fillCell(4, 1, 3, '#d9e6ef') +
+          fillCell(4, 1, 1, '#e2ecd8') + fillCell(4, 1, 2, '#e2ecd8') + fillCell(4, 2, 1, '#e2ecd8') + fillCell(4, 2, 2, '#e2ecd8') +
+          [[2, 0], [3, 0], [3, 1], [3, 2], [3, 3], [2, 3]].map(([r, c]) => fillCell(4, r, c, '#f4ead2')).join('') +
+          dot(4, 0, 1, 'var(--ink)', 7) + dot(4, 1, 3, 'var(--ink)', 7) + dot(4, 2, 0, 'var(--ink)', 7) + dot(4, 3, 2, 'var(--ink)', 7)),
+        text: 'Place <b>une reine par ligne, par colonne et par zone de couleur</b>.' },
+      { art: svg(grid(4) + dot(4, 1, 1, 'var(--ink)', 7) + dot(4, 2, 2, 'var(--bad-ink)', 7) + cross(cx(4, 2) + 14, cx(4, 2) - 14)),
+        text: 'Deux reines <b>ne se touchent jamais</b>, même en diagonale.' },
+      { art: svg(grid(3) + dot(3, 1, 0, 'var(--muted)', 4) + dot(3, 1, 2, 'var(--ink)', 9) + finger(cx(3, 0) + 8, cx(3, 1) + 8) +
+          '<text x="' + cx(3, 0) + '" y="104" text-anchor="middle" font-size="9" fill="var(--muted)">1 toucher</text>' +
+          '<text x="' + cx(3, 2) + '" y="104" text-anchor="middle" font-size="9" fill="var(--muted)">2 touchers</text>'),
+        text: 'Touche une fois pour poser un <b>repère</b>, deux fois pour une <b>reine</b>. Glisse pour poser plusieurs repères.' }
+    ],
+    variants: {
+      cavaliers: { art: svg(grid(4) + dot(4, 0, 0, 'var(--ink)', 7) + dot(4, 1, 2, 'var(--bad-ink)', 7) +
+          '<path d="M' + cx(4, 0) + ' ' + cx(4, 0) + 'H' + cx(4, 2) + 'V' + cx(4, 1) + '" fill="none" stroke="var(--bad-ink)" stroke-dasharray="3 3"/>' + dot(4, 1, 1, 'var(--ink)', 7)),
+        text: '<b>Variante Cavaliers</b> : les reines peuvent se toucher, mais jamais à un <b>saut de cavalier</b> (2 cases puis 1).' }
+    }
+  };
+
+  T.astres = {
+    steps: [
+      { art: svg(grid(4) + sun(4, 1, 0) + moon(4, 1, 1) + sun(4, 1, 2) + moon(4, 1, 3)),
+        text: 'Remplis la grille de <b>soleils</b> et de <b>lunes</b> : autant de chaque par ligne et par colonne.' },
+      { art: svg(grid(4) + sun(4, 1, 0) + sun(4, 1, 1) + sun(4, 1, 2) + '<line x1="16" y1="' + cx(4, 1) + '" x2="80" y2="' + cx(4, 1) + '" stroke="var(--bad-ink)" stroke-width="2"/>'),
+        text: 'Jamais <b>trois identiques</b> côte à côte.' },
+      { art: svg(grid(4) + sun(4, 1, 1) + sun(4, 1, 2) + text(4, 1, 1.5, '=', 'var(--muted)') + sun(4, 2, 1) + moon(4, 2, 2) + text(4, 2, 1.5, '×', 'var(--muted)')),
+        text: '<b>=</b> : les deux cases sont identiques. <b>×</b> : elles sont différentes. Touche une case pour changer de symbole.' }
+    ],
+    variants: {
+      diagonales: { art: svg(grid(4) + moon(4, 0, 0) + moon(4, 1, 1) + moon(4, 2, 2) + '<line x1="20" y1="20" x2="78" y2="78" stroke="var(--bad-ink)" stroke-width="2"/>'),
+        text: '<b>Variante Diagonales</b> : pas trois identiques alignés, <b>même en diagonale</b>.' }
+    }
+  };
+
+  T.paves = {
+    steps: [
+      { art: svg(grid(4) + '<rect x="15" y="15" width="42" height="42" rx="6" fill="#d9e6ef"/>' + text(4, 0.5, 0.5, '4') + text(4, 2, 3, '3') + finger(57, 57)),
+        text: 'Trace un <b>rectangle</b> autour de chaque nombre, en glissant le doigt. Sa taille doit être égale au nombre.' },
+      { art: svg(grid(4) + '<rect x="15" y="15" width="42" height="42" rx="6" fill="#d9e6ef"/><rect x="63" y="15" width="42" height="18" rx="6" fill="#f3dcd7"/>' +
+          '<rect x="87" y="39" width="18" height="66" rx="6" fill="#e2ecd8"/><rect x="15" y="63" width="66" height="42" rx="6" fill="#f4ead2"/><rect x="63" y="39" width="18" height="18" rx="6" fill="#ebe2f1"/>' +
+          text(4, 0.5, 0.5, '4') + text(4, 0, 2.5, '2') + text(4, 2, 3, '3') + text(4, 2.5, 1, '6') + text(4, 1, 2, '1')),
+        text: 'Chaque rectangle contient <b>un seul nombre</b>, et toute la grille doit être couverte.' }
+    ],
+    variants: {
+      mystere: { art: svg(grid(4) + text(4, 1, 1, '?', 'var(--muted)') + text(4, 2, 3, '3')),
+        text: '<b>Variante Mystère</b> : un <b>?</b> cache la taille de son rectangle. Déduis-la à partir des autres.' }
+    }
+  };
+
+  T.pixels = {
+    steps: [
+      { art: svg('<text x="20" y="62" font-size="11" fill="var(--muted)" text-anchor="middle">3 1</text>' +
+          [0, 1, 2, 3, 4].map((c) => '<rect x="' + (32 + c * 16) + '" y="50" width="15" height="15" rx="2" fill="' + (c < 3 || c === 4 ? 'var(--game)' : 'var(--soft)') + '"/>').join('')),
+        text: 'Les nombres indiquent les <b>blocs de cases pleines</b> d\'une ligne ou d\'une colonne, dans l\'ordre.' },
+      { art: svg('<text x="20" y="62" font-size="11" fill="var(--muted)" text-anchor="middle">3 1</text>' +
+          [0, 1, 2, 3, 4].map((c) => '<rect x="' + (32 + c * 16) + '" y="50" width="15" height="15" rx="2" fill="' + (c === 3 ? 'var(--soft)' : 'var(--game)') + '"/>').join('') +
+          '<circle cx="' + (32 + 3 * 16 + 7.5) + '" cy="57.5" r="2" fill="var(--muted)"/>'),
+        text: 'Entre deux blocs, au moins une case vide. Choisis l\'outil <b>remplir</b> ou <b>point</b> au-dessus de la grille.' }
+    ],
+    variants: {
+      miroir: { art: svg(grid(4) + fillCell(4, 1, 0, 'var(--game)') + fillCell(4, 1, 3, 'var(--game)', 0.5) + '<line x1="60" y1="8" x2="60" y2="112" stroke="var(--muted)" stroke-dasharray="4 3"/>'),
+        text: '<b>Variante Miroir</b> : le dessin est symétrique. Chaque case posée se recopie de l\'autre côté.' }
+    }
+  };
+
+  T.serpent = {
+    steps: [
+      { art: svg(grid(3) + path(3, [[0, 0], [0, 1], [0, 2], [1, 2], [1, 1], [1, 0], [2, 0], [2, 1], [2, 2]], '#8cbfb8', 7) +
+          dot(3, 0, 0, 'var(--board)', 9) + text(3, 0, 0, '1') + dot(3, 1, 1, 'var(--board)', 9) + text(3, 1, 1, '2') + dot(3, 2, 2, 'var(--board)', 9) + text(3, 2, 2, '3')),
+        text: 'Pars du <b>1</b> et trace un seul chemin qui passe par <b>toutes les cases</b>, une seule fois.' },
+      { art: svg(grid(3) + text(3, 0, 0, '1') + text(3, 1, 1, '2') + text(3, 2, 2, '3')),
+        text: 'Passe par les nombres <b>dans l\'ordre</b> et termine sur le plus grand.' }
+    ],
+    variants: {
+      laby: { art: svg(grid(3) + '<line x1="44" y1="44" x2="44" y2="108" stroke="var(--muted)" stroke-width="3" stroke-linecap="round"/>' + dot(3, 0, 0, '#8cbfb8', 8) +
+          '<circle cx="' + cx(3, 2) + '" cy="' + cx(3, 2) + '" r="8" fill="none" stroke="#8cbfb8" stroke-width="2"/>'),
+        text: '<b>Variante Labyrinthe</b> : un départ (point plein), une arrivée (anneau) et des <b>murs</b> infranchissables.' }
+    }
+  };
+
+  T.lumieres = {
+    steps: [
+      { art: svg([[1, 1], [0, 1], [2, 1], [1, 0], [1, 2]].map(([r, c]) => dot(3, r, c, '#dcc283', 11)).join('') +
+          [[0, 0], [0, 2], [2, 0], [2, 2]].map(([r, c]) => dot(3, r, c, 'var(--soft)', 11)).join('') + finger(cx(3, 1) + 6, cx(3, 1) + 6)),
+        text: 'Touche une lumière : <b>elle et ses quatre voisines</b> changent d\'état.' },
+      { art: svg([0, 1, 2].map((r) => [0, 1, 2].map((c) => dot(3, r, c, 'var(--soft)', 11)).join('')).join('')),
+        text: '<b>Éteins toutes les lumières.</b> Essaie d\'y arriver avec le moins de coups possible.' }
+    ],
+    variants: {
+      croix: { art: svg([[1, 1], [0, 0], [0, 2], [2, 0], [2, 2]].map(([r, c]) => dot(3, r, c, '#dcc283', 11)).join('') +
+          [[0, 1], [1, 0], [1, 2], [2, 1]].map(([r, c]) => dot(3, r, c, 'var(--soft)', 11)).join('')),
+        text: '<b>Variante Croix</b> : chaque appui inverse la lumière et ses <b>quatre voisines en diagonale</b>.' }
+    }
+  };
+
+  T.coffre = {
+    steps: [
+      { art: svg([0, 1, 2, 3].map((i) => '<circle cx="' + (22 + i * 22) + '" cy="50" r="9" fill="var(--soft)"/><text x="' + (22 + i * 22) + '" y="55" text-anchor="middle" font-size="12" fill="' +
+          [A, B, Y, G][i] + '">' + ['●', '▲', '■', '◆'][i] + '</text>').join('') +
+          '<circle cx="40" cy="80" r="4" fill="var(--ink)"/><circle cx="54" cy="80" r="4" fill="none" stroke="var(--ink)"/><circle cx="68" cy="80" r="4" fill="none" stroke="var(--faint)"/><circle cx="82" cy="80" r="4" fill="none" stroke="var(--faint)"/>'),
+        text: 'Devine le <b>code secret</b>. Après chaque essai : point plein = bien placé, cercle = bon symbole mal placé.' },
+      { art: svg('<text x="60" y="66" text-anchor="middle" font-size="22" fill="var(--game)">→</text>'),
+        text: 'Compose ton code avec le clavier, puis valide avec la <b>flèche</b>. Le nombre d\'essais est limité.' }
+    ],
+    variants: {
+      cadenas: { art: svg([0, 1, 2].map((i) => '<text x="' + (34 + i * 26) + '" y="52" text-anchor="middle" font-size="18" fill="var(--ink)">' + [3, 7, 5][i] +
+          '</text><text x="' + (34 + i * 26) + '" y="76" text-anchor="middle" font-size="12" fill="var(--muted)">' + ['▲', '✓', '▼'][i] + '</text>').join('')),
+        text: '<b>Variante Cadenas</b> : un code à chiffres. Sous chaque chiffre : ✓ juste, ▲ le bon est plus grand, ▼ plus petit.' }
+    }
+  };
+
+  // pages à montrer : tout le tutoriel, ou seulement la page de variante si le jeu est déjà connu
+  C.tutorial = function (id, variant, knowsBase) {
+    const t = T[id];
+    if (!t) return [];
+    const v = variant !== 'classic' && t.variants && t.variants[variant];
+    if (v && knowsBase) return [v];
+    return v ? t.steps.concat([v]) : t.steps;
+  };
+})();

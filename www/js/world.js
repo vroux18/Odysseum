@@ -121,6 +121,8 @@
   };
   // heure → moment (les intervalles se fondent les uns dans les autres)
   const TIMELINE = [[0, 'nuit'], [5, 'nuit'], [6.5, 'aube'], [8.5, 'jour'], [17, 'jour'], [19, 'crepuscule'], [20.5, 'nuit'], [24, 'nuit']];
+  let calm = false;
+  let cine = null; // séquence « mode concentration » en cours
   let lightHour = 12, forceNight = false, skyKey = '', mtnColor = '#dfe6e6';
 
   function mix(a, b, k) {
@@ -862,9 +864,17 @@
     const face = new THREE.Mesh(new THREE.SphereGeometry(0.085, 16, 12), skin);
     face.scale.set(0.9, 1.08, 0.95);
     const hair = new THREE.Mesh(new THREE.SphereGeometry(0.09, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), hairMat);
-    hair.position.set(0, 0.012, -0.008);
-    const beard = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8, 0, Math.PI * 2, Math.PI * 0.45, Math.PI * 0.55), hairMat);
-    beard.position.set(0, -0.022, 0.018);
+    hair.position.set(0, 0.012, -0.012);
+    hair.rotation.x = -0.75; // les cheveux couvrent l'arrière du crâne, pas le visage
+    const beard = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8, 0, Math.PI * 2, Math.PI * 0.55, Math.PI * 0.45), hairMat);
+    beard.position.set(0, -0.03, 0.022);
+    // yeux discrets, pour que le visage se lise en gros plan
+    const eyeMat = new THREE.MeshBasicMaterial({ color: '#3b3430' });
+    [-0.03, 0.03].forEach((x) => {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.009, 6, 5), eyeMat);
+      eye.position.set(x, 0.012, 0.078);
+      head.add(eye);
+    });
     head.add(face, hair, beard);
     // longue cape blanche, doublure à la couleur de l'île
     const capeMat = lambert('#f4f2ec', { side: THREE.DoubleSide });
@@ -886,6 +896,26 @@
     spear.add(shaft, tip);
     spear.position.set(0.19, 0, 0.05);
     spear.rotation.z = -0.06;
+    // bras articulés à l'épaule (balancent en marchant, se lèvent vers la tête en mode focus)
+    const arms = [-1, 1].map((side) => {
+      const pivot = new THREE.Group();
+      pivot.position.set(side * 0.155, 0.85, 0);
+      const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.03, 0.27, 7), tunicMat);
+      sleeve.position.y = -0.135;
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.034, 8, 6), skin);
+      hand.position.y = -0.3;
+      pivot.add(sleeve, hand);
+      pivot.userData.side = side;
+      body.add(pivot);
+      return pivot;
+    });
+    // lueur de la pensée, au cœur de la tête
+    const mind = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: '#ffffff', transparent: true, opacity: 0, depthWrite: false, depthTest: false }));
+    mind.scale.set(0.5, 0.5, 1);
+    mind.position.y = 1.03;
+    body.add(mind);
+    // la lance reste plantée à côté de lui, même quand il lève les bras
+    spear.position.x = 0.22;
     [torso, belt, emblem, shoulders, neck, capePivot, spear].forEach((o) => body.add(o));
     body.add(head);
     body.traverse((o) => { if (o.isMesh) o.castShadow = true; });
@@ -898,7 +928,7 @@
     g.add(shadow);
     g.scale.setScalar(0.95);
     scene.add(g);
-    Object.assign(hero, { group: g, body, scarf: scarfMat, shadow, cape: capePivot, legs, head, emblem });
+    Object.assign(hero, { group: g, body, scarf: scarfMat, shadow, cape: capePivot, legs, head, emblem, arms, mind, focus: 0, focusTarget: 0 });
   }
 
   // point de passage → position vivante (les îles tanguent, les pierres flottent)
@@ -1046,7 +1076,19 @@
     hero.body.rotation.x = speed ? 0.06 : 0;
     hero.body.scale.y = 1 + (moving ? 0 : Math.sin(t * 1.8) * 0.012);
     hero.cape.rotation.x = moving ? -0.32 + Math.sin(t * 7) * 0.06 : -0.04 + Math.sin(t * 1.2) * 0.03;
-    hero.head.rotation.y = moving ? 0 : Math.sin(t * 0.35) * 0.35;
+    // bras : balancier à la marche, mains sur la tête en mode focus
+    hero.focus += (hero.focusTarget - hero.focus) * (1 - Math.exp(-dt * 4));
+    const f = hero.focus;
+    hero.arms.forEach((arm) => {
+      const side = arm.userData.side;
+      const swing = speed ? -Math.sin(w) * 0.45 * side : 0;
+      arm.rotation.x = swing * (1 - f) - 0.35 * f;
+      arm.rotation.z = side * 0.1 * (1 - f) + (-side * 2.82) * f;
+    });
+    hero.head.rotation.y = moving || f > 0.05 ? 0 : Math.sin(t * 0.35) * 0.35;
+    hero.head.rotation.x = -0.12 * f; // il baisse légèrement la tête, concentré
+    hero.mind.material.opacity = Math.max(0, f - 0.5) * 2 * (0.7 + Math.sin(t * 3) * 0.3);
+    hero.mind.scale.setScalar(0.35 + f * 0.35 + Math.sin(t * 3) * 0.04);
     const accent = new THREE.Color(opts.levelInfo(selected).accent);
     hero.scarf.color.lerp(accent, 1 - Math.exp(-dt * 2));
     hero.emblem.material.color.lerp(accent, 1 - Math.exp(-dt * 2));
@@ -1070,12 +1112,15 @@
     // la mer suit la caméra par pas de maille (sans faire glisser la houle)
     const cell = SEA_SIZE / SEA_SEG;
     sea.position.set(Math.round(cam.tx / cell) * cell, 0, Math.round(cam.tz / cell) * cell);
-    for (let i = 0; i < seaPos.count; i++) {
+    if (!calm || !World._seaStill) for (let i = 0; i < seaPos.count; i++) {
       const x = seaBase[i * 3] + sea.position.x, z = seaBase[i * 3 + 2] + sea.position.z;
       seaPos.setY(i, Math.sin(x * 0.25 + t * 0.6) * 0.09 + Math.cos(z * 0.3 + t * 0.45) * 0.08 - 0.05);
     }
-    seaPos.needsUpdate = true;
-    sea.geometry.computeVertexNormals();
+    if (!calm || !World._seaStill) {
+      seaPos.needsUpdate = true;
+      sea.geometry.computeVertexNormals();
+      World._seaStill = calm; // en mode calme, la houle se fige après une dernière mise à jour
+    }
 
     chapters.forEach((ch) => {
       if (!ch) return;
@@ -1129,7 +1174,8 @@
     }
     const sel = nodePos(selected);
     marker.position.set(sel.x, sel.y + 1.75 + Math.sin(t * 1.6) * 0.08, sel.z);
-    marker.material.opacity += ((hero.route || hero.free ? 0 : 1) - marker.material.opacity) * (1 - Math.exp(-dt * 5));
+    marker.material.opacity += ((hero.route || hero.free || cine ? 0 : 1) - marker.material.opacity) * (1 - Math.exp(-dt * 5));
+    if (cine) pulse.visible = false;
 
     clouds.forEach((c) => {
       const u = c.userData;
@@ -1157,6 +1203,24 @@
 
     updateHero(dt, t);
 
+    // mode concentration : la caméra plonge vers le visage d'Ulysse
+    if (cine) {
+      cine.t += dt;
+      const head = new THREE.Vector3();
+      hero.head.getWorldPosition(head);
+      goal.tx = head.x; goal.ty = head.y + 0.02; goal.tz = head.z;
+      goal.radius = 1.25; goal.elev = 0.12;
+      hero.mind.material.color.set(cine.accent);
+      if (cine.t > 2.3 && cine.done) { const cb = cine.done; cine.done = null; cb(); }
+      const k = 1 - Math.exp(-dt * 2.4);
+      let dth = goal.theta - cam.theta;
+      dth = Math.atan2(Math.sin(dth), Math.cos(dth));
+      cam.theta += dth * k;
+      ['elev', 'radius', 'tx', 'ty', 'tz'].forEach((key) => { cam[key] += (goal[key] - cam[key]) * k; });
+      placeCamera();
+      return;
+    }
+
     // caméra : derrière le voyageur, dans le sens du sentier
     const dir = pathDir(selected);
     if (holdTheta > 0) holdTheta -= dt; else userTheta *= 1 - Math.min(1, dt * 0.4);
@@ -1167,6 +1231,10 @@
     dth = Math.atan2(Math.sin(dth), Math.cos(dth));
     cam.theta += dth * k;
     ['elev', 'radius', 'tx', 'ty', 'tz'].forEach((key) => { cam[key] += (goal[key] - cam[key]) * k; });
+    placeCamera();
+  }
+
+  function placeCamera() {
     const ce = Math.cos(cam.elev);
     camera.position.set(
       cam.tx + Math.cos(cam.theta) * ce * cam.radius,
@@ -1211,6 +1279,7 @@
   }
   function onUp(e) {
     if (!drag) return;
+    if (cine) { drag = null; return; } // pas de déplacement pendant la concentration
     const tap = drag.moved < 8 && performance.now() - drag.t < 400;
     drag = null;
     if (!tap) return;
@@ -1329,6 +1398,28 @@
   // heure réelle (ex. 18.5 pour 18 h 30) ; night = forcer la nuit (mode sombre choisi)
   World.setTime = (hour, night) => { if (!World.ok) return; lightHour = hour; forceNight = !!night; applyLight(); };
   World.isNight = (hour) => hour < 6 || hour >= 20.5;
+  // Mode concentration : Ulysse pose les mains sur sa tête, la caméra plonge vers lui,
+  // une lueur s'allume dans sa tête ; `done` est appelé à la fin de la séquence.
+  World.concentrate = (accent, done) => {
+    if (!World.ok) { done(); return; }
+    if (hero.route) { // il s'arrête où il est
+      const p = hero.group.position;
+      const ch = chapters.find((c) => c && Math.hypot(p.x - c.group.position.x, p.z - c.group.position.z) < c.r);
+      hero.route = null;
+      if (ch) hero.free = { c: ch.c, at: new THREE.Vector3(p.x, 0, p.z) };
+    }
+    hero.focusTarget = 1;
+    cine = { t: 0, accent, done };
+  };
+  World.endConcentrate = () => {
+    if (!World.ok) return;
+    cine = null;
+    hero.focusTarget = 0;
+    goal.radius = 12.5;
+    goal.elev = 0.62;
+  };
+  // animations réduites : mer immobile, pas d'oiseaux ni de poussières
+  World.setCalm = (on) => { if (!World.ok) return; calm = on; birds.forEach((b) => { b.visible = !on; }); motes.visible = !on; };
   World.selected = () => selected;
   World.start = function () {
     if (!World.ok || running) return;

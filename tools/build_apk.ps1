@@ -11,6 +11,10 @@ New-Item -ItemType Directory -Force C:\gtmp | Out-Null
 $env:TEMP = "C:\gtmp"; $env:TMP = "C:\gtmp"
 $env:JAVA_TOOL_OPTIONS = "-Djava.io.tmpdir=C:\gtmp -Djdk.net.unixdomain.tmpdir=C:\gtmp"
 
+# même clé de test que les builds GitHub (l'APK s'installe par-dessus les précédents)
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.android" | Out-Null
+Copy-Item (Join-Path $root 'tools\debug.keystore') "$env:USERPROFILE\.android\debug.keystore" -Force
+
 Push-Location $root
 npx cap sync android
 Pop-Location

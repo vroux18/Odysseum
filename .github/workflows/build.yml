@@ -1,0 +1,80 @@
+# À chaque envoi sur main : GitHub fabrique l'APK de test et le publie en « release ».
+# Lien fixe vers la dernière version :
+#   https://github.com/vroux18/Odysseum/releases/latest/download/Odysseum.apk
+# Si le dépôt est public (et GitHub Pages activé en mode « GitHub Actions »),
+# la version web est aussi publiée : https://vroux18.github.io/Odysseum/
+name: Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: build
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Dépendances
+        run: npm ci
+
+      # Toujours la même clé de test : l'APK s'installe par-dessus la version précédente.
+      - name: Clé de signature de test
+        run: mkdir -p ~/.android && cp tools/debug.keystore ~/.android/debug.keystore
+
+      - name: Projet Android
+        run: |
+          [ -d android ] || npx cap add android
+          npx cap sync android
+
+      - name: Compilation de l'APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon -q
+
+      - name: Renommage
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk Odysseum.apk
+
+      - name: Publication (release)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: test-${{ github.run_number }}
+          name: Odysseum — test ${{ github.run_number }}
+          body: "Version de test générée automatiquement depuis ${{ github.sha }}."
+          files: Odysseum.apk
+          make_latest: true
+
+  web:
+    # GitHub Pages n'est gratuit que pour les dépôts publics
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: www
+      - id: deploy
+        uses: actions/deploy-pages@v4
