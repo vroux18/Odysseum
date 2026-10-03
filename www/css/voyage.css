@@ -150,3 +150,14 @@
 :root[data-theme="dark"] #btn-explain { color: #8cc4ff !important; }
 #btn-explain.empty { opacity: .45 !important; }
 #btn-explain svg.ic { width: 26px; height: 26px; }
+
+/* transitions plus discrètes : lueur de victoire, éclair de départ, arrivée de la grille */
+#play::after { background: radial-gradient(ellipse 70% 50% at 50% 48%, rgba(255, 236, 170, .28), transparent 70%) !important; }
+#play.glow::after { animation: success-glow 1.2s ease-out !important; }
+.flash { animation: flash-soft .8s ease-out forwards !important; }
+@keyframes flash-soft { 0% { opacity: 0; } 35% { opacity: .45; } 100% { opacity: 0; } }
+.board > * { animation: board-in-soft .45s ease-out both !important; }
+@keyframes board-in-soft { from { opacity: 0; transform: translateY(6px); } }
+.cell-grid:not(.ready) > .cell, .nono:not(.ready) > .nono-cell, .lumieres:not(.ready) > .bulb {
+  animation: tile-in-soft .35s ease-out both !important; animation-delay: calc(var(--i, 0) * 6ms) !important; }
+@keyframes tile-in-soft { from { opacity: 0; transform: scale(.92); } }
