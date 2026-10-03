@@ -82,7 +82,7 @@
       if (v == null) return '';
       if (isLock) return '<span class="digit">' + v + '</span>';
       const s = SYMBOLS[v];
-      return '<span class="chip" style="--c:' + s.color + '">' + s.ch + '</span>';
+      return '<span class="chip" style="--c:' + s.color + '"><i>' + s.ch + '</i></span>'; // la couleur suffit ; le symbole reste pour le mode daltonien
     };
 
     function feedbackHTML(guess) {

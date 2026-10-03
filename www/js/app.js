@@ -146,7 +146,7 @@
     $('#play').style.setProperty('--game', ACCENT[g.id]);
     $('#play').classList.remove('done');
     $('#play-icon').innerHTML = icon(g.id);
-    $('#play-level').textContent = info.free ? (info.focus ? 'concentration' : 'jeu libre') : (info.boss ? 'épreuve · niveau ' : 'niveau ') + (info.L + 1);
+    $('#play-level').textContent = info.tier ? info.tier.name.toLowerCase() + ' · ' + info.tier.k : info.free ? (info.focus ? 'concentration' : 'jeu libre') : (info.boss ? 'épreuve · niveau ' : 'niveau ') + (info.L + 1);
     // passage d'un mini-jeu au suivant dans une série : la grille arrive par la droite
     $('#board').classList.toggle('next-step', stepIndex > 0);
     $('#board').classList.remove('leaving');
@@ -263,6 +263,16 @@
   // Niveau réussi : la grille s'illumine, puis le niveau suivant s'enchaîne tout seul.
   // La carte rattrapera la progression au retour (Ulysse avancera jusqu'à la bonne pierre).
   function finishLevel(info) {
+    if (info.tier) { // niveau d'un palier : on le coche et on enchaîne sur le suivant
+      const s = info.steps[0];
+      tierMark(s.id, info.tier.id, info.tier.k);
+      $('#play').classList.add('done');
+      clearTimeout(finishLevel.timer);
+      finishLevel.timer = setTimeout(() => {
+        if (!screens.play.hidden) startTier(s.id, info.tier.id, Math.min(TIER_SIZE, info.tier.k + 1));
+      }, 2300);
+      return;
+    }
     if (info.free) { // jeu libre : on enchaîne sur le niveau suivant du même jeu
       const s = info.steps[0];
       C.gameData(dataKey(game(s.id), s.variant)).level++;
@@ -458,8 +468,8 @@
       b.className = 'tile';
       b.style.setProperty('--game', ACCENT[g.id]);
       b.innerHTML = '<span class="tile-icon">' + icon(g.id) + '</span><span class="tile-name">' + g.name + '</span>' +
-        '<span class="tile-lvl">niv. ' + C.gameData(dataKey(g, v)).level + '</span>';
-      b.addEventListener('click', () => startFree(g, v));
+        '<span class="tile-lvl">' + gameProgress(g.id) + ' / ' + TIER_SIZE * TIERS.length + '</span>';
+      b.addEventListener('click', () => openLevels(g.id));
       gl.appendChild(b);
     });
   }
@@ -473,6 +483,68 @@
     const d = C.gameData(dataKey(g, v));
     $('#brain').hidden = true;
     playStep({ L: -1, free: true, focus: sk.id, seed: 'focus:' + g.id + ':' + v + ':' + d.level, steps: [{ id: g.id, variant: v, level: d.level }] }, 0);
+  }
+
+  // ------------------------ Paliers par mini-jeu ------------------------
+  // Chaque mini-jeu : 3 paliers de 150 niveaux. Un palier s'ouvre après 20 niveaux du précédent.
+  const TIERS = [
+    { id: 'basique', name: 'Basique', from: 1, span: 12 },
+    { id: 'difficile', name: 'Difficile', from: 12, span: 14 },
+    { id: 'expert', name: 'Expert', from: 25, span: 16 }
+  ];
+  const TIER_SIZE = 150, TIER_UNLOCK = 20;
+  const LOCK = '<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+  const tierDone = (id, t) => ((C.store.tiers || {})[id] || {})[t] || 0;
+  const tierOpen = (id, k) => k === 0 || tierDone(id, TIERS[k - 1].id) >= TIER_UNLOCK;
+  const tierLevel = (t, k) => t.from + Math.floor((k - 1) * t.span / TIER_SIZE); // difficulté réelle du générateur
+  const gameProgress = (id) => TIERS.reduce((s, t) => s + tierDone(id, t.id), 0);
+  function tierMark(id, tierId, k) {
+    C.store.tiers = C.store.tiers || {};
+    const d = C.store.tiers[id] = C.store.tiers[id] || {};
+    if (k > (d[tierId] || 0)) d[tierId] = k;
+    C.save();
+  }
+  function startTier(id, tierId, k) {
+    const t = TIERS.find((x) => x.id === tierId);
+    $('#levels').hidden = true;
+    $('#brain').hidden = true;
+    $('#library').hidden = true;
+    playStep({ L: -1, free: true, tier: { id: tierId, k, name: t.name }, seed: 'palier:' + id + ':' + tierId + ':' + k,
+      steps: [{ id, variant: 'classic', level: tierLevel(t, k) }] }, 0);
+  }
+
+  // Bandeau des niveaux d'un mini-jeu : onglets de palier, grille de 150 niveaux
+  let lv = null;
+  function openLevels(id) {
+    let k = 0;
+    TIERS.forEach((t, i) => { if (tierOpen(id, i)) k = i; });
+    lv = { id, tier: TIERS[k].id };
+    renderLevels(true);
+    $('#levels').hidden = false;
+    C.sfx.tap();
+  }
+  function renderLevels(scroll) {
+    const g = game(lv.id);
+    $('#levels').style.setProperty('--game', ACCENT[lv.id]);
+    $('#lv-head').innerHTML = '<span class="lv-icon">' + icon(lv.id) + '</span><b>' + g.name + '</b><small>' + gameProgress(lv.id) + ' / ' + TIER_SIZE * TIERS.length + '</small>';
+    $('#lv-tabs').innerHTML = TIERS.map((t, k) => {
+      const open = tierOpen(lv.id, k);
+      return '<button role="tab" data-tier="' + t.id + '" class="' + (t.id === lv.tier ? 'on' : '') + (open ? '' : ' locked') + '">' +
+        '<span>' + t.name + '</span><small>' + (open ? tierDone(lv.id, t.id) + ' / ' + TIER_SIZE : LOCK) + '</small></button>';
+    }).join('');
+    const k = TIERS.findIndex((t) => t.id === lv.tier);
+    const done = tierDone(lv.id, lv.tier), open = tierOpen(lv.id, k);
+    let h = open ? '' : '<p class="lv-note">' + LOCK + 'Réussis ' + TIER_UNLOCK + ' niveaux ' + TIERS[k - 1].name.toLowerCase() + ' pour ouvrir ce palier.</p>';
+    for (let i = 1; i <= TIER_SIZE; i++) {
+      const st = !open ? 'locked' : i <= done ? 'done' : i === done + 1 ? 'next' : 'locked';
+      h += '<button class="lv ' + st + '" data-k="' + i + '"' + (st === 'locked' ? ' disabled' : '') + ' style="--i:' + Math.min(i, 40) + '">' + i + '</button>';
+    }
+    const grid = $('#lv-grid');
+    grid.innerHTML = h;
+    if (scroll) {
+      const cur = grid.querySelector('.lv.next') || grid.querySelector('.lv.done:last-of-type');
+      grid.scrollTop = cur ? Math.max(0, cur.offsetTop - grid.clientHeight / 2) : 0;
+    }
   }
 
   function startFree(g, variant) {
@@ -531,11 +603,12 @@
     $('#brain-level').textContent = p.level;
     $('#brain-xp').textContent = p.cur + ' / ' + p.need;
     $('#brain-xp-bar').style.width = Math.round(p.frac * 100) + '%';
-    zoomBrain(null, true);
     $('#games-detail').hidden = true;
     $('#brain-band').setAttribute('aria-expanded', 'false');
     const ns = 'http://www.w3.org/2000/svg';
-    const svg = $('#brain-svg');
+    const root = $('#brain-svg');
+    root.innerHTML = '<g id="brain-overview"></g>';
+    const svg = root.querySelector('#brain-overview');
     svg.innerHTML =
       // silhouette du cerveau (profil) et quelques circonvolutions
       '<path class="outline" d="M62 150C40 112 60 62 110 52C132 26 190 26 212 46C252 40 286 72 280 112C300 142 280 182 246 186C236 206 200 212 186 196L170 206C150 216 130 206 124 190C94 200 62 186 62 150Z"/>' +
@@ -585,15 +658,23 @@
       zone.style.color = accent;
       let inner = '<ellipse class="zone-hit" cx="' + sk.at[0] + '" cy="' + sk.at[1] + '" rx="46" ry="36" fill="' + accent + '"/>' +
         '<text class="zone-name" x="' + sk.at[0] + '" y="' + (sk.at[1] - 24) + '" text-anchor="middle">' + sk.name + '</text>';
+      // ses mini-jeux : des médaillons avec un anneau de progression, révélés quand on zoome
+      inner += '<g class="zone-games">';
       sk.games.forEach((id, k) => {
-        const x = sk.at[0] + (k - (sk.games.length - 1) / 2) * 26, y = sk.at[1] + 4;
-        inner += '<g class="zone-game" transform="translate(' + (x - 8) + ' ' + (y - 8) + ') scale(.66)">' +
-          '<circle cx="12" cy="12" r="15" fill="var(--surface)" stroke="currentColor" stroke-width="1.2"/>' + ICON[id] + '</g>' +
-          '<text class="zone-lvl" x="' + x + '" y="' + (y + 20) + '" text-anchor="middle">' + gameLevel(id) + '</text>';
+        const x = sk.at[0] + (k - (sk.games.length - 1) / 2) * 30, y = sk.at[1] + 2;
+        const pct = Math.round(100 * gameProgress(id) / (TIER_SIZE * TIERS.length));
+        inner += '<g class="zone-game" data-game="' + id + '" style="color:' + ACCENT[id] + ';--k:' + k + '">' +
+          '<circle cx="' + x + '" cy="' + y + '" r="11.5" fill="var(--surface)"/>' +
+          '<circle class="zg-track" cx="' + x + '" cy="' + y + '" r="11.5"/>' +
+          '<circle class="zg-ring" cx="' + x + '" cy="' + y + '" r="11.5" pathLength="100" stroke-dasharray="' + Math.max(pct, 0.01) + ' 100" transform="rotate(-90 ' + x + ' ' + y + ')"/>' +
+          '<g transform="translate(' + (x - 6.6) + ' ' + (y - 6.6) + ') scale(.55)">' + ICON[id] + '</g>' +
+          '<text class="zg-name" x="' + x + '" y="' + (y + 19) + '" text-anchor="middle">' + game(id).name + '</text>' +
+          '<text class="zg-lvl" x="' + x + '" y="' + (y + 24.5) + '" text-anchor="middle">' + gameProgress(id) + ' / ' + TIER_SIZE * TIERS.length + '</text></g>';
       });
-      zone.innerHTML = inner;
+      zone.innerHTML = inner + '</g>';
       svg.appendChild(zone);
     });
+    zoomBrain(null, true);
     // capacités : nom, niveau et barre, sans description
     $('#skills').innerHTML = SKILLS.map((sk) => {
       const st = skillStats(sk);
@@ -605,40 +686,120 @@
   // niveau d'un mini-jeu : une marche toutes les 3 grilles réussies
   const gameLevel = (id) => 1 + Math.floor(solvedOf(id) / 3);
 
-  // Zoom animé sur une zone du cerveau (null = vue d'ensemble)
-  const BRAIN_VIEW = [0, 0, 320, 250];
-  let brainView = BRAIN_VIEW.slice(), brainAnim = 0, zoomed = null;
-  function zoomBrain(skillId, instant) {
-    const sk = SKILLS.find((s) => s.id === skillId);
-    zoomed = sk ? sk.id : null;
-    const target = sk ? [sk.at[0] - 75, sk.at[1] - 56, 150, 117] : BRAIN_VIEW;
+  // Le cerveau est une carte : on la glisse au doigt, on zoome (pincer, molette, toucher une zone).
+  // Zoomé, chaque zone dévoile ses mini-jeux ; la zone au centre de la vue s'affiche dessous.
+  const BRAIN_W = 320, BRAIN_H = 250, MIN_W = 105;
+  let brainView = [0, 0, BRAIN_W, BRAIN_H], brainAnim = 0, zoomed = null;
+  // la vue épouse la forme du cadre (plus haut que large sur téléphone) : le cerveau garde ses proportions
+  const brainAspect = () => { const r = $('#brain-svg').getBoundingClientRect(); return r.width && r.height ? r.width / r.height : BRAIN_W / BRAIN_H; };
+  function clampView(v) {
+    const w = Math.max(MIN_W, Math.min(BRAIN_W, v[2])), h = w / brainAspect();
+    const cx = v[0] + v[2] / 2, cy = v[1] + v[3] / 2;
+    const x = Math.max(0, Math.min(BRAIN_W - w, cx - w / 2));
+    const y = h >= BRAIN_H ? (BRAIN_H - h) / 2 : Math.max(0, Math.min(BRAIN_H - h, cy - h / 2));
+    return [x, y, w, h];
+  }
+  function setBrainView(v) {
+    brainView = clampView(v);
+    const svg = $('#brain-svg');
+    svg.setAttribute('viewBox', brainView.join(' '));
+    const z = BRAIN_W / brainView[2];
+    svg.style.setProperty('--z', z.toFixed(3));
+    // la zone la plus proche du centre de la vue devient la zone affichée (dès qu'on a un peu zoomé)
+    const cx = brainView[0] + brainView[2] / 2, cy = brainView[1] + brainView[3] / 2;
+    let best = null;
+    if (z > 1.45) {
+      let bd = Infinity;
+      SKILLS.forEach((sk) => { const d = Math.hypot(sk.at[0] - cx, sk.at[1] - cy); if (d < bd) { bd = d; best = sk; } });
+    }
+    showZone(best);
+  }
+  function showZone(sk) {
+    const id = sk ? sk.id : null;
+    if (id === zoomed && $('#zone-panel').dataset.for === String(id)) return;
+    zoomed = id;
     const svg = $('#brain-svg');
     svg.classList.toggle('zoomed', !!sk);
-    svg.querySelectorAll('.zone').forEach((z) => z.classList.toggle('focus', z.dataset.skill === zoomed));
+    svg.querySelectorAll('.zone').forEach((z) => z.classList.toggle('zfocus', z.dataset.skill === zoomed));
     $('#brain-back').hidden = !sk;
     $('#skills').hidden = !!sk;
     const panel = $('#zone-panel');
     panel.hidden = !sk;
-    if (sk) {
-      const st = skillStats(sk);
-      panel.style.setProperty('--game', ACCENT[sk.games[0]]);
-      panel.innerHTML = '<div class="zp-head"><b>' + sk.name + '</b><small>niv. ' + st.level + ' · ' + st.cur + ' / ' + st.need + ' xp</small></div>' +
-        '<div class="skill-bar"><i style="width:' + Math.round(st.frac * 100) + '%"></i></div>' +
-        '<div class="zp-games">' + sk.games.map((id) => '<span class="zp-game" style="--game:' + ACCENT[id] + '">' + icon(id) +
-          '<span>' + game(id).name + '</span><small>niv. ' + gameLevel(id) + '</small></span>').join('') + '</div>' +
-        '<button class="zp-go" data-skill="' + sk.id + '">activer le mode concentration</button>';
-    }
+    panel.dataset.for = String(id);
+    if (!sk) return;
+    const st = skillStats(sk);
+    panel.style.setProperty('--game', ACCENT[sk.games[0]]);
+    panel.innerHTML = '<div class="zp-head"><b>' + sk.name + '</b><small>niv. ' + st.level + ' · ' + st.cur + ' / ' + st.need + ' xp</small></div>' +
+      '<div class="skill-bar"><i style="width:' + Math.round(st.frac * 100) + '%"></i></div>' +
+      '<div class="zp-games">' + sk.games.map((id2, k) => '<button class="zp-game" data-game="' + id2 + '" style="--game:' + ACCENT[id2] + ';--k:' + k + '">' + icon(id2) +
+        '<span>' + game(id2).name + '</span><small>' + gameProgress(id2) + ' / ' + TIER_SIZE * TIERS.length + '</small></button>').join('') + '</div>' +
+      '<button class="zp-go" data-skill="' + sk.id + '">activer le mode concentration</button>';
+  }
+  // vol animé vers une zone (null = vue d'ensemble)
+  function zoomBrain(skillId, instant) {
+    const sk = SKILLS.find((s) => s.id === skillId);
+    const w = sk ? 128 : BRAIN_W, h = w / brainAspect();
+    const target = clampView(sk ? [sk.at[0] - w / 2, sk.at[1] - h / 2 + 4, w, h] : [0, 0, BRAIN_W, BRAIN_H]);
     cancelAnimationFrame(brainAnim);
-    if (instant) { brainView = target.slice(); svg.setAttribute('viewBox', brainView.join(' ')); return; }
-    const from = brainView.slice(), t0 = performance.now(), D = 700;
+    if (instant) { setBrainView(target); return; }
+    const from = brainView.slice(), t0 = performance.now(), D = 650;
     const step = (now) => {
       const k = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - k, 3);
-      brainView = from.map((v, i) => v + (target[i] - v) * e);
-      svg.setAttribute('viewBox', brainView.join(' '));
+      setBrainView(from.map((v, i) => v + (target[i] - v) * e));
       if (k < 1) brainAnim = requestAnimationFrame(step);
     };
     brainAnim = requestAnimationFrame(step);
   }
+  // gestes : glisser pour se déplacer, pincer ou molette pour zoomer, toucher pour choisir
+  (function brainGestures() {
+    const svg = $('#brain-svg');
+    const pts = new Map();
+    let moved = 0, pinch = null;
+    const unit = () => brainView[2] / svg.getBoundingClientRect().width; // unités de vue par pixel
+    const toView = (px, py) => { const r = svg.getBoundingClientRect(); return [brainView[0] + (px - r.left) * unit(), brainView[1] + (py - r.top) * unit()]; };
+    function zoomAt(px, py, f) {
+      const [vx, vy] = toView(px, py);
+      const w = Math.max(MIN_W, Math.min(BRAIN_W, brainView[2] / f)), k = w / brainView[2];
+      setBrainView([vx - (vx - brainView[0]) * k, vy - (vy - brainView[1]) * k, w, w / brainAspect()]);
+    }
+    svg.addEventListener('pointerdown', (e) => {
+      cancelAnimationFrame(brainAnim);
+      svg.setPointerCapture(e.pointerId);
+      pts.set(e.pointerId, [e.clientX, e.clientY]);
+      if (pts.size === 1) moved = 0;
+      if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = Math.hypot(a[0] - b[0], a[1] - b[1]); moved = 99; }
+    });
+    svg.addEventListener('pointermove', (e) => {
+      const p = pts.get(e.pointerId);
+      if (!p) return;
+      const dx = e.clientX - p[0], dy = e.clientY - p[1];
+      pts.set(e.pointerId, [e.clientX, e.clientY]);
+      if (pts.size === 2) {
+        const [a, b] = [...pts.values()];
+        const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+        if (pinch) zoomAt((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, d / pinch);
+        pinch = d;
+        return;
+      }
+      moved += Math.abs(dx) + Math.abs(dy);
+      if (moved > 6) setBrainView([brainView[0] - dx * unit(), brainView[1] - dy * unit(), brainView[2], brainView[3]]);
+    });
+    const end = (e) => {
+      if (!pts.has(e.pointerId)) return;
+      pts.delete(e.pointerId);
+      if (pts.size < 2) pinch = null;
+      if (pts.size || moved > 6 || e.type === 'pointercancel') return;
+      // simple toucher : un mini-jeu (zoomé) ouvre ses niveaux, une zone attire la vue
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const gEl = el && el.closest('.zone-game');
+      if (gEl && svg.classList.contains('zoomed')) { openLevels(gEl.dataset.game); return; }
+      const z = el && el.closest('.zone');
+      if (z) { zoomBrain(z.dataset.skill); C.sfx.tap(); }
+    };
+    svg.addEventListener('pointerup', end);
+    svg.addEventListener('pointercancel', end);
+    svg.addEventListener('wheel', (e) => { e.preventDefault(); cancelAnimationFrame(brainAnim); zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
+  })();
 
   // détail par mini-jeu (sous le bandeau) : un toucher ramène au cerveau, sur la bonne zone
   function renderGamesDetail() {
@@ -689,8 +850,18 @@
     try { localStorage.setItem('odysseum.libmode', libMode); } catch (e) { /* ignore */ }
     renderLibrary();
   }));
-  $('#open-brain').addEventListener('click', () => { renderBrain(); $('#brain').hidden = false; });
+  $('#open-brain').addEventListener('click', () => { renderBrain(); $('#brain').hidden = false; zoomBrain(null, true); });
   $('#brain').addEventListener('click', (e) => { if (e.target.id === 'brain') $('#brain').hidden = true; });
+  // le cadre change de taille (rotation, panneau du dessous) : la vue se recadre
+  if (window.ResizeObserver) new ResizeObserver(() => { if (!$('#brain').hidden) setBrainView(brainView); }).observe($('#brain-svg'));
+  // bandeau des niveaux d'un mini-jeu
+  $('#levels').addEventListener('click', (e) => {
+    if (e.target.id === 'levels') { $('#levels').hidden = true; return; }
+    const tab = e.target.closest('#lv-tabs button');
+    if (tab) { lv.tier = tab.dataset.tier; renderLevels(true); C.sfx.tap(); return; }
+    const b = e.target.closest('.lv');
+    if (b && !b.disabled) startTier(lv.id, lv.tier, +b.dataset.k);
+  });
   document.querySelectorAll('.theme-mode button').forEach((b) => b.addEventListener('click', () => {
     C.store.settings.theme = b.dataset.themeChoice;
     C.save();
@@ -710,12 +881,10 @@
     const b = e.target.closest('.skill');
     if (b) { zoomBrain(b.dataset.skill); C.sfx.tap(); }
   });
-  $('#brain-svg').addEventListener('click', (e) => {
-    const z = e.target.closest('.zone');
-    if (z && zoomed !== z.dataset.skill) { zoomBrain(z.dataset.skill); C.sfx.tap(); }
-  });
   $('#brain-back').addEventListener('click', () => zoomBrain(null));
   $('#zone-panel').addEventListener('click', (e) => {
+    const gb = e.target.closest('.zp-game');
+    if (gb) { openLevels(gb.dataset.game); return; }
     const b = e.target.closest('.zp-go');
     if (b) concentrate(SKILLS.find((sk) => sk.id === b.dataset.skill));
   });
