@@ -230,11 +230,9 @@
 .cell-grid:not(.ready) > .cell, .nono:not(.ready) > .nono-cell, .lumieres:not(.ready) > .bulb {
   animation: tile-in-soft .35s ease-out both !important; animation-delay: calc(var(--i, 0) * 6ms) !important; }
 @keyframes tile-in-soft { from { opacity: 0; transform: scale(.92); } }
-/* Pavés : un rectangle posé apparaît en simple fondu ; pendant le tracé, l'aperçu est déjà
-   un rectangle de couleur (un peu transparent, liseré blanc), sans animation */
-.paves .rect { transition: none !important; transform: none !important; }
-.paves .rect:not(.preview):not(.invalid) { animation: rect-soft .2s ease-out !important; }
-@keyframes rect-soft { from { opacity: .35; } }
+/* Pavés : pendant le tracé, l'aperçu est déjà le rectangle de couleur (un peu transparent, liseré blanc) ;
+   au lâcher il devient opaque sur place, sans fondu ni rebond (le fondu donnait un clignement) */
+.paves .rect { transition: none !important; transform: none !important; animation: none !important; }
 .paves .rect.preview { animation: none !important; opacity: .78; border-radius: 12px; box-shadow: inset 0 0 0 2.5px rgba(255, 255, 255, .85), 0 4px 10px rgba(0, 0, 0, .18) !important; }
 /* thème clair : cases des grilles nettement plus foncées que le fond ivoire, avec un liseré */
 :root:not([data-theme="dark"]) { --tile: #e9dcbd !important; --tile-hi: #f1e6cc !important; --tile-edge: #cdb98d !important; --given: #dcc9a0 !important; --grid-line: #d8c8a3 !important; }
