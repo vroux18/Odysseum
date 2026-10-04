@@ -666,8 +666,9 @@
           const { k, chain, blockers, head, fresh, gain } = best;
           const full = endpointColor[chain[chain.length - 1]] === k;
           apply(k, chain);
-          const where = chain.slice(best.pre).map((v) => cellBox(v, 'where'));
-          where.push(cellBox(head, 'where', true));
+          // seul le point de départ est entouré : le tuyau tracé se voit déjà (encadrer chaque case brouillait tout,
+          // surtout quand le tuyau est jaune comme le surlignage)
+          const where = [cellBox(head, 'where', true)];
           const why = (blockers || []).map((v) => cellBox(v, 'why'));
           const corner = fresh && g.adj[head].length < 4 && !wrap;
           const who = fresh ? 'Le point entouré d\'or' : 'Le bout du tuyau, entouré d\'or,';
@@ -680,7 +681,7 @@
         apply(k, solOf(k));
         const ends = puzzle.endpoints[k];
         return Object.assign({ text: 'Coup de pouce : rien n\'est forcé pour l\'instant. Voici le tuyau le plus court qui reste, entre les deux points entourés d\'or.' },
-          C.hintBoxes(canvas, solOf(k).filter((v) => !ends.includes(v)).map((v) => cellBox(v, 'why')).concat(ends.map((v) => cellBox(v, 'where', true)))));
+          C.hintBoxes(canvas, ends.map((v) => cellBox(v, 'where', true))));
       },
       redraw: draw,
       resize, // (zoom du plateau : redessin net à la nouvelle échelle)
