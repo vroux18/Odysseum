@@ -509,9 +509,34 @@
 #home #go.in { animation: none !important; }
 #home #go:active { transform: translateY(3px) !important; }
 /* pendant la marche : ⏩ pour arriver tout de suite */
-#home #go.ff { background: var(--k-card, #fff) !important; box-shadow: 0 4px 0 var(--k-edge, #d9cfe8) !important; color: var(--k-ink, #3b3355); }
-#home #go.ff::after { content: 'Arriver' !important; color: var(--k-ink, #3b3355) !important; }
-#home #go.ff svg .f { fill: var(--k-ink, #3b3355) !important; }
+/* (carte masquée pendant le trajet : petit bouton rond ⏩ seul, au centre) */
+#home #go.ff { width: 58px !important; height: 58px !important; border-radius: 50% !important; left: calc(50% - 29px) !important;
+  background: #fff !important; box-shadow: 0 4px 0 #cfc6e0, 0 8px 18px rgba(20, 10, 60, .25) !important; color: #3a3550; }
+#home #go.ff::after { content: none !important; display: none !important; }
+#home #go.ff svg, #home #go.ff svg.ic { width: 26px !important; height: 26px !important; margin: 0 !important; }
+#home #go.ff svg .f { fill: #3a3550 !important; stroke: none !important; }
+
+/* paliers d'un mini-jeu : barre de progression sous le nom (au lieu de « niv. N ») */
+.lv-tab-bar { display: block; width: 72%; max-width: 80px; height: 6px; margin: 6px auto 0; border-radius: 3px; overflow: hidden;
+  background: rgba(0, 0, 0, .22); }
+.lv-tab-bar > i { display: block; height: 100%; min-width: 6px; border-radius: 3px; background: #ffd23f; }
+#lv-tabs button.on .lv-tab-bar { background: rgba(255, 255, 255, .35); }
+#lv-tabs button.on .lv-tab-bar > i { background: #fff; }
+
+/* la carte du niveau se cache vraiment (son display: grid !important l'emportait sur [hidden]) */
+#home .lvcard[hidden] { display: none !important; }
+/* cartes voisines qui dépassent derrière, à gauche / à droite : on devine qu'on peut faire défiler */
+#home .lvcard { --peek: color-mix(in srgb, var(--k-bubble, #fff) 70%, transparent); touch-action: pan-y; }
+#home .lvcard.has-prev { box-shadow: -9px 0 0 -7px var(--peek), 0 6px 0 var(--k-edge, #d9cfe8), var(--k-drop, 0 8px 18px rgba(80, 60, 140, .18)) !important; }
+#home .lvcard.has-next { box-shadow: 9px 0 0 -7px var(--peek), 0 6px 0 var(--k-edge, #d9cfe8), var(--k-drop, 0 8px 18px rgba(80, 60, 140, .18)) !important; }
+#home .lvcard.has-prev.has-next { box-shadow: -9px 0 0 -7px var(--peek), 9px 0 0 -7px var(--peek), 0 6px 0 var(--k-edge, #d9cfe8), var(--k-drop, 0 8px 18px rgba(80, 60, 140, .18)) !important; }
+#home .lvcard { transition: transform .2s ease-out, opacity .2s ease-out; }
+#home .lvcard.drag { transition: none !important; }
+/* première apparition : les flèches font un petit pas vers l'extérieur, deux fois */
+#home .lvcard.nudge .lc-nav[data-d="-1"] { animation: lc-nudge-l .6s ease-in-out 2; }
+#home .lvcard.nudge .lc-nav[data-d="1"] { animation: lc-nudge-r .6s ease-in-out 2; }
+@keyframes lc-nudge-l { 50% { transform: translate(-7px, -50%); } }
+@keyframes lc-nudge-r { 50% { transform: translate(7px, -50%); } }
 
 /* ---- Sagas : l'Odyssée, les Douze Travaux, les Argonautes (app.js : sagaEmblem, showSagaCard) ---- */
 .saga-emblem { width: 1em; height: 1em; fill: currentColor; flex: none; }

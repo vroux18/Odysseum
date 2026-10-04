@@ -324,7 +324,8 @@
       card.id = 'lvcard'; card.className = 'lvcard';
       card.setAttribute('aria-label', 'Voyage : tous les niveaux');
       card.addEventListener('click', (e) => {
-        // petites flèches ‹ › autour du numéro : niveau précédent / suivant ; ailleurs : le voyage
+        if (swiped) { swiped = false; return; } // c'était un glissé, pas un toucher
+        // petites flèches ‹ › de chaque côté : niveau précédent / suivant ; ailleurs : le voyage
         const nav = e.target.closest('.lc-nav');
         if (nav) { e.stopPropagation(); stepLevel(+nav.dataset.d); return; }
         openVoyage();
@@ -357,6 +358,39 @@
     info.penalty = 0;
     playStep(info, 0);
   }
+      // glisser la carte vers la gauche / la droite : niveau suivant / précédent (elle suit le doigt)
+      let sw = null, swiped = false;
+      card.addEventListener('pointerdown', (e) => { sw = { x: e.clientX, y: e.clientY, dx: 0 }; swiped = false; });
+      card.addEventListener('pointermove', (e) => {
+        if (!sw) return;
+        sw.dx = e.clientX - sw.x;
+        if (Math.abs(sw.dx) < 6 || Math.abs(sw.dx) < Math.abs(e.clientY - sw.y)) return;
+        const can = sw.dx < 0 ? selected < J.done : selected > 0;
+        const dx = can ? sw.dx : sw.dx * 0.25; // pas de niveau de ce côté : la carte résiste
+        card.classList.add('drag');
+        // le bouton Jouer (posé sur la carte) suit le mouvement
+        [card, $('#go')].forEach((el) => pose(el, 'none', 'translateX(' + dx + 'px)' + (el === card ? ' rotate(' + dx / 40 + 'deg)' : ''),
+          String(1 - Math.min(0.5, Math.abs(dx) / 400))));
+      });
+      // (les règles du bandeau sont en !important : on pose les styles en !important aussi)
+      const pose = (el, tr, tf, op) => {
+        [['transition', tr], ['transform', tf], ['opacity', op]].forEach(([k, v]) => { if (v) el.style.setProperty(k, v, 'important'); else el.style.removeProperty(k); });
+      };
+      const settle = (tf, op) => [card, $('#go')].forEach((el) => pose(el, 'transform .2s ease-out, opacity .2s ease-out', tf || 'none', op || '1'));
+      const clear = () => [card, $('#go')].forEach((el) => pose(el, '', '', ''));
+      const release = () => {
+        if (!sw) return;
+        const dx = sw.dx; sw = null;
+        card.classList.remove('drag');
+        const d = dx < 0 ? 1 : -1, can = d > 0 ? selected < J.done : selected > 0;
+        if (Math.abs(dx) > 8) swiped = true;
+        if (Math.abs(dx) > 60 && can) {
+          settle('translateX(' + (dx < 0 ? -1 : 1) * innerWidth + 'px)', '0');
+          setTimeout(() => { clear(); stepLevel(d); }, 200);
+        } else { settle('', ''); setTimeout(clear, 220); }
+      };
+      card.addEventListener('pointerup', release);
+      card.addEventListener('pointercancel', release);
 
   // 3 astuces par grille ; le petit chiffre sur l'ampoule les décompte
   const MAX_HINTS = 3;
@@ -368,7 +402,15 @@
 
   // bulle d'explication d'une astuce. L'astuce d'un jeu est soit un texte, soit
   // { text, where: [éléments du coup joué], why: [éléments qui le justifient], clear() } :
+    // cartes voisines qui dépassent sur les côtés : on comprend qu'on peut faire défiler
+    card.classList.toggle('has-prev', selected > 0);
+    card.classList.toggle('has-next', selected < J.done);
   // « where » reçoit un anneau doré qui pulse, « why » un surlignage doux ; tout s'efface
+    // première apparition : un petit balancement pour montrer qu'elle se glisse
+    if (!card.hidden && !renderPlay.nudged && (selected > 0 || selected < J.done)) {
+      renderPlay.nudged = true;
+      setTimeout(() => { card.classList.add('nudge'); setTimeout(() => card.classList.remove('nudge'), 1300); }, 900);
+    }
   // au prochain geste sur la grille (ou après quelques secondes).
   function clearHintFx() {
     const fx = clearHintFx.cur;
@@ -1447,7 +1489,9 @@
     $('#lv-tabs').classList.toggle('four', tabs.length > 3);
     $('#lv-tabs').innerHTML = tabs.map((t) =>
       '<button role="tab" data-tier="' + t.id + '" class="' + (t.id === lv.tier ? 'on' : '') + (t.open ? '' : ' locked') + (t.mega ? ' mega-tab' : '') + '">' +
-        '<span>' + t.name + '</span><small>' + (!t.open ? LOCK : t.done >= TIER_SIZE ? '✓' : 'niv. ' + (t.done + 1)) + '</small></button>').join('');
+        // ouvert : petite barre de progression du palier (niveaux réussis sur 150) ; fermé : cadenas
+        '<span>' + t.name + '</span>' + (!t.open ? '<small>' + LOCK + '</small>'
+          : '<i class="lv-tab-bar"><i style="width:' + Math.round(Math.min(1, t.done / TIER_SIZE) * 100) + '%"></i></i>') + '</button>').join('');
     const k = TIERS.findIndex((t) => t.id === lv.tier);
     const done = mega ? megaRec(lv.id).done : tierDone(lv.id, lv.tier), open = mega ? megaOpen(lv.id) : tierOpen(lv.id, k);
     let h = open ? '' : mega ? '<p class="lv-note">' + LOCK + 'Ouvre le palier expert.</p>'
@@ -2018,9 +2062,10 @@
     const L = Math.max(0, Math.min(J.done, selected + d));
     if (L === selected) return;
     C.sfx.tap();
-    // le bandeau montre tout de suite le niveau visé ; Ulysse marche jusqu'à la pierre
-    selected = L; J.selected = L; C.save(); standing = true; renderPlay();
-    if (worldReady && C.world.select) C.world.select(L);
+    // Ulysse marche jusqu'à la pierre : la carte s'efface pendant le trajet et revient à l'arrivée
+    selected = L; J.selected = L; C.save(); standing = true;
+    if (worldReady && C.world.select) { C.world.select(L); if (C.world.walking && C.world.walking()) standing = false; }
+    renderPlay();
   }
   $('#prev-level').addEventListener('click', () => stepLevel(-1));
   $('#next-level').addEventListener('click', () => stepLevel(1));
