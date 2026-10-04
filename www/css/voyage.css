@@ -236,7 +236,7 @@
 .paves .rect.preview { animation: none !important; opacity: .78; border-radius: 12px; box-shadow: inset 0 0 0 2.5px rgba(255, 255, 255, .85), 0 4px 10px rgba(0, 0, 0, .18) !important; }
 /* Astres, version épurée : tuiles plates arrondies, pastel coupé en diagonale, symbole simple et foncé,
    repères = / × en pastille blanche ; la couleur glisse en douceur et le symbole apparaît sans rebond */
-.cell-grid.astres { gap: 9px !important; }
+.cell-grid.astres { gap: 8px !important; max-width: min(330px, 80%, calc(100dvh - 320px), calc(var(--n) * 52px)) !important; }
 .astres .cell { border-radius: 22% !important; border: 2px solid var(--as-edge) !important; background: var(--as-empty) !important;
   box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .18) !important; filter: none !important; outline: 0 !important;
   transition: background-color .18s ease, border-color .18s ease, transform .12s ease !important; }
