@@ -167,7 +167,11 @@
     const [a, va] = CURVE[i], [b, vb] = CURVE[i + 1];
     const t = Math.max(0, Math.min(1, (L - a) / (b - a)));
     return Math.min(40, Math.round(va + (vb - va) * t) + (boss ? 1 : 0));
+  // Rythme (réglage, et question au premier lancement) : « doux » suit la courbe telle quelle ;
+  // « rapide » (joueur habitué) garde l'île 1 comme tutoriel puis avance deux fois plus vite sur la courbe
+  const fastPace = () => C.store.settings && C.store.settings.pace === 'rapide';
   }
+    if (fastPace() && L >= PER) L = Math.min(SAGA_ISLES * PER - 1, PER + (L - PER) * 2);
 
   function levelInfo(L) {
     const c = Math.floor(L / PER), k = L % PER;
@@ -1129,6 +1133,14 @@
   }, 250);
 
   function shareTime(info) {
+  // Réglage « Rythme » : doux / rapide (voir questLevel) ; les niveaux à venir s'en ressentent aussitôt
+  function applyPace() {
+    document.querySelectorAll('.pace-mode button').forEach((b) => b.classList.toggle('on', b.dataset.pace === (fastPace() ? 'rapide' : 'doux')));
+  }
+  document.querySelectorAll('.pace-mode button').forEach((b) => b.addEventListener('click', () => {
+    C.store.settings.pace = b.dataset.pace; C.save(); C.sfx.tap(); applyPace(); renderPlay();
+  }));
+  applyPace();
     const txt = 'Odysseus · niveau ' + (info.L + 1) + ' bouclé en ' + C.formatTime(info.time) + '. Tu fais mieux ?';
     const url = 'https://vroux18.github.io/Odysseum/';
     if (navigator.share) {
@@ -3087,6 +3099,9 @@
   }
   // 2. l'atelier du personnage, en mode accueil : titre « Ton héros », dé mis en avant, « C'est parti ! »
   function obCreator() {
+      // les casse-têtes, tu connais ? → rythme de la quête (modifiable ensuite dans les réglages)
+      '<div class="ob-field ob-pace"><span>Les casse-têtes, tu connais ?</span><div class="switch-mode ob-pace-sw" role="radiogroup">' +
+      '<button type="button" data-pace="doux" class="on">je découvre</button><button type="button" data-pace="rapide">j\'ai l\'habitude</button></div></div>' +
     const wd = $('#wardrobe'), done = $('#wd-done'), gap = wd.querySelector('.cr-top .cr-gap');
     OB.creator = true;
     $('#open-wardrobe').click(); // même ouverture que le bouton Tenue (caméra, tenue, rendu)
@@ -3094,10 +3109,16 @@
     if (gap) gap.innerHTML = '<span class="ob-cr-title">Ton héros</span>';
     const t = done.lastChild;
     if (t && t.nodeType === 3) { OB.doneTxt = t.textContent; t.textContent = 'C\'est parti !'; }
+    let pace = C.store.settings.pace === 'rapide' ? 'rapide' : 'doux';
+    const paceBtns = ov.querySelectorAll('.ob-pace-sw button');
+    const showPace = () => paceBtns.forEach((b) => b.classList.toggle('on', b.dataset.pace === pace));
+    paceBtns.forEach((b) => b.addEventListener('click', () => { pace = b.dataset.pace; C.sfx.tap(); showPace(); }));
+    showPace();
   }
   // fin de l'atelier (bouton, retour, Échap…) : on remet l'atelier normal et la visite commence
   function obCreatorDone() {
     const wd = $('#wardrobe'), done = $('#wd-done'), gap = wd.querySelector('.cr-top .cr-gap');
+      C.store.settings.pace = pace; applyPace();
     OB.creator = false;
     wd.classList.remove('ob-mode', 'ob-rolled');
     if (gap) gap.innerHTML = '';
