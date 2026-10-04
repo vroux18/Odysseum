@@ -437,7 +437,7 @@
     C.sfx.tap();
     if (tryId) {
       const nx = nextTier(tryId);
-      setTimeout(() => startTier(tryId, nx ? nx.tier.id : TIERS[0].id, nx ? nx.k : 1), 250);
+      setTimeout(() => startTier(tryId, nx ? nx.tier.id : TIERS[0].id, nx ? nx.k : 1, false, 3), 250); // 3 grilles d'essai
       return; // (une carte de saga en attente passera au retour sur la carte)
     }
     if (unlockAfter) { const f = unlockAfter; unlockAfter = null; setTimeout(f, 350); }
@@ -1064,7 +1064,9 @@
       // enchaînement rapide, comme dans la quête : la grille finie glisse, la suivante arrive
       setTimeout(() => { if (!screens.play.hidden) $('#board').classList.add('leaving'); }, 1400);
       finishLevel.timer = setTimeout(() => {
-        if (!screens.play.hidden) startTier(s.id, info.tier.id, Math.min(TIER_SIZE, info.tier.k + 1), true);
+        if (screens.play.hidden) return;
+        if (info.trial === 1) { goHome(); return; } // essai terminé : retour au monde principal
+        startTier(s.id, info.tier.id, Math.min(TIER_SIZE, info.tier.k + 1), true, info.trial ? info.trial - 1 : 0);
       }, 1700);
       return;
     }
@@ -1596,7 +1598,9 @@
   const LOCK = UI('lock-simple');
   const tierDone = (id, t) => ((C.store.tiers || {})[id] || {})[t] || 0;
   const tierOpen = (id, k) => k === 0 || tierDone(id, TIERS[k - 1].id) >= TIER_UNLOCK;
-  const tierLevel = (t, k) => t.from + Math.floor((k - 1) * t.span / TIER_SIZE); // difficulté réelle du générateur
+  // difficulté réelle du générateur : monte vite au début du palier puis s'étale (racine carrée),
+  // pour ne pas enchaîner des dizaines de grilles identiques au départ
+  const tierLevel = (t, k) => t.from + Math.min(t.span, Math.floor(t.span * Math.sqrt((k - 1) / (TIER_SIZE - 1)) + 0.5));
   const gameProgress = (id) => TIERS.reduce((s, t) => s + tierDone(id, t.id), 0);
   // niveau d'un mini-jeu affiché au joueur (plutôt qu'un compteur) : +1 tous les 5 niveaux réussis
   const gameLvl = (id) => 1 + Math.floor(gameProgress(id) / 5);
@@ -1623,13 +1627,14 @@
     TIERS.forEach((t, k) => { const d = tierDone(id, t.id); if (tierOpen(id, k) && d < TIER_SIZE) nx = { tier: t, k: d + 1 }; });
     return nx;
   }
-  function startTier(id, tierId, k, chain) {
+  // trial : essai d'un jeu tout juste débloqué — on joue ce nombre de grilles, puis retour sur la carte
+  function startTier(id, tierId, k, chain, trial) {
     if (tierId === 'mega') { startMega(id, k, chain); return; }
     const t = TIERS.find((x) => x.id === tierId);
     $('#levels').hidden = true;
     $('#brain').hidden = true;
     $('#library').hidden = true;
-    playStep({ L: -1, free: true, chain: !!chain, tier: { id: tierId, k, name: t.name }, seed: 'palier:' + id + ':' + tierId + ':' + k,
+    playStep({ L: -1, free: true, chain: !!chain, trial: trial || 0, tier: { id: tierId, k, name: t.name }, seed: 'palier:' + id + ':' + tierId + ':' + k,
       steps: [{ id, variant: 'classic', level: tierLevel(t, k) }] }, 0);
   }
 

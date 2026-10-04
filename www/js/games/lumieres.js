@@ -40,8 +40,8 @@
 
   function params(level, variant) {
     if (level <= 12) {
-      // débuts en douceur : 1 appui puis 2 et 3 sur 3×3 (zones séparées), 4×4 au niveau 6, 5×5 au niveau 10
-      const n = level <= 5 ? 3 : level <= 9 ? 4 : 5;
+      // débuts en douceur mais courts : 3×3 jusqu'au niveau 3, 4×4 dès le 4, 5×5 dès le 8
+      const n = level <= 3 ? 3 : level <= 7 ? 4 : 5;
       return { n, variant, presses: 1 + Math.floor((level - 1) * 7 / 11), apart: level <= 8 };
     }
     const n = Math.min(7, 3 + Math.floor((level + 2) / 6)); // 3×3 pour commencer
