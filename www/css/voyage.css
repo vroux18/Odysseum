@@ -466,9 +466,12 @@
 .lvcard .lc-chip i { width: 33px !important; height: 33px !important; }
 .lvcard .lc-chip svg { width: 19px !important; height: 19px !important; }
 .lvcard .lc-games { gap: 6px !important; }
-.lvcard .lc-nav { top: 44px !important; }
-.lvcard .lc-nav[data-d="-1"] { left: calc(50% - 118px) !important; }
-.lvcard .lc-nav[data-d="1"] { right: calc(50% - 118px) !important; }
+/* flèches sorties du bandeau : une pastille ronde de chaque côté, à mi-hauteur */
+.lvcard { padding-left: 14px !important; padding-right: 14px !important; }
+.lvcard .lc-nav { top: 50% !important; width: 40px !important; height: 40px !important; font-size: 24px !important;
+  background: var(--k-bubble, #fff) !important; box-shadow: 0 4px 0 var(--k-edge, #d9cfe8), var(--k-drop, 0 6px 14px rgba(80, 60, 140, .18)); }
+.lvcard .lc-nav[data-d="-1"] { left: -50px !important; right: auto !important; }
+.lvcard .lc-nav[data-d="1"] { right: -50px !important; left: auto !important; }
 /* pas d'élan vert : le bouton ne glisse plus à l'apparition et ne saute plus de côté quand on appuie */
 #home #go.in { animation: none !important; }
 #home #go:active { transform: translateY(3px) !important; }
@@ -510,8 +513,8 @@
 /* bandeau et barre d'onglets sur toute la largeur (petite marge) */
 #home { --W: calc(100vw - 24px); }
 /* le bloc niveau + Jouer, un peu moins large que la barre d'onglets */
-#home .lvcard { --lc-w: min(340px, calc(100vw - 72px)); }
-#home #go { --W: min(340px, calc(100vw - 72px)); }
+#home .lvcard { --lc-w: min(270px, calc(100vw - 124px)); }
+#home #go { --W: min(270px, calc(100vw - 124px)); }
 
 /* thème clair : cases des grilles nettement plus foncées que le fond ivoire, avec un liseré */
 :root:not([data-theme="dark"]) { --tile: #e9dcbd !important; --tile-hi: #f1e6cc !important; --tile-edge: #cdb98d !important; --given: #dcc9a0 !important; --grid-line: #d8c8a3 !important; }
