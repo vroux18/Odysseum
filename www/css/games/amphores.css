@@ -1,37 +1,58 @@
 /* Amphores : jeu des paires. Tuiles bombées qui se retournent (dos : amphore ; face : motif grec) */
+.amph-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; flex: 0 0 auto; }
+
+/* bandeau : la règle du jour, et la tempête qui menace */
+.amph-hud { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 30px; flex-wrap: wrap; }
+.amph-rule {
+  display: inline-flex; align-items: center; gap: 7px; padding: 4px 12px 4px 9px; border-radius: 999px;
+  background: var(--k-bubble, #fff); border: 2.5px solid var(--k-rim, #fff); color: var(--k-ink, #3a3550);
+  box-shadow: 0 3px 0 var(--k-edge, #d9cfe8); font: 600 15px/1.1 var(--k-font, sans-serif);
+}
+.amph-rule b { font-weight: 600; }
+.amph-rule-ic { width: 25px; height: 14px; flex: none; }
+.amph-rule.fresh { animation: amph-call 1.6s var(--k-ease, ease) .4s 2; box-shadow: 0 3px 0 color-mix(in srgb, var(--game) 55%, var(--k-edge, #d9cfe8)); }
+.amph-storm { display: inline-flex; gap: 4px; align-items: center; padding: 4px 8px; border-radius: 999px; background: var(--k-well, #f1ecf8); }
+.amph-storm::before {
+  content: ''; width: 18px; height: 14px; margin-right: 2px;
+  background: currentColor; color: var(--k-ink-soft, #8a83a3);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 14'%3E%3Cpath d='M1 5.5q2-2.5 4 0t4 0 4 0 4 0M1 10.5q2-2.5 4 0t4 0 4 0 4 0' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 14'%3E%3Cpath d='M1 5.5q2-2.5 4 0t4 0 4 0 4 0M1 10.5q2-2.5 4 0t4 0 4 0 4 0' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.amph-storm i { width: 9px; height: 9px; border-radius: 50%; background: color-mix(in srgb, var(--k-ink-soft, #8a83a3) 30%, transparent); transition: background .3s, transform .35s var(--k-ease, ease); }
+.amph-storm i.on { background: #3d8ee8; transform: scale(1.2); }
+
 .amph {
   --t: 64px; --gap: 10px;
-  display: grid; grid-template-columns: repeat(var(--cols), var(--t)); grid-auto-rows: var(--t);
+  position: relative;
+  display: grid; grid-template-columns: repeat(var(--cols), var(--t)); grid-template-rows: repeat(var(--rows), var(--t));
   gap: var(--gap); padding: 4px; flex: 0 0 auto;
   touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
 }
-/* case vide au centre d'une grille impaire (3×3) : un simple creux discret */
-.amph-hole { width: var(--t); height: var(--t); border-radius: calc(var(--t) * .24); border: 2px dashed color-mix(in srgb, var(--k-ink-soft, #8a83a3) 35%, transparent); box-sizing: border-box; }
 .amph-tile {
   position: relative; width: var(--t); height: var(--t); padding: 0; border: 0; background: none;
   border-radius: calc(var(--t) * .24); perspective: 600px; cursor: pointer; outline: none;
   animation: amph-in .5s var(--k-ease, ease) both; animation-delay: calc(var(--k, 0) * 22ms);
 }
+.amph-tile:focus-visible .amph-back, .amph-tile:focus-visible .amph-face { outline: 3px solid var(--game); outline-offset: 2px; }
 .amph-in {
   position: absolute; inset: 0; display: block; transform-style: preserve-3d;
-  transition: transform .42s cubic-bezier(.3, 1.35, .5, 1);
+  transition: transform .42s cubic-bezier(.3, 1.35, .5, 1), opacity .4s, scale .4s;
 }
 .amph-tile.open .amph-in { transform: rotateY(180deg); }
 .amph-back, .amph-face {
   position: absolute; inset: 0; display: grid; place-items: center;
   border-radius: calc(var(--t) * .24); backface-visibility: hidden; -webkit-backface-visibility: hidden;
 }
-/* dos : bulle couleur du jeu, bord épais dessous, amphore claire */
+/* dos : bulle couleur du jeu adoucie dans le crème (ou l'indigo en sombre), amphore discrète */
 .amph-back {
-  background: radial-gradient(circle at 35% 28%, color-mix(in srgb, var(--game) 70%, #fff), var(--game) 72%);
+  background: radial-gradient(circle at 35% 28%, color-mix(in srgb, var(--game) 18%, var(--k-bubble, #fff)), color-mix(in srgb, var(--game) 34%, var(--k-bubble, #fff)) 75%);
   border: 3px solid var(--k-rim, #fff);
-  box-shadow: 0 5px 0 color-mix(in srgb, var(--game) 70%, #4a2040), var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14));
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--game) 30%, var(--k-edge, #d9cfe8)), var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14));
 }
 .amph-back svg { width: 62%; height: 62%; }
-.amph-back .am-body { fill: #fff; opacity: .9; }
-.amph-back .am-line { fill: none; stroke: color-mix(in srgb, var(--game) 80%, #fff); stroke-width: 2.2; stroke-linecap: round; }
-.amph-back .am-line:first-of-type { stroke: #fff; opacity: .9; }
-/* face : crème, liseré lilas, motif coloré */
+.amph-back .am-body { fill: color-mix(in srgb, var(--game) 22%, var(--k-cream, #fffaf0)); }
+.amph-back .am-line { fill: none; stroke: color-mix(in srgb, var(--game) 55%, var(--k-cream, #fffaf0)); stroke-width: 2.2; stroke-linecap: round; }
+/* face : crème, liseré, motif coloré */
 .amph-face {
   transform: rotateY(180deg);
   background: var(--k-cream, #fffaf0);
@@ -47,28 +68,76 @@
 .amph-mot .s.b { stroke-width: 4.4; }
 .amph-mot .w { fill: #fff; }
 .amph-mot .s.w2 { stroke: #fff; stroke-opacity: .7; }
+/* symbole de la couleur (réglage « symboles sur les couleurs ») : petit badge en bas à droite */
+.amph-face .amph-cb { display: none; position: absolute; right: 5%; bottom: 5%; width: 24%; height: 24%; fill: var(--k-ink, #3a3550); stroke: var(--k-ink, #3a3550); opacity: .85; }
+:root.a11y-cb .amph-face .amph-cb { display: block; }
+
+/* amphore dorée : l'Œil d'Athéna, visible de dos */
+.amph-tile.eye .amph-back { background: radial-gradient(circle at 35% 28%, #ffe98a, #ffc21a 75%); border-color: #fff3c4; box-shadow: 0 5px 0 #d28f00, 0 0 16px rgba(255, 196, 30, .45); }
+.amph-tile.eye:not(.open) .amph-back { animation: amph-shine 2.8s ease-in-out infinite; }
+.amph-eye .e-white { fill: #fffdf5; stroke: #c98a00; stroke-width: 2.4; }
+.amph-eye .e-iris { fill: #e59f00; }
+.amph-eye .e-pupil { fill: #3a3550; }
+.amph-tile.eye.found .amph-face { background: color-mix(in srgb, #ffc21a 18%, var(--k-cream, #fffaf0)); }
+/* Méduse : bonne bouille verte ; pétrifiée, elle devient de pierre */
+.amph-medusa .md-face { fill: #7ccf6a; }
+.amph-medusa .md-hair { fill: none; stroke: #4fae3f; stroke-width: 3; stroke-linecap: round; }
+.amph-medusa .md-head { fill: #4fae3f; }
+.amph-medusa .md-eye { fill: #3a3550; }
+.amph-medusa .md-mouth { fill: none; stroke: #2f6e25; stroke-width: 1.8; stroke-linecap: round; }
+.amph-tile.medusa.glare .amph-face { box-shadow: 0 5px 0 #4fae3f, 0 0 22px rgba(124, 207, 106, .8); animation: amph-glare .7s ease; }
+.amph-tile.medusa.found:not(.glare) .amph-face svg { filter: grayscale(1) brightness(1.05) contrast(.85); }
 
 /* appui : la tuile s'enfonce un peu */
 .amph-tile:active .amph-in { scale: .95; }
-/* paire trouvée : petit bond, puis la tuile reste posée, un peu plus calme */
-.amph-tile.found .amph-face { background: color-mix(in srgb, var(--game) 10%, var(--k-cream, #fffaf0)); box-shadow: 0 3px 0 color-mix(in srgb, var(--game) 35%, var(--k-edge, #d9cfe8)); }
+/* paire trouvée : bond et éclats, puis la tuile se pose, plus petite et plus calme */
 .amph-tile.found { cursor: default; }
-.amph-tile.match { animation: amph-match .55s var(--k-ease, ease); }
+.amph-tile.found:not(.match) .amph-in { scale: .88; }
+/* (l'opacité se pose sur la face : sur .amph-in, elle aplatirait la 3D et montrerait le dos) */
+.amph-tile.found:not(.match) .amph-face { opacity: .6; transition: opacity .4s; }
+.amph-tile.found .amph-face { box-shadow: 0 2px 0 var(--k-edge, #d9cfe8); }
+.amph-tile.match { animation: amph-match .6s var(--k-ease, ease); z-index: 2; }
+.amph-tile.match .amph-face { box-shadow: 0 5px 0 var(--k-edge, #d9cfe8), 0 0 18px color-mix(in srgb, var(--game) 55%, transparent); }
 .amph.peeking .amph-tile .amph-in { transition-duration: .55s; }
+/* éclats d'amphore */
+.amph-burst { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.amph-burst i {
+  position: absolute; left: 50%; top: 50%; width: 9px; height: 9px; margin: -4.5px; border-radius: 3px;
+  background: currentColor; transform: rotate(var(--a)) translateX(0) scale(1);
+  animation: amph-shard .65s cubic-bezier(.2, .7, .3, 1) forwards;
+}
+.amph-burst i:nth-child(2n) { width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: #ffd23f; }
+/* paires d'affilée */
+.amph-combo {
+  z-index: 4; place-self: center; pointer-events: none;
+  font: 700 22px/1 var(--k-font, sans-serif); color: #fff;
+  padding: 4px 9px; border-radius: 999px; background: var(--game); box-shadow: 0 3px 0 color-mix(in srgb, var(--game) 60%, #000);
+  animation: amph-combo 1s var(--k-ease, ease) forwards;
+}
+/* tempête : le plateau tangue ; Méduse : il frémit */
+.amph-wrap.storming .amph { animation: amph-storm .9s ease; }
+.amph.spin { animation: amph-spin .7s ease; }
 
 /* astuce : l'anneau doré suit l'arrondi de la tuile */
 .amph-tile.hint-where { border-radius: calc(var(--t) * .24); }
 
 @keyframes amph-in { from { opacity: 0; transform: scale(.5); } }
-@keyframes amph-match { 0% { transform: scale(1); } 40% { transform: scale(1.12) translateY(-4px); } 100% { transform: none; } }
+@keyframes amph-match { 0% { transform: scale(1); } 40% { transform: scale(1.14) translateY(-5px); } 100% { transform: none; } }
+@keyframes amph-shard { to { transform: rotate(var(--a)) translateX(calc(var(--t) * .62)) scale(.2); opacity: 0; } }
+@keyframes amph-combo { 0% { transform: scale(.4); opacity: 0; } 25% { transform: scale(1.15); opacity: 1; } 70% { transform: translateY(-14px); opacity: 1; } 100% { transform: translateY(-26px); opacity: 0; } }
+@keyframes amph-shine { 50% { box-shadow: 0 5px 0 #d28f00, 0 0 26px rgba(255, 196, 30, .75); } }
+@keyframes amph-glare { 30% { transform: rotateY(180deg) scale(1.1); } }
+@keyframes amph-storm { 20% { transform: rotate(-1.6deg) translateX(-3px); } 45% { transform: rotate(1.3deg) translateX(3px); } 70% { transform: rotate(-.6deg); } 100% { transform: none; } }
+@keyframes amph-spin { 30% { transform: scale(.985); } 100% { transform: none; } }
+@keyframes amph-call { 0%, 100% { transform: none; } 20% { transform: scale(1.1); } 40% { transform: scale(.97); } }
 
-:root.a11y-motion .amph-tile, :root.a11y-motion .amph-in { animation: none !important; transition-duration: .01s !important; }
+/* thème sombre : le badge de la règle et les éclats restent lisibles */
+:root[data-theme="dark"] .amph-storm i.on { background: #6fb0ff; }
+
+:root.a11y-motion .amph-tile, :root.a11y-motion .amph-in, :root.a11y-motion .amph, :root.a11y-motion .amph-rule,
+:root.a11y-motion .amph-back, :root.a11y-motion .amph-face, :root.a11y-motion .amph-combo { animation: none !important; transition-duration: .01s !important; }
+:root.a11y-motion .amph-burst { display: none; }
 @media (prefers-reduced-motion: reduce) {
-  .amph-tile, .amph-in { animation: none !important; transition-duration: .01s !important; }
+  .amph-tile, .amph-in, .amph, .amph-rule, .amph-back, .amph-face, .amph-combo { animation: none !important; transition-duration: .01s !important; }
+  .amph-burst { display: none; }
 }
-
-/* dos des tuiles plus doux : teinte du jeu adoucie dans le crème (ou l'indigo en sombre), amphore discrète */
-.amph-back { background: radial-gradient(circle at 35% 28%, color-mix(in srgb, var(--game) 18%, var(--k-bubble, #fff)), color-mix(in srgb, var(--game) 34%, var(--k-bubble, #fff)) 75%) !important;
-  box-shadow: 0 5px 0 color-mix(in srgb, var(--game) 30%, var(--k-edge, #d9cfe8)), var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14)) !important; }
-.amph-back .am-body { fill: color-mix(in srgb, var(--game) 22%, var(--k-cream, #fffaf0)) !important; }
-.amph-back .am-line { stroke: color-mix(in srgb, var(--game) 55%, var(--k-cream, #fffaf0)) !important; }

@@ -139,18 +139,34 @@
     }
   };
 
+  // Lumières : un petit ciel de nuit 3×3, étoiles dorées, anneaux de la constellation
+  const lSky = '<rect x="10" y="10" width="100" height="100" rx="22" fill="#5450b6"/>';
+  const lStar = (r, c, col, s) => '<path transform="translate(' + cx(3, c) + ' ' + cx(3, r) + ') scale(' + (s || 1) * 0.72 + ')" ' +
+    'd="M0-16l4.7 9.6 10.5 1.5-7.6 7.4 1.8 10.5L0 8.1l-9.4 4.9 1.8-10.5-7.6-7.4 10.5-1.5z" fill="' + col + '" stroke="' + col + '" stroke-width="3" stroke-linejoin="round"/>';
+  const lDot = (r, c) => '<circle cx="' + cx(3, c) + '" cy="' + cx(3, r) + '" r="2.6" fill="#fff" opacity=".4"/>';
+  const lRing = (r, c, solid) => '<circle cx="' + cx(3, c) + '" cy="' + cx(3, r) + '" r="13" fill="none" stroke="#ffd23f" stroke-width="2.5"' + (solid ? '' : ' stroke-dasharray="4 3"') + '/>';
+  const lSkyOf = (lit, rings, stray) => {
+    let out = lSky;
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+      const k = r * 3 + c, ring = rings.includes(k), on = lit.includes(k), st = (stray || []).includes(k);
+      if (ring) out += lRing(r, c, on);
+      out += on ? lStar(r, c, '#ffd23f') : st ? lStar(r, c, '#efe6ff', 0.8) : lDot(r, c);
+    }
+    return out;
+  };
   T.lumieres = {
     steps: [
-      { art: svg([[1, 1], [0, 1], [2, 1], [1, 0], [1, 2]].map(([r, c]) => dot(3, r, c, '#dcc283', 11)).join('') +
-          [[0, 0], [0, 2], [2, 0], [2, 2]].map(([r, c]) => dot(3, r, c, 'var(--soft)', 11)).join('') + finger(cx(3, 1) + 6, cx(3, 1) + 6)),
-        text: 'Touche une lumière : <b>elle et ses quatre voisines</b> s\'allument ou s\'éteignent.' },
-      { art: svg([0, 1, 2].map((r) => [0, 1, 2].map((c) => dot(3, r, c, 'var(--soft)', 11)).join('')).join('')),
-        text: '<b>Éteins toutes les lumières.</b> Essaie d\'y arriver avec le moins de coups possible.' }
+      { art: svg(lSkyOf([1, 3, 4, 5, 7], []) + finger(cx(3, 1) + 7, cx(3, 1) + 9)),
+        text: 'Touche une case : <b>elle et ses 4 voisines</b> s\'allument ou s\'éteignent.' },
+      { art: svg(lSkyOf([0, 1], [0, 1, 3], [8])),
+        text: 'Allume <b>exactement les étoiles cerclées d\'or</b> : la constellation. Éteins les étoiles en trop.' },
+      { art: svg(lSkyOf([0, 1, 3], [0, 1, 3]) + '<path d="M28 28H60M28 28V60" stroke="#ffe89a" stroke-width="2.5" stroke-linecap="round"/>' +
+          '<circle cx="60" cy="4.5" r="3.6" fill="#ffd23f" stroke="#e8a400" stroke-width="2"/>' + finger(cx(3, 0) + 7, cx(3, 0) + 9)),
+        text: 'Les points en haut : le <b>nombre de coups</b> de la solution la plus courte. Un défi en plus, pas une obligation.' }
     ],
     variants: {
-      croix: { art: svg([[1, 1], [0, 0], [0, 2], [2, 0], [2, 2]].map(([r, c]) => dot(3, r, c, '#dcc283', 11)).join('') +
-          [[0, 1], [1, 0], [1, 2], [2, 1]].map(([r, c]) => dot(3, r, c, 'var(--soft)', 11)).join('')),
-        text: '<b>Variante Croix</b> : chaque appui allume ou éteint la lumière et ses <b>quatre voisines en diagonale</b>.' }
+      croix: { art: svg(lSkyOf([0, 2, 4, 6, 8], []) + finger(cx(3, 1) + 7, cx(3, 1) + 9)),
+        text: '<b>Variante Croix</b> : chaque appui inverse la case et ses <b>4 voisines en diagonale</b>.' }
     }
   };
 

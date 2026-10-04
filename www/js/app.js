@@ -66,7 +66,8 @@
     paves: (p) => 6 + 0.7 * sq(p.n) + 3 * (p.mystery || 0),    // 8×8 ≈ 51 s
     pixels: (p) => 8 + 1.0 * sq(p.n),                          // 10×10 ≈ 108 s
     serpent: (p) => 6 + 0.9 * sq(p.n),                         // 8×8 ≈ 64 s
-    lumieres: (p) => 6 + 4 * (p.presses || 4),                 // 12 appuis ≈ 54 s
+    // constellation : ~5 s par coup de la solution, plus le temps de lire le dessin ; 4 coups en 5×5 ≈ 34 s, 8 coups en 7×7 ≈ 64 s
+    lumieres: (p) => 6 + 5 * (p.presses || 4) + 0.3 * sq(p.n) + 1.5 * (p.sealed || 0),
     coffre: (p) => 10 + 6 * (p.len || 4) + 2 * (p.symbols || 6), // code de 5 parmi 7 ≈ 54 s
     demineur: (p) => 8 + 0.8 * sq(p.n),                        // 9×9 ≈ 73 s
     bataille: (p) => 8 + 1.0 * sq(p.n),                        // 8×8 ≈ 72 s
@@ -78,7 +79,8 @@
       return t;
     },
     // paires : ~3,4 s par paire (+ aperçu), un peu plus avec les motifs cousins ; 6 paires ≈ 28 s, 18 paires ≈ 79 s
-    amphores: (p) => 6 + 3.4 * (p.pairs || 8) + 1.2 * (p.similar || 0) + (p.peek || 0) / 1000,
+    // (+ ~3 s par Méduse et par tempête possible : il faut suivre les amphores qui bougent)
+    amphores: (p) => 6 + 3.4 * (p.pairs || 8) + 1.2 * (p.similar || 0) + (p.peek || 0) / 1000 + 3 * (p.medusas || 0) + (p.storm ? 6 : 0),
     // mosaïque : temps d'affichage + ~1,2 s par tesselle ; 3×3 ≈ 19 s, 6×6 ≈ 59 s
     mosaique: (p) => (p.show || 4000) / 1000 + 4 + 1.2 * sq(p.n) + 1.5 * (p.colors || 3),
     // grille logique : ~1,4 s par case de la grille ; 3×3 ≈ 53 s, 4×4 ≈ 149 s
