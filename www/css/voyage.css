@@ -489,3 +489,7 @@
 
 /* bandeau et barre d'onglets sur toute la largeur (petite marge) */
 #home { --W: calc(100vw - 24px); }
+
+/* thème clair : cases des grilles nettement plus foncées que le fond ivoire, avec un liseré */
+:root:not([data-theme="dark"]) { --tile: #e9dcbd !important; --tile-hi: #f1e6cc !important; --tile-edge: #cdb98d !important; --given: #dcc9a0 !important; --grid-line: #d8c8a3 !important; }
+:root:not([data-theme="dark"]) .cell-grid > .cell:not(.on):not(.sun):not(.moon), :root:not([data-theme="dark"]) .nono > .nono-cell:not(.on) { outline: 1.5px solid rgba(160, 130, 80, .35); outline-offset: -1.5px; }
