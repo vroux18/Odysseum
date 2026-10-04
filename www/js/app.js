@@ -970,13 +970,25 @@
 
   // Récapitulatif animé : chaque capacité travaillée, son gain d'XP, sa barre qui se remplit.
   // ------------------------- Mode chill / compet -------------------------
-  const isCompet = () => false; // jeu uniquement en mode chill pour l'instant (compet gardé de côté)
+  // Réglage « Mode » : croisière (on joue tranquille : ni étoiles ni chrono à l'écran, elles sont gardées en silence)
+  // ou régate (étoiles, chrono en direct pendant la série, record du niveau, partage)
+  const playStyle = () => (C.store.settings.playStyle === 'croisiere' ? 'croisiere' : 'regate');
+  const isCompet = () => playStyle() === 'regate';
+  function applyPlayStyle() {
+    document.documentElement.classList.toggle('chill', !isCompet());
+    document.querySelectorAll('.play-style button').forEach((b) => b.classList.toggle('on', b.dataset.playStyle === playStyle()));
+    if (typeof refreshStars === 'function') refreshStars();
+  }
+  document.querySelectorAll('.play-style button').forEach((b) => b.addEventListener('click', () => {
+    C.store.settings.playStyle = b.dataset.playStyle; C.save(); C.sfx.tap(); applyPlayStyle();
+  }));
+  applyPlayStyle();
   const levelTime = (info) => (performance.now() - info.t0) / 1000 + (info.penalty || 0);
-  // le chrono s'affiche en compet, pendant une série de la quête (inutile tant que le compet est de côté)
-  if (isCompet()) setInterval(() => {
+  // le chrono en direct s'affiche en régate, pendant une série de la quête
+  setInterval(() => {
     const t = $('#play-timer');
     const info = session && session.info;
-    const on = info && info.t0 && !info.free && !screens.play.hidden;
+    const on = isCompet() && info && info.t0 && !info.free && !screens.play.hidden;
     t.hidden = !on;
     if (on && !info.stopped) t.textContent = C.formatTime(levelTime(info));
   }, 250);
@@ -987,6 +999,7 @@
     if (navigator.share) {
       navigator.share({ title: 'Odysseus', text: txt, url }).catch(() => { /* partage annulé */ });
     } else if (navigator.clipboard) {
+    if (!t) return;
       navigator.clipboard.writeText(txt + ' ' + url).then(() => showXp('message copié, colle-le à tes amis', '#5f9fd8')).catch(() => {});
     }
   }
@@ -1011,10 +1024,9 @@
       const record = prev == null || info.time < prev;
       if (record) J.best[info.L] = info.time;
       C.save();
-      ldTime.innerHTML = '<b>' + C.formatTime(info.time) + '</b>' +
-        (record ? '<small class="record">' + (prev == null ? 'premier temps' : 'nouveau record') + '</small>'
-          : '<small>record ' + C.formatTime(prev) + '</small>') +
-        (info.penalty ? '<small>dont ' + info.penalty + ' s de pénalité (indices)</small>' : '');
+      // (le temps lui-même est déjà sur la piste du chrono : ici seulement le record)
+      ldTime.innerHTML = (record ? '<small class="record">' + (prev == null ? 'premier temps' : 'nouveau record') + '</small>'
+          : '<small>record ' + C.formatTime(prev) + '</small>');
       $('#ld-share').onclick = () => shareTime(info);
     }
     const before = info.xpStart || {};
@@ -1181,7 +1193,10 @@
 
   // étoiles des niveaux de la quête sur la carte (animate : les nouvelles montent de leur pierre)
   function refreshStars(animate) {
-    if (worldReady && C.world.setStars) C.world.setStars(J.stars || {}, !!animate);
+    if (!worldReady || !C.world.setStars) return;
+    const st = J.stars || {};
+    // croisière : pas d'étoiles sur les pierres (on les efface en passant 0 partout)
+    C.world.setStars(isCompet() ? st : Object.fromEntries(Object.keys(st).map((k) => [k, 0])), !!animate);
   }
   // fin d'une grille de palier (enchaînée, sans récapitulatif) : les étoiles éclosent sur le plateau
   function popStars(n) {

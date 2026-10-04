@@ -318,6 +318,10 @@
 .hint-box.line.hint-why { border-radius: 999px !important; opacity: 1; background: var(--hint) !important; box-shadow: 0 0 8px var(--hint-glow) !important; }
 .hint-box.hint-why:not(.line) { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--hint) 55%, transparent) !important; background: color-mix(in srgb, var(--hint) 12%, transparent) !important; }
 
+/* ---- Mode croisière (réglage « Mode ») : ni étoiles ni chrono à l'écran ---- */
+html.chill .lc-stars, html.chill #ld-stars, html.chill #ld-clock, html.chill .vy-stars, html.chill .dc-stars,
+html.chill #pop-stars, html.chill #play-timer, html.chill #ld-time, html.chill #ld-share, html.chill .mini-stars { display: none !important; }
+
 /* ---- Accessibilité (réglages) : les anciennes règles de style.css visaient l'ancien thème ---- */
 /* texte agrandi : les panneaux (réglages, voyage, défi, jeux, carte joueur, fin de niveau…) grossissent d'un cran,
    ainsi que le bandeau du niveau, les onglets et les textes de jeu ; les plateaux gardent leur taille */

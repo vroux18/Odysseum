@@ -393,6 +393,14 @@
           <button data-theme-choice="dark" role="tab">sombre</button>
         </div>
       </div>
+      <!-- façon de jouer : croisière (sans étoiles ni chrono) ou régate (étoiles, chrono, records) -->
+      <div class="theme-row mode-row">
+        <span>Mode</span>
+        <div class="switch-mode play-style" role="tablist" aria-label="Façon de jouer">
+          <button data-play-style="croisiere" role="tab">croisière</button>
+          <button data-play-style="regate" role="tab">régate</button>
+        </div>
+      </div>
       <!-- l'archipel suit l'heure réelle (aube, jour, soir, nuit) ; coché : toujours le grand jour -->
       <label class="toggle daylock"><span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="currentColor" stroke="none"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Toujours le jour</span><input type="checkbox" id="opt-daylock"><i></i></label>
       <!-- récapitulatif de fin de niveau (étoiles, temps, XP) : on peut le passer -->
