@@ -27,6 +27,21 @@
   clip-path: polygon(50% 0, 63% 35%, 100% 38%, 71% 61%, 80% 100%, 50% 78%, 20% 100%, 29% 61%, 0 38%, 37% 35%); }
 .vy-stars s.on { background: #fff; }
 
+/* liste du voyage, plus lisible : étoiles sous la pièce (et plus dessus), pierre en cours bien visible */
+.vy-row { row-gap: 20px !important; column-gap: 7px !important; padding-bottom: 6px; }
+.vy-stone { font-size: 17px !important; overflow: visible; }
+.vy-stone b { top: 0 !important; }
+.vy-stars { bottom: -14px !important; gap: 1px; }
+.vy-stars s { width: 10px !important; height: 10px !important; background: var(--k-ink-soft, #8a83a3) !important; opacity: .45; }
+.vy-stars s.on { background: #ffc93d !important; opacity: 1; filter: drop-shadow(0 1px 0 #c97c00); }
+.vy-stone.now { background: linear-gradient(#8be36a, #5cc93a) !important; color: #fff !important; box-shadow: 0 4px 0 #3a9a26, 0 0 0 3px #fff !important; }
+.vy-stone.now .vy-stars { display: none; }
+.vy-stone.here { outline: 2.5px solid var(--k-ink, #3a3550); outline-offset: 4px; }
+.vy-stone.now.here { outline: 0; }
+.vy-stone.lock { opacity: .55 !important; color: var(--k-ink-soft, #8a83a3) !important; }
+.vy-stone.boss { transform: none !important; }
+.vy-flag { top: -6px !important; right: -6px !important; }
+
 /* fin de niveau : chrono et piste des seuils d'étoiles */
 .ld-clock { width: min(300px, 100%); margin: 2px auto 14px; display: flex; flex-direction: column; align-items: center; gap: 10px;
   animation: ck-in .5s var(--k-ease, ease) 1s both; }
