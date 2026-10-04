@@ -1477,7 +1477,8 @@
     // rangés par capacité : un petit titre coloré, puis les cartes de ses mini-jeux
     let group = null;
     const byCat = [];
-    SKILLS.forEach((sk) => sk.games.forEach((id) => byCat.push([sk, game(id)])));
+    // dans chaque capacité : d'abord les jeux ouverts, puis les autres dans l'ordre où ils se débloquent
+    SKILLS.forEach((sk) => sk.games.slice().sort((a, b) => unlockAt(a) - unlockAt(b)).forEach((id) => byCat.push([sk, game(id)])));
     C.games.forEach((g) => { if (!byCat.some(([, x]) => x === g)) byCat.push([null, g]); });
     let lastSk;
     byCat.forEach(([sk, g]) => {
