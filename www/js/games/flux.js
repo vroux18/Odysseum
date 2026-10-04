@@ -244,12 +244,12 @@
   }
 
   function params(level, variant) {
-    // débuts tout doux : 4×4, puis une rangée de plus tous les 5 niveaux
-    // départ très doux : 4×4 à 3 couleurs, la grille grandit tous les 8 niveaux, les ponts n'arrivent qu'au niveau 16
+    // la grille grandit tous les 8 niveaux, les ponts n'arrivent qu'au niveau 16 ;
+    // n − 1 couleurs à taille donnée (sans va-et-vient d'un niveau à l'autre)
     const n = Math.min(9, 4 + Math.floor((level - 1) / 8));
     let bridges = level < 16 ? 0 : Math.min(3, 1 + Math.floor((level - 16) / 12));
     if (variant === 'tore') bridges = level < 16 ? 0 : 1;
-    const colors = Math.max(3, Math.min(COLORS.length, n - 2 + (level % 2)));
+    const colors = Math.max(3, Math.min(COLORS.length, n - 1));
     // jusqu'au niveau 12 : grille entièrement traçable par passages forcés (voir forcedSolvable) ;
     // des tuyaux courts (plus de couleurs) se laissent presque tous deviner de proche en proche
     if (level <= 12) {

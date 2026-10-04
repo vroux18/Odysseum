@@ -75,7 +75,9 @@
       cells.forEach((b, i) => b.classList.toggle('on', !!state[i]));
     }
 
+    let won = false;
     function doPress(i) {
+      if (won) return; // grille finie : plus de coups
       history.push({ state: state.slice(), mine: mine.slice(), moves });
       press(state, n, i, pattern);
       mine[i] ^= 1;
@@ -83,10 +85,17 @@
       C.sfx.tap();
       cells[i].classList.remove('pulse'); void cells[i].offsetWidth; cells[i].classList.add('pulse');
       render(); api.onChange();
-      if (state.every((v) => !v)) api.onWin();
+      if (state.every((v) => !v)) { won = true; api.onWin(); }
     }
 
+    // au doigt : dès l'appui (un « click » se perd parfois sur deux touchers rapides) ; au clavier : click
+    grid.addEventListener('pointerdown', (e) => {
+      if (!e.isPrimary || e.button > 0) return;
+      const b = e.target.closest('.bulb');
+      if (b) doPress(+b.dataset.i);
+    });
     grid.addEventListener('click', (e) => {
+      if (e.detail) return; // (déjà joué au pointerdown)
       const b = e.target.closest('.bulb');
       if (b) doPress(+b.dataset.i);
     });

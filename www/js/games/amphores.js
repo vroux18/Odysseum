@@ -196,7 +196,14 @@
       api.onChange();
     }
 
+    // au doigt : dès l'appui (deux tuiles retournées très vite ne se perdent pas) ; au clavier : click
+    box.addEventListener('pointerdown', (e) => {
+      if (!e.isPrimary || e.button > 0) return;
+      const t = e.target.closest('.amph-tile');
+      if (t) flip(+t.dataset.i);
+    });
     box.addEventListener('click', (e) => {
+      if (e.detail) return; // (déjà joué au pointerdown)
       const t = e.target.closest('.amph-tile');
       if (t) flip(+t.dataset.i);
     });

@@ -180,18 +180,8 @@
       <svg class="ic cam-free" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-compass"/></svg>
       <svg class="ic cam-follow" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-crosshair"/></svg>
     </button>
-    <!-- un seul bouton : le mini-jeu qui attend sur la pierre choisie -->
-    <!-- niveau précédent / suivant autour du bouton play -->
-    <button id="prev-level" class="ghost-icon level-arrow prev" aria-label="Niveau précédent"><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-caret-left"/></svg></button>
+    <!-- un seul bouton : le niveau qui attend sur la pierre choisie (la carte du niveau #lvcard est créée par app.js) -->
     <button id="go" class="go" aria-label="Jouer"></button>
-    <button id="next-level" class="ghost-icon level-arrow next" aria-label="Niveau suivant"><svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-caret-right"/></svg></button>
-    <span id="go-label" class="go-label"></span>
-    <!-- voyager d'île en île : la caméra survole l'île choisie, Ulysse reste où il est -->
-    <div id="island-nav" class="island-nav" hidden>
-      <button id="island-prev" aria-label="Île précédente"><svg viewBox="0 0 24 24"><path d="M14.5 6 8.5 12l6 6"/></svg></button>
-      <button id="island-name" class="island-name"></button>
-      <button id="island-next" aria-label="Île suivante"><svg viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></svg></button>
-    </div>
   </main>
 
   <!-- Partie -->
@@ -233,7 +223,7 @@
       </button>
       <button id="btn-hint" class="ghost-icon" aria-label="Indice">
         <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-lightbulb"/></svg>
-        <span id="hint-left" class="hint-left">3</span>
+        <span id="hint-left" class="hint-left" hidden></span>
       </button>
     </nav>
 
@@ -449,8 +439,6 @@
           <svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-arrow-right"/></svg>
         </button>
       </div>
-      <!-- passer ce récapitulatif à l'avenir (réactivable dans les réglages) -->
-      <label class="ld-skip"><input type="checkbox" id="ld-skip"> ne plus afficher</label>
     </div>
   </div>
   <!-- gain d'expérience après une victoire -->

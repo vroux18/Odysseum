@@ -343,7 +343,7 @@
     const history = [];
     const used = new Set(); // cartes que le joueur a rangées (estompées)
     let autoX = C.store.settings.oracleAuto !== false;
-    let won = false;
+    let won = false, winT = 0;
 
     const rowCats = [0];
     for (let c = K - 1; c >= 2; c--) rowCats.push(c);
@@ -492,10 +492,11 @@
       }
       won = true;
       box.classList.add('won');
-      setTimeout(() => api.onWin(), 450);
+      winT = setTimeout(() => api.onWin(), 450);
     }
 
-    grid.addEventListener('click', (e) => {
+    // au doigt : dès l'appui (un « click » se perd parfois sur deux touchers rapides) ; au clavier : click
+    const tapCell = (e) => {
       const el = e.target.closest('.orc-cell');
       if (!el || won) return;
       const [a, x, b, y] = el.dataset.k.split(':').map(Number);
@@ -506,7 +507,9 @@
       if (next === 1) C.sfx.place(); else C.sfx.tap();
       el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
       render(); api.onChange(); check();
-    });
+    };
+    grid.addEventListener('pointerdown', (e) => { if (e.isPrimary && !(e.button > 0)) tapCell(e); });
+    grid.addEventListener('click', (e) => { if (!e.detail) tapCell(e); }); // (déjà joué au pointerdown)
     clueBox.addEventListener('click', (e) => {
       const el = e.target.closest('.orc-clue');
       if (!el) return;
@@ -579,7 +582,7 @@
         return { text: explainOracle(d), where: [cellEl(d.a, d.x, d.b, d.y)], why };
       },
       redraw() { fit(); },
-      destroy() { if (ro) ro.disconnect(); }
+      destroy() { clearTimeout(winT); if (ro) ro.disconnect(); }
     };
   }
 

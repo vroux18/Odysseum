@@ -329,7 +329,8 @@
       },
       // indice : le chant reprend lentement, puis la prochaine coquille attendue scintille
       hint() {
-        if (phase === 'won') return false;
+        // (pas pendant l'attente du départ ni la pause après une note : leurs minuteries remettent le jeu d'aplomb)
+        if (phase === 'won' || phase === 'wait' || phase === 'pause') return false;
         clearAll();
         const keep = phase === 'turn' ? pos : 0;
         const slow = Math.round(puzzle.step * 1.45);

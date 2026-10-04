@@ -266,7 +266,7 @@
       },
       // indice : le modèle réapparaît un instant en transparence, et une tesselle à corriger s'entoure d'or
       hint() {
-        if (phase === 'won') return false;
+        if (phase === 'won' || phase === 'wait') return false; // (avant l'affichage du modèle : rien à montrer)
         if (phase === 'show') hideModel();
         if (phase !== 'paint') { clearAll(); phase = 'paint'; }
         const firstBad = paint.findIndex((v, i) => v !== truth[i]);

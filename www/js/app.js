@@ -53,7 +53,8 @@
   // ------------------------------------------------------------------
   // Étoiles (1 à 3) selon le temps : chaque grille a un temps « cible » en secondes,
   // déduit de sa taille ; une série (niveau, boss) additionne ceux de ses grilles.
-  // 3★ ≤ cible, 2★ ≤ 2 × cible, sinon 1★ ; chaque astuce retire une étoile (au moins 1).
+  // 3★ ≤ cible, 2★ ≤ ~1,8 × cible (repères arrondis, starMarks), sinon 1★ ; avoir pris au moins
+  // un indice retire une étoile, une seule (au moins 1★).
   // Grille résolue d'office (bouton de test) : 0 étoile, aucun record touché.
   // ------------------------------------------------------------------
   const sq = (n) => (n || 5) * (n || 5);
@@ -189,7 +190,7 @@
       const others = rng.shuffle(pool.slice());
       others.forEach((id) => { if (ids.length < count && !ids.includes(id)) ids.push(id); });
     }
-    // difficulté de la quête : voir questLevel (courbe douce sur les trois sagas, épreuve +2, plafond 40)
+    // difficulté de la quête : voir questLevel (courbe douce sur les trois sagas, épreuve +1, plafond 40)
     const level = questLevel(L, boss);
     const vChance = boss ? Math.min(0.7, 0.25 + c * 0.1) : Math.min(0.55, 0.12 + c * 0.08);
     const steps = ids.map((id) => ({ id, variant: pickVariant(id, vChance), level }));
@@ -339,17 +340,10 @@
     b.classList.toggle('boss', info.boss);
     b.classList.toggle('replay', selected < J.done);
     // bouton play ; le numéro du niveau en petite étiquette dessous
-    b.innerHTML = walking ? '<svg class="ic" viewBox="0 0 24 24"><path class="f" d="M3 6l8 6-8 6zM12 6l8 6-8 6z"/></svg>' : UI('play');
-    const lab = $('#go-label');
-    // les mini-jeux qui attendent sur cette pierre, en pastilles de couleur, puis le numéro du niveau
+    b.innerHTML = walking ? '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path class="f" d="M3 6l8 6-8 6zM12 6l8 6-8 6z"/></svg>' : UI('play');
+    // les mini-jeux qui attendent sur cette pierre (sans doublon)
     const ids = info.steps.map((s) => s.id).filter((id, i, a) => a.indexOf(id) === i);
-    lab.innerHTML = '<span class="gl-games">' + ids.map((id) => '<i style="--c:' + ACCENT[id] + '"><svg viewBox="0 0 24 24">' + (ICON[id] || '') + '</svg></i>').join('') + '</span>' +
-      '<span class="gl-num">' + (info.boss ? 'épreuve · ' : 'niveau ') + (selected + 1) + '</span>';
-    lab.hidden = b.hidden;
-    // flèches : revenir au niveau d'avant, ou avancer jusqu'au niveau en cours
-    $('#prev-level').hidden = b.hidden || selected <= 0;
-    $('#next-level').hidden = b.hidden || selected >= J.done;
-    b.setAttribute('aria-label', 'Jouer');
+    b.setAttribute('aria-label', walking ? 'Arriver tout de suite' : info.boss ? 'Épreuve' : 'Jouer');
     b.classList.remove('in'); void b.offsetWidth; b.classList.add('in');
     // bandeau flottant du niveau : numéro, étoiles gagnées (ou à gagner), mini-jeux ; le bouton Play posé dessus
     let card = $('#lvcard');
@@ -411,12 +405,8 @@
       renderPlay.nudged = true;
       setTimeout(() => { card.classList.add('nudge'); setTimeout(() => card.classList.remove('nudge'), 1300); }, 900);
     }
-    let isle = ''; // nom de l'île (la liste est définie plus bas : pas encore prête au tout premier affichage)
-    try { isle = voyageName(Math.floor(selected / PER)); } catch (e) { /* premier rendu */ }
-    // petit emblème de la saga devant le nom de l'île (titre de la saga au survol)
-    if (isle) { const sg = sagaOf(Math.floor(selected / PER)); isle = '<i class="lc-saga" title="' + sg.name.replace(/"/g, '') + '">' + sagaEmblem(sg.emblem) + '</i>' + isle; }
-    card.innerHTML = '<span class="lc-isle">' + isle + '</span><span class="lc-play-slot"></span>' +
-      '<span class="lc-title"><i class="lc-nav" data-d="-1"' + (selected <= 0 ? ' hidden' : '') + '>‹</i>' +
+    // (les flèches sont des <i> : la carte entière est un bouton, son aria-label suffit)
+    card.innerHTML = '<span class="lc-title"><i class="lc-nav" data-d="-1"' + (selected <= 0 ? ' hidden' : '') + '>‹</i>' +
       (info.boss ? 'Épreuve ' : 'Niveau ') + (selected + 1) +
       '<i class="lc-nav" data-d="1"' + (selected >= J.done ? ' hidden' : '') + '>›</i></span>' +
       '<span class="lc-stars' + (past ? '' : ' todo') + '">' + starRow(past ? won : 0, 'lc-st') + '</span>' +
@@ -434,8 +424,9 @@
     playStep(info, 0);
   }
 
-  // 3 astuces par grille ; le petit chiffre sur l'ampoule les décompte
-  const MAX_HINTS = Infinity; // indices illimités (chacun coûte quand même dans le calcul des étoiles)
+  // indices illimités : en prendre retire une seule étoile au total (voir starsFor) ; le compteur
+  // sur l'ampoule ne s'affiche que si MAX_HINTS redevient un nombre
+  const MAX_HINTS = Infinity;
   function renderHints(left) {
     $('#hint-left').textContent = isFinite(left) ? left : '';
     $('#hint-left').hidden = !isFinite(left);
@@ -712,6 +703,15 @@
     window.addEventListener('resize', () => { if (Z.host && Z.s > 1) zoomTo(1, 0, 0); });
   }
 
+  // petit rebond au toucher d'une case (posé une seule fois : #board reste le même d'une grille à l'autre) ;
+  // les pièces qui changent de face (Astres, Lumières) se retournent, les autres rebondissent
+  $('#board').addEventListener('pointerdown', (e) => {
+    const t = e.target.closest('.cell, .bulb, .nono-cell');
+    if (!t) return;
+    const fx = t.closest('.astres, .lumieres') ? 'flip' : 'pop';
+    t.classList.remove('pop', 'flip'); void t.offsetWidth; t.classList.add(fx);
+  });
+
   let playRun = null;
   // « Arrêter » : si de l'XP a été gagnée depuis le début de la partie, petit bilan avant de rentrer
   function stopPlay() {
@@ -736,7 +736,8 @@
     $('#play').classList.toggle('mega', info.event != null || !!info.mega); // grande grille : cases plus serrées
     zoomAttach($('#board'), false); // (le zoom revient à 1× ; réactivé une fois la grille posée)
     $('#play-icon').innerHTML = icon(g.id);
-    $('#play-level').textContent = info.mega ? 'méga · ' + info.mega.k : info.event != null ? 'méga' : info.daily ? 'défi du jour' : info.tier ? info.tier.name.toLowerCase() + ' · ' + info.tier.k : info.free ? (info.focus ? 'concentration' : 'jeu libre') : (info.boss ? 'épreuve · niveau ' : 'niveau ') + (info.L + 1);
+    // (défi d'une île : même étiquette « île N » que sa carte dans la liste des mini-jeux, distincte de « méga »)
+    $('#play-level').textContent = info.mega ? 'méga · ' + info.mega.k : info.event != null ? 'île ' + (info.event + 1) : info.daily ? 'défi du jour' : info.tier ? info.tier.name.toLowerCase() + ' · ' + info.tier.k : info.free ? (info.focus ? 'concentration' : 'jeu libre') : (info.boss ? 'épreuve · niveau ' : 'niveau ') + (info.L + 1);
     // passage d'un mini-jeu au suivant dans une série : la grille arrive par la droite
     $('#board').classList.toggle('next-step', stepIndex > 0 || !!info.chain || !!info.focus);
     $('#board').classList.remove('leaving');
@@ -827,14 +828,6 @@
         // une fois la cascade jouée, la grille est « prête » : effacer une case ne relance plus l'apparition
         setTimeout(() => grid.classList.add('ready'), 2 * n * 18 + 800);
       }
-      host.addEventListener('pointerdown', (e) => {
-        const t = e.target.closest('.cell, .bulb, .nono-cell');
-        if (!t) return;
-        // les pièces qui changent de face (Astres, Lumières) se retournent ; les autres rebondissent
-        const fx = t.closest('.astres, .lumieres') ? 'flip' : 'pop';
-        t.classList.remove('pop', 'flip'); void t.offsetWidth; t.classList.add(fx);
-      });
-
       const tools = $('#tools');
       if (inst.tools) {
         tools.innerHTML = '';
@@ -859,9 +852,12 @@
         elapsed(v) { if (v != null) elapsed = v; return elapsed; },
         hint(explain) {
           if (won || hints >= MAX_HINTS) { C.sfx.error && C.sfx.error(); return; }
+          // compté AVANT l'appel : un indice qui termine la grille déclenche onWin tout de suite,
+          // et cet indice doit déjà peser dans les étoiles
+          hints++;
           const res = inst.hint();
+          if (!res) hints--;
           if (res) {
-            hints++;
             renderHints(MAX_HINTS - hints);
             if (typeof res === 'string' || (res && typeof res === 'object')) showTip(res, explain); // l'astuce montre où (et, sur demande, explique pourquoi)
             if (info.t0) info.penalty += 10; // compet : chaque indice coûte 10 secondes
@@ -976,14 +972,11 @@
   // ------------------------- Mode chill / compet -------------------------
   const isCompet = () => false; // jeu uniquement en mode chill pour l'instant (compet gardé de côté)
   const levelTime = (info) => (performance.now() - info.t0) / 1000 + (info.penalty || 0);
-  function renderPlayMode() {
-    document.querySelectorAll('.play-mode button').forEach((b) => b.classList.toggle('on', b.dataset.playMode === (isCompet() ? 'compet' : 'chill')));
-  }
-  // le chrono s'affiche en compet, pendant une série de la quête
-  setInterval(() => {
+  // le chrono s'affiche en compet, pendant une série de la quête (inutile tant que le compet est de côté)
+  if (isCompet()) setInterval(() => {
     const t = $('#play-timer');
     const info = session && session.info;
-    const on = isCompet() && info && info.t0 && !info.free && !screens.play.hidden;
+    const on = info && info.t0 && !info.free && !screens.play.hidden;
     t.hidden = !on;
     if (on && !info.stopped) t.textContent = C.formatTime(levelTime(info));
   }, 250);
@@ -1026,7 +1019,7 @@
     }
     const before = info.xpStart || {};
     const rows = SKILLS.filter((sk) => (C.store.xp[sk.id] || 0) > (before[sk.id] || 0));
-    $('#ld-title').textContent = info.summary ? 'Bilan de la partie' : info.daily ? game(info.steps[0].id).name : info.event != null || info.mega ? 'Méga ' + game(info.steps[0].id).name : info.boss ? 'Épreuve réussie' : 'Niveau ' + (info.L + 1);
+    $('#ld-title').textContent = info.summary ? 'Bilan de la partie' : info.daily ? game(info.steps[0].id).name : info.event != null ? voyageName(info.event) : info.mega ? 'Méga ' + game(info.steps[0].id).name : info.boss ? 'Épreuve réussie' : 'Niveau ' + (info.L + 1);
     // trois grosses étoiles sous le titre : elles éclosent une à une (les manquantes restent grises)
     const ldStars = $('#ld-stars');
     const hasStars = info.stars != null && !info.assisted; // résolu d'office (outil de test) : ni étoiles ni chrono
@@ -1052,11 +1045,9 @@
         (run.hints ? '<span class="ck-hint" aria-label="Indices : ' + run.hints + ' (une étoile en moins)"><svg class="ic" viewBox="0 0 256 256"><use href="assets/ui/icons.svg#i-lightbulb"/></svg>−1<svg viewBox="0 0 24 24" class="ck-hstar"><path d="' + STAR_D + '"/></svg></span>' : '') + '</div>' +
         '<div class="ck-track"><span class="ck-fill" style="--w:' + pos(run.time) + '"></span>' + tick(m3, 3) + tick(m2, 2) + '</div>';
     }
-    // moins de 3 étoiles : proposer de rejouer à côté de « suivant » ; case « ne plus afficher »
+    // moins de 3 étoiles : proposer de rejouer à côté de « suivant »
     showLevelDone.last = info;
     $('#ld-replay').hidden = !hasStars || info.stars >= 3 || !!info.summary;
-    $('#ld-skip').checked = !!C.store.settings.skipDone;
-    $('#ld-skip').parentElement.hidden = !!info.summary;
     const delay0 = hasStars ? 1.25 : 0.35; // les lignes d'XP arrivent après les étoiles
     box.innerHTML = rows.map((sk, i) => {
       const was = levelFrom(before[sk.id] || 0, 40), now = skillStats(sk);
@@ -1247,15 +1238,11 @@
   }
   const CHECK = '<svg viewBox="0 0 24 24"><path d="M5.5 12.5l4 4 9-9.5"/></svg>';
   const FLAME = '<svg viewBox="0 0 24 24"><path d="M12 2.8c.6 3.4 4.6 5.6 4.6 10.4a4.6 4.6 0 0 1-9.2 0c0-2.2 1-3.6 2.2-4.8.2 1.6.9 2.6 1.9 3 .2-3.3-.6-5.8.5-8.6z"/></svg>';
-  // contenu du bouton (et de la rangée de la liste) : icône du jeu, coche + étoiles une fois fait, flamme de la série
+  // défi du jour : son jeu, le résultat du jour (s'il est fait) et la série en cours ;
+  // html : l'onglet Défi de la barre (pastille à la couleur du jeu ; la série et le calendrier sont dans la feuille)
   function dailyBadges() {
     const info = dailyInfo(), rec = DAY.days[info.daily], streak = dailyStreak();
-    return {
-      info, rec, streak,
-      html: '<span class="daily-ic" style="color:' + info.accent + '">' + icon(info.id) + '</span>' +
-        (rec ? '<i class="daily-check">' + CHECK + '</i>' + starRow(rec.stars, 'mini-stars daily-stars') : '') +
-        (streak > 0 ? '<i class="daily-flame">' + FLAME + '<b>' + streak + '</b></i>' : '')
-    };
+    return { info, rec, streak, html: '<span class="daily-ic" style="color:' + info.accent + '">' + icon(info.id) + '</span>' };
   }
   function renderDaily() {
     const b = $('#open-daily');
@@ -1308,7 +1295,8 @@
       // défi réussi : plus de bouton, juste « Fait » avec les étoiles gagnées
       (d.rec
         ? '<div class="dc-done"><i class="dc-check">' + CHECK + '</i>Fait' + starRow(d.rec.stars, 'dc-stars') + '</div>'
-        : '<button class="dc-play"><span class="dc-game" style="--c:' + d.info.accent + '"><svg viewBox="0 0 24 24">' + (ICON[d.info.id] || '') + '</svg></span>' + UI('play') + '</button>');
+        : '<button class="dc-play" aria-label="Jouer le défi du jour"><span class="dc-game" style="--c:' + d.info.accent + '"><svg viewBox="0 0 24 24">' + (ICON[d.info.id] || '') + '</svg></span>' + UI('play') + '</button>');
+    addSheetClose($('#daily')); // croix de fermeture, comme les autres feuilles (le contenu vient d'être réécrit)
   }
 
   // ------------------------ Liste des mini-jeux ------------------------
@@ -2088,13 +2076,6 @@
   applyTheme(); // avant le premier affichage, pour éviter un flash
 
   // --------------------------- Événements ---------------------------
-  document.querySelectorAll('.play-mode button').forEach((b) => b.addEventListener('click', () => {
-    C.store.settings.playMode = b.dataset.playMode;
-    C.save();
-    renderPlayMode();
-    C.sfx.tap();
-  }));
-  renderPlayMode();
   function stepLevel(d) {
     const L = Math.max(0, Math.min(J.done, selected + d));
     if (L === selected) return;
@@ -2104,8 +2085,6 @@
     if (worldReady && C.world.select) { C.world.select(L); if (C.world.walking && C.world.walking()) standing = false; }
     renderPlay();
   }
-  $('#prev-level').addEventListener('click', () => stepLevel(-1));
-  $('#next-level').addEventListener('click', () => stepLevel(1));
 
   // Le voyage : toutes les pierres déjà atteintes, île par île (étoiles, épreuves) ;
   // toucher une pierre y téléporte Ulysse pour la rejouer.
@@ -2192,7 +2171,6 @@
     box.innerHTML = html;
   }
   function openVoyage() { renderVoyage(); $('#voyage').hidden = false; C.sfx.tap(); }
-  $('#go-label').addEventListener('click', openVoyage);
   $('#vy-list').addEventListener('click', (e) => {
     const b = e.target.closest('.vy-stone');
     if (!b || b.disabled) return;
@@ -2316,6 +2294,7 @@
     $('#brain').hidden = true;
     if (!worldReady || screens.home.hidden) { startFocus(sk); return; }
     $('#go').hidden = true;
+    const card = $('#lvcard'); if (card) card.hidden = true; // (la carte du niveau suit le bouton Jouer)
     const accent = ACCENT[sk.games[0]];
     showXp('mode concentration · <b>' + sk.name.toLowerCase() + '</b>', accent);
     C.world.concentrate(accent, () => {
@@ -2355,48 +2334,10 @@
     else if (i.L >= 0) startLevel(i.L);
     else goHome();
   });
-  // « ne plus afficher » : le récapitulatif est passé (on garde juste les étoiles un instant)
-  $('#ld-skip').addEventListener('change', (e) => { C.store.settings.skipDone = e.target.checked; C.save(); const o = $('#opt-ldshow'); if (o) o.checked = !e.target.checked; });
-  // réglage inverse : « Bilan de fin de niveau » affiché ou non
+  // réglage « Bilan de fin de niveau » : affiché ou passé (on garde juste les étoiles un instant)
   { const o = $('#opt-ldshow'); if (o) { o.checked = !C.store.settings.skipDone; o.addEventListener('change', (e) => { C.store.settings.skipDone = !e.target.checked; C.save(); }); } }
 
   $('#open-settings').addEventListener('click', () => { $('#settings').hidden = false; });
-
-  // ------------------------------ Voyage d'île en île ------------------------------
-  // Bouton en bas : survoler les îles déjà atteintes (et apercevoir la suivante), puis revenir à Ulysse.
-  let islandView = -1;
-  function renderIslandNav() {
-    const nav = $('#island-nav');
-    const list = worldReady && C.world.islands ? C.world.islands() : null;
-    nav.hidden = !list || list.length < 2;
-    if (nav.hidden) return;
-    const cur = list.findIndex((i) => i.current);
-    const at = islandView < 0 ? cur : islandView;
-    const isl = list[at] || list[0];
-    $('#island-name').innerHTML = (isl.unlocked ? isl.name : '<span class="lock">?</span> Île inconnue') + (islandView >= 0 && at !== cur ? '<small>revenir à Ulysse</small>' : '');
-    $('#island-prev').disabled = at <= 0;
-    $('#island-next').disabled = at >= list.length - 1 || !list[at].unlocked;
-  }
-  function goIsland(d) {
-    const list = C.world.islands();
-    const cur = list.findIndex((i) => i.current);
-    const at = Math.max(0, Math.min(list.length - 1, (islandView < 0 ? cur : islandView) + d));
-    islandView = at === cur ? -1 : at;
-    if (islandView < 0) { if (C.world.viewHero) C.world.viewHero(); else C.world.setCameraMode('follow'); }
-    else C.world.viewIsland(at);
-    C.sfx.tap();
-    renderIslandNav();
-  }
-  $('#island-prev').addEventListener('click', () => goIsland(-1));
-  $('#island-next').addEventListener('click', () => goIsland(1));
-  $('#island-name').addEventListener('click', () => {
-    if (islandView < 0) return;
-    islandView = -1;
-    if (C.world.viewHero) C.world.viewHero(); else C.world.setCameraMode('follow');
-    renderIslandNav();
-  });
-  renderIslandNav();
-  setInterval(() => { if (!screens.home.hidden) renderIslandNav(); }, 1500); // Ulysse a pu changer d'île
 
   // ------------------------------ Garde-robe ------------------------------
   // Les choix viennent du monde 3D (World.skinOptions) ; à défaut, une palette grecque de base.
@@ -2899,17 +2840,19 @@
   // Les navigateurs n'autorisent le son qu'après un premier geste.
   document.addEventListener('pointerdown', () => C.audio.unlock(), { once: true });
   // chaque feuille a sa croix de fermeture (en plus du toucher sur le fond) ; le bouton retour Android ferme d'abord la feuille ouverte
-  const SHEETS = ['library', 'levels', 'brain', 'settings', 'wardrobe', 'rules', 'voyage', 'credits'];
-  SHEETS.forEach((id) => {
-    const ov = document.getElementById(id), sheet = ov && ov.querySelector('.sheet');
+  // (#daily est créé à la première ouverture : openDaily lui ajoute sa croix avec addSheetClose)
+  const SHEETS = ['library', 'levels', 'brain', 'settings', 'wardrobe', 'rules', 'voyage', 'credits', 'daily'];
+  function addSheetClose(ov) {
+    const sheet = ov && ov.querySelector('.sheet');
     if (!sheet || sheet.querySelector('.sheet-close')) return;
     const x = document.createElement('button');
     x.className = 'sheet-close';
     x.setAttribute('aria-label', 'Fermer');
-    x.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>';
+    x.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>';
     x.addEventListener('click', (e) => { e.stopPropagation(); ov.hidden = true; C.sfx.tap(); });
     sheet.prepend(x);
-  });
+  }
+  SHEETS.forEach((id) => addSheetClose(document.getElementById(id)));
   const openSheet = () => SHEETS.map((id) => document.getElementById(id)).filter((o) => o && !o.hidden).pop();
   document.addEventListener('backbutton', () => {
     const o = openSheet();

@@ -206,6 +206,8 @@
       });
     }
 
+    // instantané pour l'annulation : l'état ET les points effacés (cleared)
+    const snap = () => { const s = state.slice(); s.cl = cleared.slice(); return s; };
     let down = null;
     function cellAt(e) {
       const el = document.elementFromPoint(e.clientX, e.clientY);
@@ -215,8 +217,7 @@
       const i = cellAt(e);
       if (i < 0) return;
       grid.setPointerCapture(e.pointerId);
-      const snap = state.slice(); snap.cl = cleared.slice(); // l'annulation rend aussi les points effacés
-      down = { start: i, dragging: false, snapshot: snap, auto: blocked() };
+      down = { start: i, dragging: false, snapshot: snap(), auto: blocked() }; // l'annulation rend aussi les points effacés
     });
     grid.addEventListener('pointermove', (e) => {
       if (!down) return;
@@ -254,7 +255,13 @@
       else if (bad.size) C.sfx.error();
     };
     grid.addEventListener('pointerup', up);
-    grid.addEventListener('pointercancel', up);
+    // toucher interrompu (geste du système) : rien n'est joué, un glissé en cours est annulé
+    grid.addEventListener('pointercancel', () => {
+      if (!down) return;
+      if (down.dragging) { state = down.snapshot; cleared = down.snapshot.cl; }
+      down = null;
+      render();
+    });
 
     render();
 
@@ -264,7 +271,7 @@
         return 'Couronnes ' + queens + '/' + n;
       },
       undo() { if (history.length) { state = history.pop(); if (state.cl) cleared = state.cl; render(); api.onChange(); } },
-      reset() { history.push(state.slice()); state = new Uint8Array(n * n); render(); api.onChange(); },
+      reset() { history.push(snap()); state = new Uint8Array(n * n); cleared = new Uint8Array(n * n); render(); api.onChange(); },
       hint() {
         const N = n * n;
         const rowOf = (i) => Math.floor(i / n), colOf = (i) => i % n;
@@ -284,7 +291,7 @@
         for (let i = 0; i < N; i++) {
           if (state[i] !== 2 || isSol(i)) continue;
           const { bad } = conflicts();
-          history.push(state.slice());
+          history.push(snap());
           let why = [], text;
           if (bad.has(i)) {
             why = crownsOn().filter((j) => j !== i && bad.has(j));
@@ -314,7 +321,7 @@
             const f = freeIn(u);
             if (f.length !== 1 || !isSol(f[0])) continue;
             const i = f[0];
-            history.push(state.slice());
+            history.push(snap());
             state[i] = 2;
             done();
             const text = 'Dans ' + uName(u) + ', toutes les autres cases sont écartées : sa couronne va forcément sur la case dorée.';
@@ -324,7 +331,7 @@
 
         // 3. une région tient toute dans une seule ligne (ou colonne) : le reste de cette ligne est barré
         const mark = (list, text, why) => {
-          history.push(state.slice());
+          history.push(snap());
           list.forEach((j) => { state[j] = 1; cleared[j] = 0; });
           render(); api.onChange();
           return { text, where: list.map((j) => cells[j]), why: why.map((j) => cells[j]) };
@@ -367,7 +374,7 @@
         for (let r = 0; r < n; r++) {
           const i = r * n + puzzle.solution[r];
           if (state[i] === 2) continue;
-          history.push(state.slice());
+          history.push(snap());
           state[i] = 2;
           done();
           return { text: 'Coup de pouce : rien n\'est forcé pour l\'instant, alors je pose une couronne sur la case dorée. Regarde les cases qu\'elle écarte.', where: [cells[i]], why: [] };

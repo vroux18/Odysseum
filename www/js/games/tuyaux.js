@@ -313,11 +313,11 @@
 
     return {
       status() { return ''; },
-      undo() { if (history.length) { cur = history.pop(); draw(); api.onChange(); } },
+      undo() { if (history.length) { cur = history.pop(); draw(); if (!raf) raf = requestAnimationFrame(animate); api.onChange(); } }, // (l'eau se retire en douceur)
       reset() {
         history.push(cur.slice());
         cur = puzzle.solution.map((m, i) => { let x = m; for (let t = 0; t < puzzle.turns[i]; t++) x = rot(x); return x; });
-        draw(); api.onChange();
+        draw(); if (!raf) raf = requestAnimationFrame(animate); api.onChange();
       },
       hint() {
         if (won) return false;

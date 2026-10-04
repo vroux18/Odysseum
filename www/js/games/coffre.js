@@ -40,7 +40,7 @@
         variant: 'classic',
         len: level <= 7 ? 3 : 4,
         symbols: level <= 4 ? 4 : level <= 10 ? 5 : 6,
-        repeats: level >= 11,
+        repeats: false, // (les répétitions arrivent au niveau 14, voir plus bas)
         tries: level <= 4 ? 10 : 9
       };
     }

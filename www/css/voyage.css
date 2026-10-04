@@ -1,129 +1,148 @@
-/* Le voyage : liste des pierres atteintes, île par île (jetons de css/cartoon.css) */
-#home .go-label { pointer-events: auto; cursor: pointer; }
-#home .go-label::after { content: ''; display: inline-block; width: 7px; height: 7px; margin-left: 8px; vertical-align: 2px;
-  border-right: 2.5px solid currentColor; border-bottom: 2.5px solid currentColor; transform: rotate(45deg); opacity: .55; }
+/* =====================================================================
+   Odysseus — accueil, voyage, défi du jour, fin de niveau (jetons de css/cartoon.css).
+   Chargée après cartoon.css et mega.css. Chaque composant est défini UNE seule fois ;
+   les !important restants ne servent qu'à battre une règle !important plus ancienne
+   (#home .ghost-icon et .go dans cartoon.css).
+   ===================================================================== */
 
+/* ---------- Accueil : mesures partagées ----------
+   --W : largeur de la barre d'onglets (petite marge de 12 px de chaque côté), --edge : sa marge ;
+   --dock-h : hauteur de la barre ; --lc-h / --lc-b : hauteur et pied de la carte du niveau. */
+#home { --W: calc(100vw - 24px); --edge: calc((100vw - var(--W)) / 2); --dock-h: 64px;
+  --lc-h: 150px; --lc-b: calc(var(--dock-h) + 26px + env(safe-area-inset-bottom, 0px)); }
+/* boutons du haut alignés sur les bords de la barre */
+#home #open-brain { left: var(--edge) !important; }
+#home #open-settings { right: var(--edge) !important; }
+
+/* ---------- Accueil : barre d'onglets ----------
+   Pilule flottante translucide (verre dépoli) : Défi · Tenue · Vue · Jeux. */
+#home::after { content: ''; position: fixed; z-index: 4; left: var(--edge); right: var(--edge); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); height: var(--dock-h);
+  border-radius: 32px; background: color-mix(in srgb, var(--k-bubble, #fff) 72%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 10px 30px rgba(20, 16, 50, .25); border: 1px solid rgba(255, 255, 255, .18); pointer-events: none; }
+#home #open-daily, #home #open-wardrobe, #home #cam-mode, #home #open-library {
+  position: fixed; z-index: 5; top: auto; right: auto; bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+  width: calc(var(--W) / 4); max-width: none; height: 48px; padding: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  border: 0 !important; border-radius: 24px; background: transparent !important; box-shadow: none !important; transform: none !important; }
+#home #open-daily { left: var(--edge); }
+#home #open-wardrobe { left: calc(var(--edge) + var(--W) / 4); }
+#home #cam-mode { left: calc(var(--edge) + var(--W) / 2); }
+#home #open-library { left: calc(var(--edge) + 3 * var(--W) / 4); }
+#home #open-daily:active, #home #open-wardrobe:active, #home #cam-mode:active, #home #open-library:active { background: color-mix(in srgb, var(--k-ink, #3a3550) 10%, transparent) !important; }
+/* (#cam-mode svg.ic garde les 26 px de cartoon.css, plus spécifique) */
+#home #open-wardrobe svg, #home #cam-mode svg, #home #open-library svg { width: 23px !important; height: 23px !important; }
+/* nom de l'onglet sous l'icône */
+#home #open-daily::after, #home #open-wardrobe::after, #home #cam-mode::after, #home #open-library::after {
+  font: 700 10.5px/1 var(--k-font, 'Fredoka', sans-serif); color: var(--k-ink-soft, #8a83a3); letter-spacing: .02em; }
+#home #open-daily::after { content: 'Défi'; }
+#home #open-wardrobe::after { content: 'Tenue'; }
+#home #cam-mode::after { content: 'Vue'; }
+#home #open-library::after { content: 'Jeux'; }
+/* onglet « Vue » actif (caméra libre) : pastille douce dans la barre */
+#home #cam-mode.on { background: color-mix(in srgb, var(--k-sea, #1d9be0) 20%, transparent) !important; box-shadow: none !important; border: 0 !important; color: var(--k-sea, #1d9be0); }
+#home #cam-mode.on svg { color: var(--k-sea, #1d9be0); }
+/* onglet Défi : pastille pleine à la couleur du jeu du jour, icône blanche (lisible en clair comme en sombre) */
+#home #open-daily .daily-ic { width: 25px; height: 25px; border-radius: 50%; display: grid; place-items: center; background: currentColor; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .15); }
+#home #open-daily .daily-ic svg { width: 15px; height: 15px; stroke: #fff; color: #fff; }
+#home #open-daily .daily-ic svg .f { fill: #fff; }
+
+/* ---------- Accueil : carte du niveau (#lvcard, créée par app.js) et bouton Jouer (#go) ----------
+   Une carte blanche bombée au-dessus de la barre : « Niveau N », étoiles, mini-jeux ; le bouton
+   vert « Jouer » est posé en bas de la carte ; les flèches ‹ › dépassent de chaque côté. */
+#home .lvcard { --lc-w: min(270px, calc(100vw - 124px)); --peek: color-mix(in srgb, var(--k-bubble, #fff) 70%, transparent); }
+.lvcard { position: fixed; z-index: 5; left: 50%; bottom: var(--lc-b); width: var(--lc-w); height: var(--lc-h); margin-left: calc(var(--lc-w) / -2);
+  border: 0; border-radius: 28px; padding: 8px 14px 10px; cursor: pointer; touch-action: pan-y;
+  display: grid; grid-template-columns: 1fr; grid-template-rows: auto auto auto 52px; gap: 5px 8px;
+  justify-content: center; justify-items: center; align-content: start; align-items: center; text-align: center;
+  background: var(--k-bubble, #fff); color: var(--k-ink, #3a3550); font-family: var(--k-font, 'Fredoka', sans-serif);
+  box-shadow: 0 6px 0 var(--k-edge, #d9cfe8), var(--k-drop, 0 8px 18px rgba(80, 60, 140, .18));
+  transition: transform .2s ease-out, opacity .2s ease-out; }
+.lvcard.drag { transition: none; }
+.lvcard.pop { animation: lc-pop .45s var(--k-ease, ease) both; }
+@keyframes lc-pop { from { opacity: 0; transform: translateY(14px) scale(.96); } }
+.lvcard:active { transform: translateY(3px); box-shadow: 0 3px 0 var(--k-edge, #d9cfe8); }
+/* cartes voisines qui dépassent derrière, à gauche / à droite : on devine qu'on peut faire défiler */
+#home .lvcard.has-prev { box-shadow: -9px 0 0 -7px var(--peek), 0 6px 0 var(--k-edge, #d9cfe8), var(--k-drop, 0 8px 18px rgba(80, 60, 140, .18)); }
+#home .lvcard.has-next { box-shadow: 9px 0 0 -7px var(--peek), 0 6px 0 var(--k-edge, #d9cfe8), var(--k-drop, 0 8px 18px rgba(80, 60, 140, .18)); }
+#home .lvcard.has-prev.has-next { box-shadow: -9px 0 0 -7px var(--peek), 9px 0 0 -7px var(--peek), 0 6px 0 var(--k-edge, #d9cfe8), var(--k-drop, 0 8px 18px rgba(80, 60, 140, .18)); }
+/* 1re rangée : « Niveau N » (ou « Épreuve N ») */
+.lc-title { grid-area: 1 / 1; justify-self: center; display: inline-flex; align-items: center; gap: 0; font: 700 18px/1 var(--k-font, 'Fredoka', sans-serif); white-space: nowrap; }
+.lvcard.boss .lc-title { color: var(--k-sun-dk, #e08f00); }
+/* 2e rangée : étoiles gagnées (en pointillés tant que le niveau n'est pas fait) */
+.lc-stars { grid-area: 2 / 1; justify-self: center; align-self: center; margin: 0; }
+.lc-st { display: flex; gap: 3px; }
+.lc-st svg { width: 21px; height: 21px; fill: var(--k-well, #f1ecf8); stroke: var(--k-edge, #d9cfe8); stroke-width: 1.4; stroke-linejoin: round; }
+.lc-st svg.on { fill: #ffc93d; stroke: #e08f00; filter: drop-shadow(0 1.5px 0 #c97c00); }
+.lc-stars.todo .lc-st svg { fill: none; stroke: var(--k-ink-soft, #8a83a3); stroke-dasharray: 3 2.4; opacity: .7; }
+/* 3e rangée : les mini-jeux du niveau, en pastilles de couleur (le nom reste dans le DOM, en taille 0) */
+.lc-games { grid-area: 3 / 1; justify-self: center; align-self: center; margin: 0; display: flex; flex-wrap: nowrap; align-items: center; justify-content: center; gap: 6px; }
+.lc-chip { display: inline-flex; align-items: center; gap: 0; padding: 0; border-radius: 999px; background: none; color: var(--k-ink, #3a3550);
+  font: 700 0/1 var(--k-font, 'Fredoka', sans-serif); white-space: nowrap; }
+.lc-chip i { width: 33px; height: 33px; border-radius: 50%; display: grid; place-items: center; background: var(--c); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .15); }
+.lc-chip svg { width: 19px; height: 19px; fill: none; stroke: #fff; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
+.lc-chip svg .f { fill: #fff; }
+/* flèches ‹ › : une pastille ronde de chaque côté de la carte, à mi-hauteur (cachées : display none) */
+.lc-nav { position: absolute; top: 50%; margin: 0; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 50%;
+  display: inline-grid; place-items: center; font: 700 24px/1 var(--k-font, 'Fredoka', sans-serif); font-style: normal; color: var(--k-ink, #3a3550); cursor: pointer;
+  background: var(--k-bubble, #fff); box-shadow: 0 4px 0 var(--k-edge, #d9cfe8), var(--k-drop, 0 6px 14px rgba(80, 60, 140, .18)); }
+.lc-nav[data-d="-1"] { left: -50px; }
+.lc-nav[data-d="1"] { right: -50px; }
+/* première apparition : les flèches font un petit pas vers l'extérieur, deux fois */
+.lvcard.nudge .lc-nav[data-d="-1"] { animation: lc-nudge-l .6s ease-in-out 2; }
+.lvcard.nudge .lc-nav[data-d="1"] { animation: lc-nudge-r .6s ease-in-out 2; }
+@keyframes lc-nudge-l { 50% { transform: translate(-7px, -50%); } }
+@keyframes lc-nudge-r { 50% { transform: translate(7px, -50%); } }
+
+/* bouton Jouer : grande pilule verte « Jouer » (« Épreuve » pour le boss) au bas de la carte ;
+   pas d'élan : il ne glisse pas à l'apparition et ne saute pas de côté quand on appuie */
+#home #go { --W: min(270px, calc(100vw - 124px));
+  position: fixed; z-index: 6; top: auto; right: auto; left: calc(50% - var(--W) / 2 + 14px); bottom: calc(var(--lc-b) + 10px);
+  width: calc(var(--W) - 28px); height: 46px; margin: 0; border-radius: 23px; transform: none;
+  display: flex; align-items: center; justify-content: center; gap: 8px; transition: bottom .35s cubic-bezier(.34, 1.4, .64, 1); }
+#home #go.in { animation: none; }
+#home #go:active { transform: translateY(3px) !important; }
+#home #go svg { width: 20px; height: 20px; }
+#home #go::after { content: 'Jouer'; position: static; inset: auto; width: auto; height: auto; border: 0; background: none; opacity: 1; transform: none; animation: none;
+  font: 700 17px/1 var(--k-font, 'Fredoka', sans-serif); color: #fff; }
+#home #go.boss::after { content: 'Épreuve'; }
+/* pendant la marche (carte masquée) : petit bouton rond ⏩ seul, au centre, pour arriver tout de suite */
+#home #go.ff { left: calc(50% - 29px); width: 58px; height: 58px; border-radius: 50%; color: #3a3550;
+  background: #fff !important; box-shadow: 0 4px 0 #cfc6e0, 0 8px 18px rgba(20, 10, 60, .25) !important; }
+#home #go.ff::after { content: none; }
+#home #go.ff svg { width: 26px; height: 26px; margin: 0; }
+#home #go.ff svg .f { fill: #3a3550; stroke: none; }
+
+/* ---------- Le voyage : liste des pierres atteintes, île par île ---------- */
 .voyage-sheet { max-height: 78vh; overflow-y: auto; padding-top: 56px !important; }
 .vy-list { display: flex; flex-direction: column; gap: 18px; width: 100%; align-self: stretch; box-sizing: border-box; padding: 0 4px 8px; }
 .vy-isle { width: 100%; }
 .vy-isle h3 { margin: 0 0 10px; font: 700 18px/1.1 var(--k-font, 'Fredoka', sans-serif); color: var(--k-ink, #3a3550); }
 .vy-isle:not(.cur) h3 { color: var(--k-ink-soft, #8a83a3); }
-.vy-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px 6px; } /* 14 pierres par île : deux rangées de 7 */
-
-.vy-stone { position: relative; width: 100%; aspect-ratio: 1; max-width: 100%; border-radius: 50%; border: 0; padding: 0;
-  display: grid; place-items: center; font: 700 15px/1 var(--k-font, 'Fredoka', sans-serif);
+/* 14 pierres par île : deux rangées de 7 ; les étoiles sous la pierre */
+.vy-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 20px 7px; padding-bottom: 6px; }
+.vy-stone { position: relative; width: 100%; aspect-ratio: 1; max-width: 100%; border-radius: 50%; border: 0; padding: 0; overflow: visible;
+  display: grid; place-items: center; font: 700 17px/1 var(--k-font, 'Fredoka', sans-serif);
   background: #fff; color: var(--k-ink, #3a3550); box-shadow: 0 4px 0 var(--k-edge, #d9cfe8), var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14));
   transition: transform .15s ease, box-shadow .15s ease; cursor: pointer; }
 .vy-stone:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--k-edge, #d9cfe8); }
-.vy-stone b { position: relative; top: -2px; }
+.vy-stone b { position: relative; top: 0; }
 .vy-stone.done { background: linear-gradient(#ffe27a, #ffc93d); color: #7a4a00; box-shadow: 0 4px 0 #e08f00, var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14)); }
-.vy-stone.now { background: #fff; box-shadow: 0 4px 0 var(--k-edge, #d9cfe8), 0 0 0 3px var(--game); }
-.vy-stone.lock { opacity: .35; cursor: default; box-shadow: none; background: var(--k-well, #f1ecf8); }
-.vy-stone.here { outline: 3px solid var(--k-ink, #3a3550); outline-offset: 3px; }
-.vy-stone.boss { transform: scale(1.08); }
-.vy-flag { position: absolute; top: -9px; right: -4px; width: 18px; height: 18px; fill: var(--game); stroke: var(--k-ink, #3a3550); stroke-width: 1.6; stroke-linejoin: round; }
-.vy-stars { position: absolute; bottom: 4px; left: 0; right: 0; display: flex; justify-content: center; gap: 1px; }
-.vy-stars s { width: 7px; height: 7px; background: rgba(122, 74, 0, .25);
-  clip-path: polygon(50% 0, 63% 35%, 100% 38%, 71% 61%, 80% 100%, 50% 78%, 20% 100%, 29% 61%, 0 38%, 37% 35%); }
-.vy-stars s.on { background: #fff; }
-
-/* liste du voyage, plus lisible : étoiles sous la pièce (et plus dessus), pierre en cours bien visible */
-.vy-row { row-gap: 20px !important; column-gap: 7px !important; padding-bottom: 6px; }
-.vy-stone { font-size: 17px !important; overflow: visible; }
-.vy-stone b { top: 0 !important; }
-.vy-stars { bottom: -14px !important; gap: 1px; }
-.vy-stars s { width: 10px !important; height: 10px !important; background: var(--k-ink-soft, #8a83a3) !important; opacity: .45; }
-.vy-stars s.on { background: #ffc93d !important; opacity: 1; filter: drop-shadow(0 1px 0 #c97c00); }
-.vy-stone.now { background: linear-gradient(#8be36a, #5cc93a) !important; color: #fff !important; box-shadow: 0 4px 0 #3a9a26, 0 0 0 3px #fff !important; }
+/* pierre en cours : verte, bien visible */
+.vy-stone.now { background: linear-gradient(#8be36a, #5cc93a); color: #fff; box-shadow: 0 4px 0 #3a9a26, 0 0 0 3px #fff; }
 .vy-stone.now .vy-stars { display: none; }
+.vy-stone.lock { opacity: .55; color: var(--k-ink-soft, #8a83a3); cursor: default; box-shadow: none; background: var(--k-well, #f1ecf8); }
 .vy-stone.here { outline: 2.5px solid var(--k-ink, #3a3550); outline-offset: 4px; }
 .vy-stone.now.here { outline: 0; }
-.vy-stone.lock { opacity: .55 !important; color: var(--k-ink-soft, #8a83a3) !important; }
-.vy-stone.boss { transform: none !important; }
-.vy-flag { top: -6px !important; right: -6px !important; }
+.vy-flag { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; fill: var(--game); stroke: var(--k-ink, #3a3550); stroke-width: 1.6; stroke-linejoin: round; }
+.vy-stars { position: absolute; bottom: -14px; left: 0; right: 0; display: flex; justify-content: center; gap: 1px; }
+.vy-stars s { width: 10px; height: 10px; background: var(--k-ink-soft, #8a83a3); opacity: .45;
+  clip-path: polygon(50% 0, 63% 35%, 100% 38%, 71% 61%, 80% 100%, 50% 78%, 20% 100%, 29% 61%, 0 38%, 37% 35%); }
+.vy-stars s.on { background: #ffc93d; opacity: 1; filter: drop-shadow(0 1px 0 #c97c00); }
 
-/* fin de niveau : chrono et piste des seuils d'étoiles */
-.ld-clock { width: min(300px, 100%); margin: 2px auto 14px; display: flex; flex-direction: column; align-items: center; gap: 10px;
-  animation: ck-in .5s var(--k-ease, ease) 1s both; }
-.ld-clock[hidden] { display: none; }
-@keyframes ck-in { from { opacity: 0; transform: translateY(6px); } }
-.ck-time { display: flex; align-items: center; gap: 6px; font: 700 26px/1 var(--k-font, 'Fredoka', sans-serif); color: var(--k-ink, #3a3550); font-variant-numeric: tabular-nums; }
-.ck-time svg { width: 22px; height: 22px; fill: none; stroke: var(--k-ink, #3a3550); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-.ck-track { position: relative; width: 100%; height: 12px; border-radius: 6px; background: var(--k-well, #f1ecf8); box-shadow: inset 0 2px 0 rgba(80, 60, 140, .12); margin-bottom: 30px; }
-.ck-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 6px; background: linear-gradient(90deg, #ffd84d, #ffb31f);
-  box-shadow: inset 0 3px 0 rgba(255, 255, 255, .45); animation: ck-fill 1s cubic-bezier(.2, .8, .2, 1) 1.1s forwards; }
-@keyframes ck-fill { to { width: var(--w); } }
-.ck-tick { position: absolute; top: -4px; width: 0; height: 20px; border-left: 2.5px solid var(--k-ink, #3a3550); opacity: .55; }
-.ck-tick .ck-stars { position: absolute; top: 22px; left: 50%; transform: translateX(-50%); display: flex; gap: 0; white-space: nowrap; }
-.ck-tick .ck-stars svg { width: 10px; height: 10px; fill: #ffc93d; }
-.ck-tick .ck-stars svg:not(.on) { display: none; }
-.ck-tick em { position: absolute; top: 34px; left: 50%; transform: translateX(-50%); font: 600 10px/1 var(--k-font, 'Fredoka', sans-serif); font-style: normal; color: var(--k-ink-soft, #8a83a3); }
-
-/* réglages : bouton Crédits ; feuille des crédits avec le mot du développeur */
-.credits-btn { display: inline-flex; align-items: center; gap: 8px; align-self: center; margin: 6px auto 0; padding: 10px 20px; border: 0; border-radius: 999px;
-  background: var(--surface, #fff); color: var(--ink, #3a3550); font: 700 15px/1 var(--k-font, 'Fredoka', sans-serif); cursor: pointer;
-  box-shadow: 0 4px 0 var(--k-edge, #d9cfe8), var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14)); }
-.credits-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--k-edge, #d9cfe8); }
-.credits-btn svg { width: 18px; height: 18px; color: var(--k-sun-dk, #e08f00); }
-.credits-sheet { padding-top: 30px !important; gap: 14px; }
-.cr-title { margin: 0; text-align: center; font: 700 24px/1 var(--k-font, 'Fredoka', sans-serif); color: var(--k-ink, #3a3550); }
-.cr-note { background: var(--surface, #fff); border-radius: 20px; padding: 16px 18px; box-shadow: 0 4px 0 var(--k-edge, #d9cfe8); font: 500 15px/1.45 var(--k-font, 'Fredoka', sans-serif); color: var(--ink, #3a3550); }
-.cr-note p { margin: 0 0 8px; }
-.cr-note .cr-sign { margin: 4px 0 0; text-align: right; font-weight: 700; }
-.cr-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font: 500 13px/1.4 var(--k-font, 'Fredoka', sans-serif); color: var(--k-ink-soft, #8a83a3); }
-.cr-list b { color: var(--k-ink, #3a3550); margin-right: 4px; }
-
-.credits-ov { z-index: 60 !important; }
-.cr-title, .cr-list b { color: var(--ink, #3a3550) !important; }
-.cr-list { color: var(--muted, #8a83a3) !important; }
-
-/* étiquette sous Play : les mini-jeux du niveau en grosses pastilles, puis le numéro */
-#home .go-label { display: inline-flex !important; align-items: center; gap: 10px; padding: 6px 14px 6px 6px !important; height: auto !important; }
-.gl-games { display: inline-flex; gap: 5px; }
-.gl-games i { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--c);
-  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .14), inset 0 2px 0 rgba(255, 255, 255, .35); }
-.gl-games svg { width: 20px; height: 20px; fill: none; stroke: #fff; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
-.gl-games svg .f { fill: #fff; }
-.gl-num { white-space: nowrap; }
-
-/* nom d'île sur une seule ligne (« Ithaque en vue », « Le Lit d'olivier ») : la police se resserre au besoin */
-#island-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: clamp(13px, 4.2vw, 17px) !important; line-height: 1.1 !important; min-width: 0; }
-
-/* ---------- Bandeau flottant du niveau (accueil) ----------
-   Une carte blanche bombée au-dessus de la navigation d'île : numéro, étoiles, mini-jeux.
-   Le gros bouton Play est posé à cheval sur son bord haut ; les flèches encadrent la carte. */
-#home { --lc-w: min(320px, calc(100vw - 40px)); --lc-h: 118px; --lc-b: calc(90px + env(safe-area-inset-bottom, 0px)); }
-#home .go-label { display: none !important; }
-.lvcard { position: fixed; z-index: 5; left: 50%; bottom: var(--lc-b); width: var(--lc-w); height: var(--lc-h); margin-left: calc(var(--lc-w) / -2);
-  border: 0; border-radius: 28px; padding: 46px 64px 12px; cursor: pointer;
-  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 4px;
-  background: var(--k-bubble, #fff); color: var(--k-ink, #3a3550);
-  box-shadow: 0 6px 0 var(--k-edge, #d9cfe8), var(--k-drop, 0 8px 18px rgba(80, 60, 140, .18)); font-family: var(--k-font, 'Fredoka', sans-serif); }
-.lvcard[hidden] { display: none; }
-.lvcard.pop { animation: lc-pop .45s var(--k-ease, ease) both; }
-@keyframes lc-pop { from { opacity: 0; transform: translateY(14px) scale(.96); } }
-.lvcard:active { transform: translateY(3px); box-shadow: 0 3px 0 var(--k-edge, #d9cfe8); }
-.lc-title { font: 700 19px/1 var(--k-font, 'Fredoka', sans-serif); white-space: nowrap; }
-.lvcard.boss .lc-title { color: var(--k-sun-dk, #e08f00); }
-.lc-st { display: flex; gap: 3px; }
-.lc-st svg { width: 22px; height: 22px; fill: var(--k-well, #f1ecf8); stroke: var(--k-edge, #d9cfe8); stroke-width: 1.4; stroke-linejoin: round; }
-.lc-st svg.on { fill: #ffc93d; stroke: #e08f00; filter: drop-shadow(0 1.5px 0 #c97c00); }
-.lc-stars.todo .lc-st svg { fill: none; stroke: var(--k-ink-soft, #8a83a3); stroke-dasharray: 3 2.4; opacity: .7; }
-.lc-games { display: flex; gap: 6px; margin-top: 2px; }
-.lc-games i { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--c); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .15); }
-.lc-games svg { width: 15px; height: 15px; fill: none; stroke: #fff; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
-.lc-games svg .f { fill: #fff; }
-/* Play à cheval sur le haut de la carte */
-#home #go { position: fixed !important; z-index: 6 !important; top: auto !important; left: calc(50% - 41px) !important; right: auto !important;
-  bottom: calc(var(--lc-b) + var(--lc-h) - 40px) !important; width: 82px !important; height: 82px !important; margin: 0 !important; }
-/* flèches : dans la carte, de part et d'autre */
-#home #prev-level, #home #next-level { position: fixed !important; z-index: 6 !important; top: auto !important; width: 44px !important; height: 44px !important;
-  bottom: calc(var(--lc-b) + (var(--lc-h) - 44px) / 2 - 6px) !important; margin: 0 !important; }
-#home #prev-level { left: calc(50% - var(--lc-w) / 2 + 12px) !important; right: auto !important; }
-#home #next-level { left: auto !important; right: calc(50% - var(--lc-w) / 2 + 12px) !important; }
-
-/* rangée « Défi du jour » en tête des mini-jeux */
-.daily-row { gap: 12px !important; padding: 10px 12px !important; min-height: 64px !important; }
+/* ---------- Défi du jour ---------- */
+/* rangée en tête de la liste des mini-jeux (base dans cartoon.css) */
+.daily-row { gap: 12px; padding: 10px 12px; min-height: 64px; }
 .daily-row .dr-ic { width: 44px; height: 44px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--c);
   box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .15), inset 0 2px 0 rgba(255, 255, 255, .3); color: #fff; }
 .daily-row .dr-ic svg { width: 24px; height: 24px; fill: none; stroke: #fff; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
@@ -135,354 +154,9 @@
 .daily-row .dr-stars svg { width: 14px; height: 14px; }
 .daily-row .dr-flame { display: inline-flex; align-items: center; gap: 2px; font: 700 13px/1 var(--k-font, 'Fredoka', sans-serif); color: #e2731f; font-style: normal; }
 .daily-row .dr-flame svg { width: 16px; height: 16px; }
-.daily-row .daily-go { margin-left: 0 !important; flex: none; background: var(--c) !important; color: #fff !important; }
+.daily-row .daily-go { margin-left: 0; flex: none; background: var(--c); color: #fff; }
 .daily-row .daily-go svg { width: 18px; height: 18px; stroke: #fff; }
-/* bouton du défi sur l'accueil : pastille pleine à la couleur du jeu, icône blanche (lisible en clair comme en sombre) */
-#open-daily .daily-ic { background: currentColor !important; border-radius: 50%; display: grid !important; place-items: center; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .15); }
-#open-daily .daily-ic svg { stroke: #fff !important; color: #fff !important; }
-#open-daily .daily-ic svg .f { fill: #fff !important; }
-
-/* ---------- Bandeau du niveau, v2 : carte compacte horizontale ----------
-   [‹]  [ ▶  Niveau 45 · ★★★ · jeux ]  [›]   — Play rond à gauche dans la carte, infos à droite */
-#home { --lc-w: min(270px, calc(100vw - 132px)); --lc-h: 84px; --lc-b: calc(92px + env(safe-area-inset-bottom, 0px)); }
-.lvcard { padding: 10px 14px 10px 92px !important; border-radius: 42px !important; align-items: flex-start !important; justify-content: center !important; gap: 5px !important; }
-.lc-title { font-size: 18px !important; }
-.lc-st svg { width: 17px !important; height: 17px !important; }
-.lc-games i { width: 22px !important; height: 22px !important; }
-.lc-games svg { width: 13px !important; height: 13px !important; }
-.lc-row { display: flex; align-items: center; gap: 8px; }
-/* Play dans la carte, à gauche (le transform existant de #go le recentre sur left) */
-#home #go { width: 66px !important; height: 66px !important; left: calc(50% - var(--lc-w) / 2 + 9px + 33px) !important;
-  bottom: calc(var(--lc-b) + (var(--lc-h) - 66px) / 2 + 3px) !important; }
-#home #go svg.ic { width: 30px !important; height: 30px !important; }
-/* flèches de part et d'autre de la carte */
-#home #prev-level, #home #next-level { width: 46px !important; height: 46px !important; bottom: calc(var(--lc-b) + (var(--lc-h) - 46px) / 2 + 3px) !important; }
-#home #prev-level { left: calc(50% - var(--lc-w) / 2 - 56px) !important; }
-#home #next-level { right: calc(50% - var(--lc-w) / 2 - 56px) !important; }
-
-/* bouton « explication » (bulle) à côté de l'indice : même compteur de 3 astuces */
-#btn-explain { color: #2f7fc4 !important; }
-:root[data-theme="dark"] #btn-explain { color: #8cc4ff !important; }
-#btn-explain.empty { opacity: .45 !important; }
-#btn-explain svg.ic { width: 26px; height: 26px; }
-
-/* transitions plus discrètes : lueur de victoire, éclair de départ, arrivée de la grille */
-#play::after { background: radial-gradient(ellipse 70% 50% at 50% 48%, rgba(255, 236, 170, .28), transparent 70%) !important; }
-#play.glow::after { animation: success-glow 1.2s ease-out !important; }
-.flash { animation: flash-soft .8s ease-out forwards !important; }
-@keyframes flash-soft { 0% { opacity: 0; } 35% { opacity: .45; } 100% { opacity: 0; } }
-.board > * { animation: board-in-soft .45s ease-out both !important; }
-@keyframes board-in-soft { from { opacity: 0; transform: translateY(6px); } }
-.cell-grid:not(.ready) > .cell, .nono:not(.ready) > .nono-cell, .lumieres:not(.ready) > .bulb {
-  animation: tile-in-soft .35s ease-out both !important; animation-delay: calc(var(--i, 0) * 6ms) !important; }
-@keyframes tile-in-soft { from { opacity: 0; transform: scale(.92); } }
-
-/* ---------- Accueil v3 : bas de l'écran dégagé ----------
-   En bas : la seule carte du niveau (Play + numéro + étoiles + jeux) ; la toucher ouvre le voyage pour revenir en arrière.
-   En haut : navigation d'île (pilule centrée sous la barre), jeux et caméra rangés sous les boutons de droite. */
-#home { --lc-w: min(340px, calc(100vw - 32px)); --lc-h: 88px; --lc-b: calc(18px + env(safe-area-inset-bottom, 0px)); }
-#home #prev-level, #home #next-level { display: none !important; }
-.lvcard { padding-left: 100px !important; padding-right: 54px !important; }
-/* petit chevron « voyage » à droite de la carte */
-.lvcard::after { content: ''; position: absolute; right: 22px; top: 50%; width: 10px; height: 10px; margin-top: -7px;
-  border-right: 3px solid var(--k-ink-soft, #8a83a3); border-bottom: 3px solid var(--k-ink-soft, #8a83a3); transform: rotate(-45deg); border-radius: 2px; opacity: .8; }
-#home #go { width: 70px !important; height: 70px !important; left: calc(50% - var(--lc-w) / 2 + 12px + 35px) !important; bottom: calc(var(--lc-b) + (var(--lc-h) - 70px) / 2 + 3px) !important; }
-/* navigation d'île : en haut, centrée */
-#home #island-nav { top: calc(84px + env(safe-area-inset-top, 0px)) !important; bottom: auto !important; left: 50% !important; right: auto !important;
-  transform: translateX(-50%) !important; width: auto !important; min-width: 170px; max-width: calc(100vw - 150px); height: 44px !important; }
-/* tous les jeux et caméra : sous les boutons de droite */
-#home #open-library { top: calc(80px + env(safe-area-inset-top, 0px)) !important; bottom: auto !important; right: 14px !important; width: 52px !important; height: 52px !important; }
-#home #cam-mode { top: calc(144px + env(safe-area-inset-top, 0px)) !important; bottom: auto !important; left: auto !important; right: 14px !important; width: 52px !important; height: 52px !important; }
-
-/* ---------- Accueil v4 : barre d'onglets en bas, comme une appli ----------
-   Haut : carte du joueur à gauche, réglages à droite. Bas : la carte du niveau (île + numéro + étoiles + jeux),
-   posée sur une barre de 4 onglets : Jeux · Défi · Tenue · Vue. Le nom d'île passe dans la carte du niveau. */
-#home { --dock-h: 66px; --lc-b: calc(var(--dock-h) + 14px + env(safe-area-inset-bottom, 0px)); --lc-h: 96px; }
-#home #island-nav { display: none !important; }
-#home::after { content: ''; position: fixed; z-index: 4; left: 0; right: 0; bottom: 0; height: calc(var(--dock-h) + env(safe-area-inset-bottom, 0px));
-  background: var(--k-bubble, #fff); border-radius: 26px 26px 0 0; box-shadow: 0 -6px 20px rgba(20, 16, 50, .18); pointer-events: none; }
-#home #open-library, #home #open-daily, #home #open-wardrobe, #home #cam-mode {
-  position: fixed !important; z-index: 5 !important; top: auto !important; right: auto !important; transform: none !important;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 18px) !important; width: 25vw !important; height: 46px !important; max-width: 120px;
-  border: 0 !important; border-radius: 16px !important; background: transparent !important; box-shadow: none !important;
-  display: flex !important; flex-direction: column; align-items: center; justify-content: flex-start; gap: 2px; padding: 0 !important; }
-#home #open-library { left: calc(12.5vw - min(12.5vw, 60px)) !important; }
-#home #open-daily { left: calc(37.5vw - min(12.5vw, 60px)) !important; }
-#home #open-wardrobe { left: calc(62.5vw - min(12.5vw, 60px)) !important; }
-#home #cam-mode { left: calc(87.5vw - min(12.5vw, 60px)) !important; }
-#home #open-library svg, #home #open-wardrobe svg, #home #cam-mode svg { width: 26px !important; height: 26px !important; }
-#home #open-daily .daily-ic { width: 28px !important; height: 28px !important; }
-#home #open-daily .daily-ic svg { width: 17px !important; height: 17px !important; }
-#home #open-daily .daily-flame, #home #open-daily .daily-check, #home #open-daily .daily-stars { display: none !important; }
-#home #open-library::after, #home #open-daily::after, #home #open-wardrobe::after, #home #cam-mode::after {
-  font: 700 11px/1 var(--k-font, 'Fredoka', sans-serif); color: var(--k-ink-soft, #8a83a3); letter-spacing: .02em; }
-#home #open-library::after { content: 'Jeux'; }
-#home #open-daily::after { content: 'Défi'; }
-#home #open-wardrobe::after { content: 'Tenue'; }
-#home #cam-mode::after { content: 'Vue'; }
-#home #cam-mode.on { color: var(--k-sea, #1d9be0) !important; }
-/* carte du niveau : nom de l'île en petit au-dessus du numéro */
-.lc-isle { font: 700 11px/1 var(--k-font, 'Fredoka', sans-serif); letter-spacing: .06em; text-transform: uppercase; color: var(--k-ink-soft, #8a83a3); margin-bottom: 1px; }
-
-/* fin de niveau : Rejouer (si moins de 3 étoiles) à côté de Suivant ; petite case « ne plus afficher » */
-.ld-actions { display: flex; align-items: center; justify-content: center; gap: 18px; }
-.ld-replay { width: 58px; height: 58px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer;
-  background: var(--k-bubble, #fff); color: var(--k-ink, #3a3550); box-shadow: 0 5px 0 var(--k-edge, #d9cfe8), var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14)); }
-.ld-replay[hidden] { display: none; }
-.ld-replay:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--k-edge, #d9cfe8); }
-.ld-replay svg { width: 26px; height: 26px; }
-.ld-skip { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; align-self: center; font: 600 12px/1 var(--k-font, 'Fredoka', sans-serif); color: var(--k-ink-soft, #8a83a3); cursor: pointer; }
-.ld-skip[hidden] { display: none; }
-.ld-skip input { width: 16px; height: 16px; accent-color: var(--k-grass, #5cc93b); }
-
-/* barre d'onglets façon nouveaux iPhone : pilule flottante translucide (verre dépoli), détachée des bords */
-#home { --dock-h: 64px; --lc-b: calc(var(--dock-h) + 26px + env(safe-area-inset-bottom, 0px)); }
-#home::after { left: 16px !important; right: 16px !important; bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important; height: var(--dock-h) !important;
-  border-radius: 32px !important; background: color-mix(in srgb, var(--k-bubble, #fff) 72%, transparent) !important;
-  -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 10px 30px rgba(20, 16, 50, .25) !important; border: 1px solid rgba(255, 255, 255, .18); }
-#home #open-library, #home #open-daily, #home #open-wardrobe, #home #cam-mode {
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 20px) !important; width: calc((100vw - 48px) / 4) !important; max-width: none; height: 48px !important; border-radius: 24px !important; justify-content: center; }
-#home #open-library { left: 24px !important; }
-#home #open-daily { left: calc(24px + (100vw - 48px) / 4) !important; }
-#home #open-wardrobe { left: calc(24px + (100vw - 48px) / 2) !important; }
-#home #cam-mode { left: calc(24px + 3 * (100vw - 48px) / 4) !important; }
-#home #open-library svg, #home #open-wardrobe svg, #home #cam-mode svg { width: 23px !important; height: 23px !important; }
-#home #open-daily .daily-ic { width: 25px !important; height: 25px !important; }
-#home #open-daily .daily-ic svg { width: 15px !important; height: 15px !important; }
-#home #open-library::after, #home #open-daily::after, #home #open-wardrobe::after, #home #cam-mode::after { font-size: 10.5px; }
-/* onglet actif (vue libre) : petite pilule de surbrillance */
-#home #cam-mode.on { background: color-mix(in srgb, var(--k-sea, #1d9be0) 18%, transparent) !important; }
-#home #open-library:active, #home #open-daily:active, #home #open-wardrobe:active, #home #cam-mode:active { background: color-mix(in srgb, var(--k-ink, #3a3550) 10%, transparent) !important; }
-
-#home .lvcard, #home #go { transition: bottom .35s cubic-bezier(.34, 1.4, .64, 1); }
-
-/* ordre des onglets : Défi · Tenue · Vue · Jeux (Jeux tout à droite) */
-#home #open-daily { left: 24px !important; }
-#home #open-wardrobe { left: calc(24px + (100vw - 48px) / 4) !important; }
-#home #cam-mode { left: calc(24px + (100vw - 48px) / 2) !important; }
-#home #open-library { left: calc(24px + 3 * (100vw - 48px) / 4) !important; }
-
-/* Pavés : un rectangle validé se remplit en douceur (fondu + léger gonflement), sans rebond ni éclair */
-/* posé : simple fondu, sans mouvement ; l'aperçu et les changements de couleur ne s'animent pas */
-.paves .rect:not(.preview):not(.invalid) { animation: rect-soft .2s ease-out !important; }
-@keyframes rect-soft { from { opacity: .35; } }
-.paves .rect { transition: none !important; transform: none !important; }
-.paves .rect.preview { animation: none !important; }
-
-
-/* carte du niveau v3 : à gauche île + niveau + étoiles, au centre les mini-jeux, à droite le bouton Play */
-.lvcard { display: grid !important; grid-template-columns: auto 1fr; grid-template-rows: auto auto auto; column-gap: 10px; row-gap: 3px;
-  align-items: center !important; padding: 12px 104px 12px 22px !important; }
-.lvcard::after { display: none !important; }
-.lvcard .lc-isle { grid-column: 1; grid-row: 1; }
-.lvcard .lc-title { grid-column: 1; grid-row: 2; }
-.lvcard .lc-stars { grid-column: 1; grid-row: 3; }
-.lvcard .lc-games { grid-column: 2; grid-row: 1 / 4; justify-self: center; align-self: center; margin: 0 !important; gap: 6px !important; }
-.lvcard .lc-games i { width: 30px !important; height: 30px !important; }
-.lvcard .lc-games svg { width: 17px !important; height: 17px !important; }
-#home #go { left: auto !important; right: calc(50% - var(--lc-w) / 2 + 12px) !important; transform: none !important; }
-
-/* carte du niveau un peu moins large */
-#home { --lc-w: min(310px, calc(100vw - 64px)); }
-.lvcard { padding-right: 96px !important; padding-left: 18px !important; }
-.lvcard .lc-games i { width: 26px !important; height: 26px !important; }
-.lvcard .lc-games svg { width: 15px !important; height: 15px !important; }
-
-/* alignement général : carte du niveau, barre d'onglets et boutons du haut partagent les mêmes bords */
-#home { --W: min(340px, calc(100vw - 40px)); --edge: calc((100vw - var(--W)) / 2); --lc-w: var(--W); }
-#home::after { left: var(--edge) !important; right: var(--edge) !important; }
-#home #open-daily { left: var(--edge) !important; }
-#home #open-wardrobe { left: calc(var(--edge) + var(--W) / 4) !important; }
-#home #cam-mode { left: calc(var(--edge) + var(--W) / 2) !important; }
-#home #open-library { left: calc(var(--edge) + 3 * var(--W) / 4) !important; }
-#home #open-library, #home #open-daily, #home #open-wardrobe, #home #cam-mode { width: calc(var(--W) / 4) !important; }
-#home #open-brain { left: var(--edge) !important; }
-#home #open-settings { right: var(--edge) !important; }
-#home #open-daily-top { left: var(--edge) !important; }
-.lvcard { padding-left: 20px !important; padding-right: 100px !important; }
-
-/* « Défis des îles » : distincts de la catégorie Méga (étiquette lagon « île N », nom de l'île) */
-.lib-cat-event { background: #1fa3a0 !important; box-shadow: 0 3px 0 #137572 !important; color: #fff !important; }
-.event-tile .event-badge { position: absolute; top: -6px; left: 50%; transform: translateX(-50%); padding: 2px 8px; border-radius: 999px;
-  background: #1fa3a0; color: #fff; font: 700 10px/1.2 var(--k-font, 'Fredoka', sans-serif); letter-spacing: .04em; text-transform: uppercase; white-space: nowrap;
-  box-shadow: 0 2px 0 #137572; font-style: normal; }
-.event-tile.locked .event-badge { background: #9aa3ad; box-shadow: none; }
-.event-tile .tile-name { font-size: 14px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.event-tile .tile-lvl { font-size: 11px !important; white-space: nowrap; }
-
-/* carte du niveau v4 : île, niveau, étoiles puis mini-jeux en colonne à gauche ; Play à droite ; tout plus étroit */
-#home { --W: min(300px, calc(100vw - 72px)); --lc-h: 104px; }
-.lvcard { grid-template-columns: 1fr !important; grid-template-rows: auto auto auto auto; row-gap: 3px !important; padding: 10px 96px 10px 20px !important; align-content: center; }
-.lvcard .lc-games { grid-column: 1 !important; grid-row: 4 !important; justify-self: start !important; margin-top: 3px !important; }
-.lvcard .lc-games i { width: 24px !important; height: 24px !important; }
-.lvcard .lc-games svg { width: 14px !important; height: 14px !important; }
-.lvcard { justify-items: start !important; text-align: left !important; }
-
-/* flèches ‹ › autour du numéro de niveau, dans la carte */
-.lc-title { display: inline-flex; align-items: center; gap: 4px; }
-.lc-nav { display: inline-grid; place-items: center; width: 28px; height: 28px; margin: -4px 0; border-radius: 50%; font-style: normal;
-  font: 700 22px/1 var(--k-font, 'Fredoka', sans-serif); color: var(--k-ink, #3a3550); background: var(--k-well, #f1ecf8); cursor: pointer; }
-.lc-nav[hidden] { visibility: hidden; display: inline-grid; }
-.lc-nav:active { transform: scale(.9); }
-
-/* ---------- Carte du niveau v5 : plus large, en trois rangées ----------
-   1) île + « ‹ Niveau 49 › » centrés  2) étoiles à gauche, mini-jeux à droite  3) grand bouton « Jouer » en pilule */
-#home { --W: min(360px, calc(100vw - 32px)); --lc-h: 164px; }
-.lvcard { display: grid !important; grid-template-columns: 1fr auto !important; grid-template-rows: auto auto auto 56px !important;
-  justify-items: stretch !important; align-items: center !important; text-align: center !important;
-  padding: 12px 16px 14px !important; row-gap: 4px !important; column-gap: 8px !important; }
-.lvcard .lc-isle { grid-column: 1 / 3 !important; grid-row: 1 !important; justify-self: center; }
-.lvcard .lc-title { grid-column: 1 / 3 !important; grid-row: 2 !important; justify-self: center; font-size: 21px !important; gap: 10px !important; }
-.lvcard .lc-stars { grid-column: 1 !important; grid-row: 3 !important; justify-self: start; }
-.lvcard .lc-games { grid-column: 2 !important; grid-row: 3 !important; justify-self: end !important; margin: 0 !important; }
-.lvcard .lc-play-slot { grid-column: 1 / 3; grid-row: 4; }
-.lvcard .lc-nav { width: 30px; height: 30px; }
-/* le bouton Play devient une grande pilule « Jouer » au bas de la carte */
-#home #go { width: calc(var(--W) - 32px) !important; height: 52px !important; border-radius: 26px !important;
-  left: calc(50% - var(--W) / 2 + 16px) !important; right: auto !important; transform: none !important;
-  bottom: calc(var(--lc-b) + 14px) !important; display: flex !important; align-items: center; justify-content: center; gap: 8px; }
-#home #go::after { content: 'Jouer'; position: static !important; inset: auto !important; border: 0 !important; animation: none !important;
-  font: 700 19px/1 var(--k-font, 'Fredoka', sans-serif); color: #fff; opacity: 1 !important; transform: none !important; width: auto; height: auto; background: none !important; }
-#home #go.boss::after { content: 'Épreuve'; }
-#home #go svg.ic, #home #go svg { width: 22px !important; height: 22px !important; }
-
-/* carte du niveau v6 (épurée) : île + petites étoiles sur la 1re ligne, « ‹ Niveau › », puis les mini-jeux nommés, puis Jouer */
-.lvcard { grid-template-columns: 1fr !important; grid-template-rows: auto auto auto 56px !important; }
-.lvcard .lc-isle { grid-column: 1 !important; grid-row: 1 !important; justify-self: center; display: inline-flex; align-items: center; gap: 6px; }
-.lvcard .lc-stars { grid-column: 1 !important; grid-row: 1 !important; justify-self: end; }
-.lvcard .lc-st svg { width: 13px !important; height: 13px !important; }
-.lvcard .lc-title { grid-row: 2 !important; grid-column: 1 !important; }
-.lvcard .lc-games { grid-column: 1 !important; grid-row: 3 !important; justify-self: center !important; flex-wrap: wrap; justify-content: center; gap: 6px !important; }
-.lvcard .lc-play-slot { grid-column: 1 !important; }
-.lc-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px 3px 3px; border-radius: 999px;
-  background: color-mix(in srgb, var(--c) 16%, transparent); color: var(--k-ink, #3a3550); font: 700 12.5px/1 var(--k-font, 'Fredoka', sans-serif); white-space: nowrap; }
-.lc-chip i { width: 22px !important; height: 22px !important; border-radius: 50%; display: grid; place-items: center; background: var(--c); }
-.lc-chip svg { width: 13px !important; height: 13px !important; fill: none; stroke: #fff; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
-.lc-chip svg .f { fill: #fff; }
-
-/* mini-jeux de la carte : icônes seules (pas de nom), sur une ligne */
-.lc-chip { font-size: 0 !important; padding: 0 !important; background: none !important; gap: 0 !important; }
-.lc-chip i { width: 30px !important; height: 30px !important; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .15); }
-.lc-chip svg { width: 17px !important; height: 17px !important; }
-.lvcard .lc-games { flex-wrap: nowrap !important; gap: 7px !important; }
-.lvcard .lc-stars { align-self: center; }
-
-/* onglet « Vue » actif : simple pastille douce dans la barre (plus de grosse bulle qui déborde) */
-#home #cam-mode.on { background: color-mix(in srgb, var(--k-sea, #1d9be0) 20%, transparent) !important; box-shadow: none !important; border: 0 !important;
-  color: var(--k-sea, #1d9be0) !important; transform: none !important; height: 48px !important; }
-#home #cam-mode.on svg { color: var(--k-sea, #1d9be0) !important; }
-
-/* Pavés : pendant le tracé, l'aperçu est déjà un rectangle de couleur (un peu transparent, liseré blanc) */
-.paves .rect.preview { opacity: .78; box-shadow: inset 0 0 0 2.5px rgba(255, 255, 255, .85), 0 4px 10px rgba(0, 0, 0, .18) !important; border-radius: 12px; }
-
-/* « ne plus afficher » retiré de l'écran de fin (le réglage « Bilan de fin de niveau » reste dans les réglages) */
-.ld-skip { display: none !important; }
-
-/* écran de jeu : un peu d'air au-dessus de l'en-tête */
-#play .topbar { margin-top: 18px !important; }
-
-/* carte du niveau plus compacte */
-#home { --lc-h: 132px; }
-.lvcard { grid-template-rows: auto auto auto 46px !important; padding: 9px 14px 10px !important; row-gap: 2px !important; border-radius: 26px !important; }
-.lvcard .lc-isle { font-size: 10px !important; }
-.lvcard .lc-title { font-size: 18px !important; }
-.lvcard .lc-nav { width: 26px !important; height: 26px !important; font-size: 19px !important; }
-.lc-chip i { width: 24px !important; height: 24px !important; }
-.lc-chip svg { width: 14px !important; height: 14px !important; }
-.lvcard .lc-st svg { width: 11px !important; height: 11px !important; }
-#home #go { height: 44px !important; border-radius: 22px !important; bottom: calc(var(--lc-b) + 11px) !important; }
-#home #go::after { font-size: 17px !important; }
-#home #go svg.ic, #home #go svg { width: 19px !important; height: 19px !important; }
-
-/* ---------- Bulle du niveau flottante au-dessus d'Ulysse ----------
-   « ‹ Niveau 9 › », mini-jeux et étoiles dans une petite bulle avec sa pointe ; le bouton Play rond vert posé à droite. */
-#home.bubble .lvcard { left: var(--bx) !important; top: calc(var(--by) - 14px) !important; bottom: auto !important; margin-left: 0 !important;
-  transform: translate(-50%, -100%); width: 216px !important; height: 70px !important; padding: 8px 64px 8px 14px !important; border-radius: 24px !important;
-  grid-template-rows: auto auto !important; row-gap: 4px !important; animation: none !important; transition: none !important; }
-#home.bubble .lvcard::before { content: ''; position: absolute; left: 50%; bottom: -9px; width: 18px; height: 18px; margin-left: -9px; transform: rotate(45deg);
-  background: var(--k-bubble, #fff); border-radius: 0 0 5px 0; box-shadow: 4px 4px 0 var(--k-edge, #d9cfe8); z-index: -1; }
-#home.bubble .lvcard .lc-isle { display: none !important; }
-#home.bubble .lvcard .lc-title { grid-row: 1 !important; font-size: 16px !important; justify-self: start; gap: 4px !important; }
-#home.bubble .lvcard .lc-nav { width: 22px !important; height: 22px !important; font-size: 16px !important; }
-#home.bubble .lvcard .lc-games { grid-row: 2 !important; justify-self: start !important; }
-#home.bubble .lvcard .lc-chip i { width: 20px !important; height: 20px !important; }
-#home.bubble .lvcard .lc-chip svg { width: 12px !important; height: 12px !important; }
-#home.bubble .lvcard .lc-stars { grid-row: 2 !important; justify-self: end !important; align-self: center; margin-right: -6px; }
-#home.bubble .lvcard .lc-st svg { width: 10px !important; height: 10px !important; }
-#home.bubble #go { width: 56px !important; height: 56px !important; border-radius: 50% !important; transition: none !important;
-  left: calc(var(--bx) + 108px - 62px) !important; top: calc(var(--by) - 14px - 63px) !important; bottom: auto !important; right: auto !important; }
-#home.bubble #go::after { content: none !important; display: none !important; }
-#home.bubble #go svg.ic, #home.bubble #go svg { width: 24px !important; height: 24px !important; }
-#home.bubble .lvcard { width: 230px !important; padding-right: 74px !important; }
-#home.bubble .lvcard .lc-stars { margin-right: 0 !important; }
-#home.bubble #go { left: calc(var(--bx) + 115px - 64px) !important; }
-
-/* bulle v2 : tout centré (numéro puis mini-jeux), étoiles en bas à gauche, flèches ‹ › en bas au centre ; Play rond à droite */
-#home.bubble .lvcard { height: 94px !important; grid-template-rows: auto auto 22px !important; justify-items: center !important; padding: 8px 72px 6px 14px !important; }
-#home.bubble .lvcard .lc-title { justify-self: center !important; grid-row: 1 !important; }
-#home.bubble .lvcard .lc-games { justify-self: center !important; grid-row: 2 !important; }
-#home.bubble .lvcard .lc-stars { grid-row: 3 !important; justify-self: start !important; align-self: center; }
-#home.bubble .lvcard .lc-nav { position: absolute; bottom: 5px; margin: 0; }
-#home.bubble .lvcard .lc-nav[data-d="-1"] { left: calc((100% - 58px) / 2 - 26px); }
-#home.bubble .lvcard .lc-nav[data-d="1"] { left: calc((100% - 58px) / 2 + 4px); }
-#home.bubble #go { top: calc(var(--by) - 14px - 94px / 2 - 28px) !important; }
-
-/* ---------- Bandeau du niveau, version finale : une pilule fine, centrée en bas ----------
-   [‹]   Niveau 9 · icônes · étoiles   [›]  (▶)   — navigation simple, Play rond vert à droite */
-#home { --W: min(340px, calc(100vw - 32px)); --lc-h: 66px; }
-.lvcard { display: grid !important; grid-template-columns: 1fr !important; grid-template-rows: auto auto !important; justify-items: center !important;
-  align-content: center !important; row-gap: 3px !important; padding: 6px 104px 6px 46px !important; border-radius: 33px !important; height: var(--lc-h) !important; }
-.lvcard::before, .lvcard::after { display: none !important; }
-.lvcard .lc-isle { display: none !important; }
-.lvcard .lc-title { grid-row: 1 !important; grid-column: 1 !important; justify-self: center !important; font-size: 17px !important; gap: 0 !important; }
-.lvcard .lc-games { grid-row: 2 !important; grid-column: 1 !important; justify-self: center !important; display: flex; align-items: center; gap: 4px !important; }
-.lvcard .lc-chip i { width: 20px !important; height: 20px !important; }
-.lvcard .lc-chip svg { width: 12px !important; height: 12px !important; }
-.lvcard .lc-stars { grid-row: 2 !important; grid-column: 1 !important; justify-self: end !important; align-self: center; margin-right: -2px; }
-.lvcard .lc-st svg { width: 10px !important; height: 10px !important; }
-/* flèches : aux deux extrémités gauche du bandeau et juste avant Play */
-.lvcard .lc-nav { position: absolute !important; top: 50%; margin: 0 !important; transform: translateY(-50%); width: 30px !important; height: 30px !important; font-size: 20px !important; }
-.lvcard .lc-nav[data-d="-1"] { left: 10px; }
-.lvcard .lc-nav[data-d="1"] { right: 68px; left: auto; }
-/* Play rond vert, dans le bandeau à droite */
-#home #go { width: 54px !important; height: 54px !important; border-radius: 50% !important; transform: none !important;
-  left: calc(50% + var(--W) / 2 - 60px) !important; right: auto !important; top: auto !important;
-  bottom: calc(var(--lc-b) + (var(--lc-h) - 54px) / 2 + 2px) !important; }
-#home #go::after { content: none !important; display: none !important; }
-#home #go svg.ic, #home #go svg { width: 24px !important; height: 24px !important; }
-
-/* ---------- Bandeau du niveau : encadré (niveau, étoiles, mini-jeux) entre ‹ et ›, grand bouton vert « Jouer » dessous ---------- */
-#home { --lc-h: 128px; }
-.lvcard { grid-template-rows: auto auto auto 50px !important; padding: 8px 52px 10px !important; row-gap: 3px !important; border-radius: 28px !important; height: var(--lc-h) !important; align-content: start !important; }
-.lvcard .lc-title { grid-row: 1 !important; font-size: 18px !important; }
-.lvcard .lc-stars { grid-row: 2 !important; justify-self: center !important; margin: 0 !important; }
-.lvcard .lc-st svg { width: 12px !important; height: 12px !important; }
-.lvcard .lc-games { grid-row: 3 !important; }
-.lvcard .lc-nav { top: 37px !important; width: 34px !important; height: 34px !important; font-size: 22px !important; }
-.lvcard .lc-nav[data-d="-1"] { left: 12px !important; }
-.lvcard .lc-nav[data-d="1"] { right: 12px !important; left: auto !important; }
-#home #go { width: calc(var(--W) - 28px) !important; height: 46px !important; border-radius: 23px !important;
-  left: calc(50% - var(--W) / 2 + 14px) !important; bottom: calc(var(--lc-b) + 10px) !important; display: flex !important; align-items: center; justify-content: center; gap: 8px; }
-#home #go::after { content: 'Jouer' !important; display: inline !important; position: static !important; inset: auto !important; border: 0 !important; animation: none !important;
-  font: 700 18px/1 var(--k-font, 'Fredoka', sans-serif); color: #fff; opacity: 1 !important; transform: none !important; width: auto; height: auto; background: none !important; }
-#home #go.boss::after { content: 'Épreuve' !important; }
-#home #go svg.ic, #home #go svg { width: 20px !important; height: 20px !important; }
-
-/* étoiles et icônes plus grandes, flèches resserrées vers le centre */
-#home { --lc-h: 150px; }
-.lvcard { grid-template-rows: auto auto auto 52px !important; row-gap: 5px !important; }
-.lvcard .lc-st svg { width: 21px !important; height: 21px !important; }
-.lvcard .lc-chip i { width: 33px !important; height: 33px !important; }
-.lvcard .lc-chip svg { width: 19px !important; height: 19px !important; }
-.lvcard .lc-games { gap: 6px !important; }
-/* flèches sorties du bandeau : une pastille ronde de chaque côté, à mi-hauteur */
-.lvcard { padding-left: 14px !important; padding-right: 14px !important; }
-.lvcard .lc-nav { top: 50% !important; width: 40px !important; height: 40px !important; font-size: 24px !important;
-  background: var(--k-bubble, #fff) !important; box-shadow: 0 4px 0 var(--k-edge, #d9cfe8), var(--k-drop, 0 6px 14px rgba(80, 60, 140, .18)); }
-.lvcard .lc-nav[data-d="-1"] { left: -50px !important; right: auto !important; }
-.lvcard .lc-nav[data-d="1"] { right: -50px !important; left: auto !important; }
-/* onglet du défi du jour : série, calendrier du mois, Jouer */
+/* feuille du défi (onglet Défi) : série, calendrier du mois, Jouer */
 .daily-sheet { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 22px 18px calc(20px + env(safe-area-inset-bottom, 0px)) !important;
   font-family: var(--k-font, 'Fredoka', sans-serif); color: var(--k-ink, #3a3550); }
 .dc-streak { display: flex; align-items: center; gap: 6px; }
@@ -494,7 +168,8 @@
 .dc-head span { min-width: 130px; text-align: center; }
 .dc-nav { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; font: 700 20px/1 var(--k-font, 'Fredoka', sans-serif); font-style: normal;
   background: var(--k-well, #f1ecf8); cursor: pointer; }
-.dc-nav[hidden] { display: grid; visibility: hidden; }
+/* flèche sans mois de ce côté : elle garde sa place (le mois reste centré) ; !important contre [hidden] de style.css */
+.dc-nav[hidden] { display: grid !important; visibility: hidden; }
 .dc-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; width: min(320px, 100%); }
 .dc-wd { font: 600 11px/1 var(--k-font, 'Fredoka', sans-serif); text-align: center; opacity: .5; padding-bottom: 2px; }
 .dc-day { aspect-ratio: 1; display: grid; place-items: center; border-radius: 50%; font: 600 14px/1 var(--k-font, 'Fredoka', sans-serif); background: var(--k-well, #f1ecf8); }
@@ -520,49 +195,95 @@
 .dc-stars svg { width: 16px; height: 16px; fill: rgba(255, 255, 255, .45); }
 .dc-stars svg.on { fill: #ffe27a; }
 
-/* pas d'élan vert : le bouton ne glisse plus à l'apparition et ne saute plus de côté quand on appuie */
-#home #go.in { animation: none !important; }
-#home #go:active { transform: translateY(3px) !important; }
-/* pendant la marche : ⏩ pour arriver tout de suite */
-/* (carte masquée pendant le trajet : petit bouton rond ⏩ seul, au centre) */
-#home #go.ff { width: 58px !important; height: 58px !important; border-radius: 50% !important; left: calc(50% - 29px) !important;
-  background: #fff !important; box-shadow: 0 4px 0 #cfc6e0, 0 8px 18px rgba(20, 10, 60, .25) !important; color: #3a3550; }
-#home #go.ff::after { content: none !important; display: none !important; }
-#home #go.ff svg, #home #go.ff svg.ic { width: 26px !important; height: 26px !important; margin: 0 !important; }
-#home #go.ff svg .f { fill: #3a3550 !important; stroke: none !important; }
-
-/* paliers d'un mini-jeu : barre de progression sous le nom (au lieu de « niv. N ») */
+/* ---------- Mini-jeux : défis des îles, paliers ---------- */
+/* « Défis des îles » : distincts de la catégorie Méga (étiquette lagon « île N », nom de l'île) */
+.lib-cat-event { background: #1fa3a0 !important; box-shadow: 0 3px 0 #137572 !important; color: #fff !important; }
+.event-tile .event-badge { position: absolute; top: -6px; left: 50%; transform: translateX(-50%); padding: 2px 8px; border-radius: 999px;
+  background: #1fa3a0; color: #fff; font: 700 10px/1.2 var(--k-font, 'Fredoka', sans-serif); letter-spacing: .04em; text-transform: uppercase; white-space: nowrap;
+  box-shadow: 0 2px 0 #137572; font-style: normal; }
+.event-tile.locked .event-badge { background: #9aa3ad; box-shadow: none; }
+.event-tile .tile-name { font-size: 14px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.event-tile .tile-lvl { font-size: 11px !important; white-space: nowrap; }
+/* onglets de palier : barre de progression sous le nom */
 .lv-tab-bar { display: block; width: 72%; max-width: 80px; height: 6px; margin: 6px auto 0; border-radius: 3px; overflow: hidden;
   background: rgba(0, 0, 0, .22); }
 .lv-tab-bar > i { display: block; height: 100%; min-width: 6px; border-radius: 3px; background: #ffd23f; }
 #lv-tabs button.on .lv-tab-bar { background: rgba(255, 255, 255, .35); }
 #lv-tabs button.on .lv-tab-bar > i { background: #fff; }
 
-/* fin de niveau : ampoule « −1 ★ » à côté du chrono quand on a pris des indices */
+/* ---------- Écran de jeu ---------- */
+/* un peu d'air au-dessus de l'en-tête ; grille centrée verticalement */
+#play .topbar { margin-top: 18px !important; }
+#play > .actions { margin-bottom: auto !important; }
+/* bouton « explication » (bulle) à côté de l'indice */
+#btn-explain { color: #2f7fc4 !important; }
+:root[data-theme="dark"] #btn-explain { color: #8cc4ff !important; }
+#btn-explain.empty { opacity: .45 !important; }
+#btn-explain svg.ic { width: 26px; height: 26px; }
+/* transitions discrètes : lueur de victoire, éclair de départ, arrivée de la grille */
+#play::after { background: radial-gradient(ellipse 70% 50% at 50% 48%, rgba(255, 236, 170, .28), transparent 70%) !important; }
+#play.glow::after { animation: success-glow 1.2s ease-out !important; }
+.flash { animation: flash-soft .8s ease-out forwards !important; }
+@keyframes flash-soft { 0% { opacity: 0; } 35% { opacity: .45; } 100% { opacity: 0; } }
+.board > * { animation: board-in-soft .45s ease-out both !important; }
+@keyframes board-in-soft { from { opacity: 0; transform: translateY(6px); } }
+.cell-grid:not(.ready) > .cell, .nono:not(.ready) > .nono-cell, .lumieres:not(.ready) > .bulb {
+  animation: tile-in-soft .35s ease-out both !important; animation-delay: calc(var(--i, 0) * 6ms) !important; }
+@keyframes tile-in-soft { from { opacity: 0; transform: scale(.92); } }
+/* Pavés : un rectangle posé apparaît en simple fondu ; pendant le tracé, l'aperçu est déjà
+   un rectangle de couleur (un peu transparent, liseré blanc), sans animation */
+.paves .rect { transition: none !important; transform: none !important; }
+.paves .rect:not(.preview):not(.invalid) { animation: rect-soft .2s ease-out !important; }
+@keyframes rect-soft { from { opacity: .35; } }
+.paves .rect.preview { animation: none !important; opacity: .78; border-radius: 12px; box-shadow: inset 0 0 0 2.5px rgba(255, 255, 255, .85), 0 4px 10px rgba(0, 0, 0, .18) !important; }
+/* thème clair : cases des grilles nettement plus foncées que le fond ivoire, avec un liseré */
+:root:not([data-theme="dark"]) { --tile: #e9dcbd !important; --tile-hi: #f1e6cc !important; --tile-edge: #cdb98d !important; --given: #dcc9a0 !important; --grid-line: #d8c8a3 !important; }
+:root:not([data-theme="dark"]) .cell-grid > .cell:not(.on):not(.sun):not(.moon), :root:not([data-theme="dark"]) .nono > .nono-cell:not(.on) { outline: 1.5px solid rgba(160, 130, 80, .35); outline-offset: -1.5px; }
+
+/* ---------- Fin de niveau ---------- */
+/* chrono et piste des seuils d'étoiles */
+.ld-clock { width: min(300px, 100%); margin: 2px auto 14px; display: flex; flex-direction: column; align-items: center; gap: 10px;
+  animation: ck-in .5s var(--k-ease, ease) 1s both; }
+@keyframes ck-in { from { opacity: 0; transform: translateY(6px); } }
+.ck-time { display: flex; align-items: center; gap: 6px; font: 700 26px/1 var(--k-font, 'Fredoka', sans-serif); color: var(--k-ink, #3a3550); font-variant-numeric: tabular-nums; }
+.ck-time svg { width: 22px; height: 22px; fill: none; stroke: var(--k-ink, #3a3550); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.ck-track { position: relative; width: 100%; height: 12px; border-radius: 6px; background: var(--k-well, #f1ecf8); box-shadow: inset 0 2px 0 rgba(80, 60, 140, .12); margin-bottom: 30px; }
+.ck-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 6px; background: linear-gradient(90deg, #ffd84d, #ffb31f);
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, .45); animation: ck-fill 1s cubic-bezier(.2, .8, .2, 1) 1.1s forwards; }
+@keyframes ck-fill { to { width: var(--w); } }
+.ck-tick { position: absolute; top: -4px; width: 0; height: 20px; border-left: 2.5px solid var(--k-ink, #3a3550); opacity: .55; }
+.ck-tick .ck-stars { position: absolute; top: 22px; left: 50%; transform: translateX(-50%); display: flex; gap: 0; white-space: nowrap; }
+.ck-tick .ck-stars svg { width: 10px; height: 10px; fill: #ffc93d; }
+.ck-tick .ck-stars svg:not(.on) { display: none; }
+.ck-tick em { position: absolute; top: 34px; left: 50%; transform: translateX(-50%); font: 600 10px/1 var(--k-font, 'Fredoka', sans-serif); font-style: normal; color: var(--k-ink-soft, #8a83a3); }
+/* ampoule « −1 ★ » à côté du chrono quand on a pris des indices */
 .ck-hint { display: inline-flex; align-items: center; gap: 2px; margin-left: 12px; padding: 3px 9px 3px 6px; border-radius: 999px;
   background: rgba(255, 201, 61, .16); color: #ffc93d; font: 700 15px/1 var(--k-font, 'Fredoka', sans-serif); vertical-align: middle; }
 .ck-hint svg.ic { width: 18px; height: 18px; }
 .ck-hint .ck-hstar { width: 14px; height: 14px; fill: #ffc93d; margin-left: 1px; }
+/* Rejouer (si moins de 3 étoiles) à côté de Suivant */
+.ld-actions { display: flex; align-items: center; justify-content: center; gap: 18px; }
+.ld-replay { width: 58px; height: 58px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer;
+  background: var(--k-bubble, #fff); color: var(--k-ink, #3a3550); box-shadow: 0 5px 0 var(--k-edge, #d9cfe8), var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14)); }
+.ld-replay:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--k-edge, #d9cfe8); }
+.ld-replay svg { width: 26px; height: 26px; }
 
-/* grille centrée verticalement : la marge basse « auto » était portée par le bouton de test, désormais caché */
-#play > .actions { margin-bottom: auto !important; }
+/* ---------- Réglages : boutons Crédits / Revoir le tutoriel ; feuille des crédits ---------- */
+.credits-btn { display: inline-flex; align-items: center; gap: 8px; align-self: center; margin: 6px auto 0; padding: 10px 20px; border: 0; border-radius: 999px;
+  background: var(--surface, #fff); color: var(--ink, #3a3550); font: 700 15px/1 var(--k-font, 'Fredoka', sans-serif); cursor: pointer;
+  box-shadow: 0 4px 0 var(--k-edge, #d9cfe8), var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14)); }
+.credits-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--k-edge, #d9cfe8); }
+.credits-btn svg { width: 18px; height: 18px; color: var(--k-sun-dk, #e08f00); }
+.credits-ov { z-index: 60 !important; }
+.credits-sheet { padding-top: 30px !important; gap: 14px; }
+.cr-title { margin: 0; text-align: center; font: 700 24px/1 var(--k-font, 'Fredoka', sans-serif); color: var(--ink, #3a3550); }
+.cr-note { background: var(--surface, #fff); border-radius: 20px; padding: 16px 18px; box-shadow: 0 4px 0 var(--k-edge, #d9cfe8); font: 500 15px/1.45 var(--k-font, 'Fredoka', sans-serif); color: var(--ink, #3a3550); }
+.cr-note p { margin: 0 0 8px; }
+.cr-note .cr-sign { margin: 4px 0 0; text-align: right; font-weight: 700; }
+.cr-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font: 500 13px/1.4 var(--k-font, 'Fredoka', sans-serif); color: var(--muted, #8a83a3); }
+.cr-list b { color: var(--ink, #3a3550); margin-right: 4px; }
 
-/* la carte du niveau se cache vraiment (son display: grid !important l'emportait sur [hidden]) */
-#home .lvcard[hidden] { display: none !important; }
-/* cartes voisines qui dépassent derrière, à gauche / à droite : on devine qu'on peut faire défiler */
-#home .lvcard { --peek: color-mix(in srgb, var(--k-bubble, #fff) 70%, transparent); touch-action: pan-y; }
-#home .lvcard.has-prev { box-shadow: -9px 0 0 -7px var(--peek), 0 6px 0 var(--k-edge, #d9cfe8), var(--k-drop, 0 8px 18px rgba(80, 60, 140, .18)) !important; }
-#home .lvcard.has-next { box-shadow: 9px 0 0 -7px var(--peek), 0 6px 0 var(--k-edge, #d9cfe8), var(--k-drop, 0 8px 18px rgba(80, 60, 140, .18)) !important; }
-#home .lvcard.has-prev.has-next { box-shadow: -9px 0 0 -7px var(--peek), 9px 0 0 -7px var(--peek), 0 6px 0 var(--k-edge, #d9cfe8), var(--k-drop, 0 8px 18px rgba(80, 60, 140, .18)) !important; }
-#home .lvcard { transition: transform .2s ease-out, opacity .2s ease-out; }
-#home .lvcard.drag { transition: none !important; }
-/* première apparition : les flèches font un petit pas vers l'extérieur, deux fois */
-#home .lvcard.nudge .lc-nav[data-d="-1"] { animation: lc-nudge-l .6s ease-in-out 2; }
-#home .lvcard.nudge .lc-nav[data-d="1"] { animation: lc-nudge-r .6s ease-in-out 2; }
-@keyframes lc-nudge-l { 50% { transform: translate(-7px, -50%); } }
-@keyframes lc-nudge-r { 50% { transform: translate(7px, -50%); } }
-
-/* ---- Sagas : l'Odyssée, les Douze Travaux, les Argonautes (app.js : sagaEmblem, showSagaCard) ---- */
+/* ---------- Sagas : l'Odyssée, les Douze Travaux, les Argonautes (app.js : sagaEmblem, showSagaCard) ---------- */
 .saga-emblem { width: 1em; height: 1em; fill: currentColor; flex: none; }
 [data-saga="0"] { --saga: #3d8ee8; --saga2: #3fe0d0; }
 [data-saga="1"] { --saga: #f08a2c; --saga2: #ffd23f; }
@@ -573,12 +294,9 @@
 .vy-saga .saga-emblem { width: 26px; height: 26px; padding: 5px; box-sizing: border-box; border-radius: 50%; color: #fff;
   background: linear-gradient(160deg, var(--saga2), var(--saga)); box-shadow: 0 3px 0 rgba(0, 0, 0, .12); }
 .vy-saga::after { content: ''; flex: 1; height: 3px; border-radius: 3px; background: currentColor; opacity: .18; }
-/* emblème de la saga devant le nom de l'île (carte du niveau) */
-.lc-isle .lc-saga { display: inline-flex; vertical-align: -1px; margin-right: 4px; color: var(--k-sun-dk, #e08f00); font-size: 11px; font-style: normal; }
 /* carte plein écran « changement de monde » */
 .saga-card { position: fixed; inset: 0; z-index: 9000; display: flex; align-items: center; justify-content: center; cursor: pointer;
   background: radial-gradient(circle at 50% 42%, var(--saga2) 0, var(--saga) 70%); color: #fff; }
-.saga-card[hidden] { display: none; }
 .saga-card.in { animation: sagaIn .45s var(--k-ease, ease-out) both; }
 .saga-card.out { animation: sagaOut .32s ease-in both; }
 .saga-card .sc-inner { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; padding: 0 24px; }
@@ -591,16 +309,3 @@
 @keyframes sagaPop { from { transform: scale(.2) rotate(-30deg); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes sagaUp { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .saga-card.in, .saga-card .saga-emblem, .saga-card b, .saga-card i { animation: none; } }
-
-/* bandeau et barre d'onglets sur toute la largeur (petite marge) */
-#home { --W: calc(100vw - 24px); }
-/* le bloc niveau + Jouer, un peu moins large que la barre d'onglets */
-#home .lvcard { --lc-w: min(270px, calc(100vw - 124px)); }
-#home #go { --W: min(270px, calc(100vw - 124px)); }
-
-/* thème clair : cases des grilles nettement plus foncées que le fond ivoire, avec un liseré */
-:root:not([data-theme="dark"]) { --tile: #e9dcbd !important; --tile-hi: #f1e6cc !important; --tile-edge: #cdb98d !important; --given: #dcc9a0 !important; --grid-line: #d8c8a3 !important; }
-:root:not([data-theme="dark"]) .cell-grid > .cell:not(.on):not(.sun):not(.moon), :root:not([data-theme="dark"]) .nono > .nono-cell:not(.on) { outline: 1.5px solid rgba(160, 130, 80, .35); outline-offset: -1.5px; }
-
-/* bouton de test « autosolve » : caché hors mode développeur (?dev) */
-#play .autosolve[hidden] { display: none !important; }

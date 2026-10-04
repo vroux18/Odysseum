@@ -60,8 +60,8 @@
     steps: [
       { art: svg(grid(4) + fillCell(4, 0, 0, '#f3dcd7') + fillCell(4, 0, 1, '#f3dcd7') + fillCell(4, 1, 0, '#f3dcd7') +
           fillCell(4, 0, 2, '#d9e6ef') + fillCell(4, 0, 3, '#d9e6ef') + fillCell(4, 1, 3, '#d9e6ef') +
-          fillCell(4, 1, 1, '#e2ecd8') + fillCell(4, 1, 2, '#e2ecd8') + fillCell(4, 2, 1, '#e2ecd8') + fillCell(4, 2, 2, '#e2ecd8') +
-          [[2, 0], [3, 0], [3, 1], [3, 2], [3, 3], [2, 3]].map(([r, c]) => fillCell(4, r, c, '#f4ead2')).join('') +
+          fillCell(4, 1, 1, '#e2ecd8') + fillCell(4, 1, 2, '#e2ecd8') + fillCell(4, 2, 1, '#e2ecd8') + fillCell(4, 2, 2, '#e2ecd8') + fillCell(4, 2, 0, '#e2ecd8') +
+          [[3, 0], [3, 1], [3, 2], [3, 3], [2, 3]].map(([r, c]) => fillCell(4, r, c, '#f4ead2')).join('') +
           dot(4, 0, 1, 'var(--ink)', 7) + dot(4, 1, 3, 'var(--ink)', 7) + dot(4, 2, 0, 'var(--ink)', 7) + dot(4, 3, 2, 'var(--ink)', 7)),
         text: 'Place <b>une couronne par ligne, par colonne et par zone de couleur</b>.' },
       { art: svg(grid(4) + dot(4, 1, 1, 'var(--ink)', 7) + dot(4, 2, 2, 'var(--bad-ink)', 7) + cross(cx(4, 2) + 14, cx(4, 2) - 14)),
