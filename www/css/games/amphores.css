@@ -5,6 +5,8 @@
   gap: var(--gap); padding: 4px; flex: 0 0 auto;
   touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
 }
+/* case vide au centre d'une grille impaire (3×3) : un simple creux discret */
+.amph-hole { width: var(--t); height: var(--t); border-radius: calc(var(--t) * .24); border: 2px dashed color-mix(in srgb, var(--k-ink-soft, #8a83a3) 35%, transparent); box-sizing: border-box; }
 .amph-tile {
   position: relative; width: var(--t); height: var(--t); padding: 0; border: 0; background: none;
   border-radius: calc(var(--t) * .24); perspective: 600px; cursor: pointer; outline: none;

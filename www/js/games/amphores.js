@@ -52,13 +52,13 @@
   // ------------------------------------------------------------------
   // Difficulté (niveaux 1 → 40) : grille de 3×4 à 6×6, motifs cousins, aperçu au début.
   // ------------------------------------------------------------------
-  // colonnes × rangées (toujours pair) ; on débute avec 3 paires, puis 4 (pas de saut de 3 à 6 paires)
-  const SIZES = [[2, 3], [2, 4], [3, 4], [4, 4], [4, 5], [4, 6], [5, 6], [6, 6]];
+  // colonnes × rangées ; on débute en 3×3 (4 paires, la case du centre reste vide), puis 3×4, 4×4…
+  const SIZES = [[3, 3], [3, 4], [4, 4], [4, 5], [4, 6], [5, 6], [6, 6]];
   function params(level, variant) {
     level = Math.max(1, level || 1);
-    const k = level < 3 ? 0 : level < 5 ? 1 : level < 8 ? 2 : level < 13 ? 3 : level < 20 ? 4 : level < 27 ? 5 : level < 34 ? 6 : 7;
+    const k = level < 6 ? 0 : level < 10 ? 1 : level < 14 ? 2 : level < 20 ? 3 : level < 27 ? 4 : level < 34 ? 5 : 6;
     const [cols, rows] = SIZES[k];
-    const pairs = cols * rows / 2;
+    const pairs = Math.floor(cols * rows / 2); // (grille impaire : une case vide au centre)
     // motifs cousins : obligatoires au-delà de 12 paires (12 dessins), puis de plus en plus nombreux
     const wanted = level < 14 ? 0 : Math.floor((level - 10) / 4);
     const similar = Math.min(Math.floor(pairs / 2), Math.max(pairs - MOTIFS.length, wanted));
@@ -83,6 +83,7 @@
     const deck = [];
     motifs.forEach((m, i) => deck.push(i, i));
     rng.shuffle(deck);
+    if ((p.cols * p.rows) % 2) deck.splice(Math.floor(p.cols * p.rows / 2), 0, -1); // grille impaire : case vide au centre
     return Object.assign({ motifs, deck }, p);
   }
 
@@ -91,7 +92,9 @@
   function create(host, puzzle, api) {
     const { cols, rows, deck, motifs } = puzzle;
     const total = deck.length;
+    const hole = deck.indexOf(-1); // case vide (grille impaire), -1 sinon
     const found = new Array(total).fill(false);
+    if (hole >= 0) found[hole] = true;
     const seen = new Array(total).fill(0);
     let open = [];       // tuiles retournées non encore appariées (0, 1 ou 2)
     let phase = 'wait';  // wait | peek | play | won
@@ -109,6 +112,13 @@
     box.style.setProperty('--cols', cols);
     box.style.setProperty('--rows', rows);
     const tiles = deck.map((mi, i) => {
+      if (mi < 0) { // case vide : garde la place dans la grille, ne se retourne pas
+        const d = document.createElement('span');
+        d.className = 'amph-hole';
+        d.setAttribute('aria-hidden', 'true');
+        box.appendChild(d);
+        return d;
+      }
       const b = document.createElement('button');
       b.className = 'amph-tile';
       b.dataset.i = i;
@@ -213,7 +223,7 @@
 
     return {
       status() {
-        const n = found.filter(Boolean).length / 2;
+        const n = (found.filter(Boolean).length - (hole >= 0 ? 1 : 0)) / 2;
         return phase === 'won' ? 'Toutes les paires' : n + ' / ' + puzzle.pairs + ' paires';
       },
       undo() {},
@@ -221,6 +231,7 @@
         if (phase === 'won') return;
         closeOpen();
         found.fill(false);
+        if (hole >= 0) found[hole] = true;
         tiles.forEach((t) => { t._peek = false; });
         phase = 'wait'; render(); api.onChange();
         whenReady(start);
