@@ -1890,17 +1890,8 @@
       '<path d="M10 104C12 82 30 72 50 72S88 82 90 104Z" fill="' + tunic + '" ' + ink + '/>' +
       (cape ? '<path d="M16 92C20 80 30 74 38 73L44 84ZM84 92C80 80 70 74 62 73L56 84Z" fill="' + cape + '" ' + ink + '/>' : '') +
       '<path d="M43 64h14v10c-4 4-10 4-14 0Z" fill="' + skin + '" ' + ink + '/>' +
-      // visage
-      '<circle cx="29.5" cy="47" r="4.6" fill="' + skin + '" ' + ink + '/><circle cx="70.5" cy="47" r="4.6" fill="' + skin + '" ' + ink + '/>' +
-      '<circle cx="50" cy="45" r="21" fill="' + skin + '" ' + ink + '/>' +
-      // barbe d'Ulysse (couleur des cheveux), puis le sourire
-      '<path d="M30 47C30 64 40 73 50 73S70 64 70 47C66 55 60 58 50 58S34 55 30 47Z" fill="' + hair + '" ' + ink + '/>' +
-      '<path d="M44 59.5Q50 63.5 56 59.5" fill="none" stroke="#3a3550" stroke-width="2.4" stroke-linecap="round"/>' +
-      '<circle cx="42" cy="46" r="2.6" fill="#3a3550"/><circle cx="58" cy="46" r="2.6" fill="#3a3550"/>' +
-      '<circle cx="42.8" cy="45.1" r=".9" fill="#fff"/><circle cx="58.8" cy="45.1" r=".9" fill="#fff"/>' +
-      '<ellipse cx="36" cy="53" rx="3.6" ry="2.2" fill="#ff7eb0" opacity=".45"/><ellipse cx="64" cy="53" rx="3.6" ry="2.2" fill="#ff7eb0" opacity=".45"/>' +
-      // cheveux
-      '<path d="M28.5 46C26 29 37 22 50 22S74 29 71.5 46C69 39 65 35 61 34C55 38 45 39 38 35C34 37 30.5 41 28.5 46Z" fill="' + hair + '" ' + ink + '/>';
+      // tête : forme, yeux, sourcils, bouche, barbe, joues et coupe choisis (même dessin que les tuiles de l'atelier)
+      '<g transform="translate(11.24 4.63) scale(1.615)">' + crHead(Object.assign({}, st, { skin, hair }), { ink: '#3a3550', sw: 1.6 }) + '</g>';
     if (acc === 'laurel') {
       for (let i = 0; i < 5; i++) {
         const a = Math.PI * (1.08 + i * 0.105), b = Math.PI * (1.92 - i * 0.105);
@@ -2545,8 +2536,16 @@
 
   // ---------- Atelier du personnage (plein écran) ----------
   // Ordre des onglets (pastilles rondes illustrées) ; les catégories inconnues suivent.
-  const CR_ORDER = ['outfit', 'tunic', 'cape', 'hair', 'skin', 'accessory', 'weapon', 'shield'];
-  const CR_NAMES = { outfit: 'Tenue', tunic: 'Tunique', cape: 'Cape', hair: 'Cheveux', skin: 'Peau', accessory: 'Coiffe', weapon: 'Arme', shield: 'Bouclier' };
+  const CR_ORDER = ['outfit', 'tunic', 'cape', 'hair', 'skin', 'face', 'accessory', 'weapon', 'shield'];
+  const CR_NAMES = { outfit: 'Tenue', tunic: 'Tunique', cape: 'Cape', hair: 'Cheveux', skin: 'Peau', accessory: 'Coiffe', weapon: 'Arme', shield: 'Bouclier',
+    face: 'Visage', hairStyle: 'Coupe', head: 'Forme', eyes: 'Yeux', brows: 'Sourcils', mouth: 'Bouche', beard: 'Barbe', cheeks: 'Joues' };
+  // onglets à plusieurs volets (petite rangée de pastilles sous les onglets) : Cheveux = coupe + couleur,
+  // Visage = forme, yeux, sourcils, bouche, barbe, joues. Les autres catégories ont un seul volet.
+  const CR_GROUPS = { hair: ['hairStyle', 'hair'], face: ['head', 'eyes', 'brows', 'mouth', 'beard', 'cheeks'] };
+  const CR_SUBNAMES = { hairStyle: 'Coupe', hair: 'Couleur', head: 'Forme', eyes: 'Yeux', brows: 'Sourcils', mouth: 'Bouche', beard: 'Barbe', cheeks: 'Joues' };
+  const CR_FACE_CATS = ['hairStyle', 'head', 'eyes', 'brows', 'mouth', 'beard', 'cheeks'];
+  const crGroupOf = (k) => Object.keys(CR_GROUPS).find((g) => CR_GROUPS[g].includes(k)) || k;
+  const crSubLast = {}; // dernier volet ouvert de chaque onglet
   // petits dessins (viewBox 48) : .o = rempli + contour encre, .l = trait encre ; couleurs fixes
   // pour les objets (bronze, bois, or), couleur du choix pour les tuiles de teinte
   const crLine = (d, col, w) => '<path d="' + d + '" fill="none" stroke="currentColor" stroke-width="' + (w + 2.6) + '" stroke-linecap="round" stroke-linejoin="round"/>' +
@@ -2558,7 +2557,8 @@
   const CR_SWATCH = {
     tunic: (c) => '<path class="o" fill="' + c + '" d="M17 8 9.5 12l3 8 3-1.5V40h17V18.5l3 1.5 3-8L31 8c-1.5 3-4 4.5-7 4.5S18.5 11 17 8z"/><path d="M15.5 26.5h17" stroke="#e0a83a" stroke-width="3"/>',
     cape: (c) => '<path class="o" fill="' + c + '" d="M15 10c5 3 13 3 18 0l5 28c-7 4-21 4-28 0z"/><path d="M21 14.5l-2 23M27 14.5l2 23" stroke="#000" stroke-opacity=".18" stroke-width="2" stroke-linecap="round"/><circle class="o" cx="15" cy="10" r="2.8" fill="#e0a83a"/><circle class="o" cx="33" cy="10" r="2.8" fill="#e0a83a"/>',
-    hair: (c) => CR_FACE('#f1cba7') + CR_HAIR(c),
+    // (la coupe portée, dans cette couleur ; chauve : des boucles, pour voir la teinte)
+    hair: (c) => { const L = Object.assign(crLook(crCurrent()), { hair: c }); if (L.hairStyle === 'chauve') L.hairStyle = 'boucles'; return crHead(L, { zoom: 0.92 }); },
     skin: (c) => '<circle class="o" cx="24" cy="25" r="13" fill="' + c + '"/><circle cx="19.5" cy="23.5" r="1.6" fill="#3a3550"/><circle cx="28.5" cy="23.5" r="1.6" fill="#3a3550"/>' +
       '<ellipse cx="16.5" cy="28.5" rx="2.6" ry="1.6" fill="#ff7eb0" opacity=".45"/><ellipse cx="31.5" cy="28.5" rx="2.6" ry="1.6" fill="#ff7eb0" opacity=".45"/>' +
       '<path d="M20 29.5c2.4 2.6 5.6 2.6 8 0" fill="none" stroke="#3a3550" stroke-width="2" stroke-linecap="round"/>'
@@ -2596,8 +2596,100 @@
     }
     return base;
   }
+  // ---------- Tête d'Ulysse en dessin (viewBox 48, centre 24,25) : tuiles Visage / Coupe et portrait ----------
+  // L : { skin, hair (couleurs), hairStyle, head, eyes, brows, mouth, beard, cheeks } ; P : { ink, sw, noHair, zoom }
+  function crHead(L, P) {
+    P = P || {};
+    const ink = P.ink || 'currentColor', sw = P.sw || 2.4, E = '#3a3550';
+    const O = ' stroke="' + ink + '" stroke-width="' + sw + '" stroke-linejoin="round" stroke-linecap="round"';
+    const O2 = ' stroke="' + ink + '" stroke-width="' + (sw * 0.6) + '" stroke-linejoin="round" stroke-linecap="round"'; // (traits intérieurs, plus fins)
+    const line = (d, c, w) => '<path d="' + d + '" fill="none" stroke="' + c + '" stroke-width="' + w + '" stroke-linecap="round" stroke-linejoin="round"/>';
+    const fill = (d, c, extra) => '<path d="' + d + '" fill="' + c + '"' + (extra || '') + '/>';
+    const sk = L.skin || '#f1cba7', hc = L.hair || '#6f4b2e', hs = P.noHair ? 'chauve' : (L.hairStyle || 'boucles');
+    const both = (f) => f(-1) + f(1);
+    let back = '', top = '', s = '';
+    // coiffure : ce qui passe derrière la tête (cheveux longs, queue, tresses) puis le dessus
+    const cap = 'M11.2 25c-.6-8.4 5-13.4 12.8-13.4S37.4 16.6 36.8 25c-2.4-5.4-7-7.6-12.8-7.6S13.6 19.6 11.2 25z';
+    const curls = (n, R, r, a0, a1) => { let c = ''; for (let k = 0; k < n; k++) { const a = (a0 + (a1 - a0) * k / (n - 1)) * Math.PI / 180; c += '<circle cx="' + (24 + Math.cos(a) * R).toFixed(1) + '" cy="' + (24 + Math.sin(a) * R).toFixed(1) + '" r="' + r + '" fill="' + hc + '"' + O + '/>'; } return c; };
+    if (hs === 'boucles') top = curls(9, 12.4, 4.6, 168, 372);
+    else if (hs === 'courtes') top = curls(11, 12.6, 3.3, 172, 368);
+    else if (hs === 'lisses') top = fill('M12.6 27c-1.6-10 4-17 11.4-17s13 7 11.4 17c-1.2-3.6-3.4-6.4-5.6-7.2-3.2 2.4-8.4 3.4-13.4 1.8-2 1.6-3.3 3.4-3.8 5.4z', hc, O);
+    else if (hs === 'ras') top = fill(cap, hc, O);
+    else if (hs === 'longs') {
+      back = fill('M10.4 22c-2.4 10-1.8 17 1.6 22h24c3.4-5 4-12 1.6-22z', hc, O);
+      top = fill('M11 25c-1-9 5-14 13-14s14 5 13 14c-3-4.6-7.2-7.4-13-7.4S14 20.4 11 25z', hc, O) + line('M24 11.4v5.6', ink, sw * 0.5);
+    } else if (hs === 'queue') {
+      back = fill('M33.6 15.4c5.4-1 9 3.6 8.6 10.6-.3 5.4-2.6 9.6-5.6 11.6.6-5.6-.4-10-3.6-13.4z', hc, O);
+      top = fill(cap, hc, O) + '<circle cx="35.4" cy="16.4" r="2" fill="#ff4f4f"' + O + '/>';
+    } else if (hs === 'chignon') {
+      back = '<circle cx="24" cy="9.4" r="5.2" fill="' + hc + '"' + O + '/>';
+      top = fill(cap, hc, O) + '<rect x="21" y="12" width="6" height="2.4" rx="1.2" fill="#ff4f4f"' + O + '/>';
+    } else if (hs === 'tresses') {
+      back = both((d) => [29.5, 33.5, 37.5, 41.5].map((y) => '<circle cx="' + (24 + d * 12.6) + '" cy="' + y + '" r="2.3" fill="' + hc + '"' + O + '/>').join('') +
+        '<circle cx="' + (24 + d * 12.6) + '" cy="44.4" r="1.4" fill="#ff4f4f"' + O + '/>');
+      top = fill(cap, hc, O);
+    } else if (hs === 'crete') {
+      back = fill('M20.8 18V8.4c0-3 1.4-5 3.2-5s3.2 2 3.2 5V18z', hc, O);
+      top = fill(cap, hc, O);
+    } else if (hs === 'chauve' && !P.noHair) top = line('M17.4 15.6c1.8-1.4 3.8-2 5.8-2', '#fff', 1.6).replace('/>', ' opacity=".6"/>');
+    // oreilles et forme du visage
+    const head = L.head || 'base';
+    const ex = head === 'ovale' ? 12.4 : head === 'rond' ? 10.2 : head === 'carre' ? 10.6 : 11;
+    s += both((d) => '<circle cx="' + (24 + d * (24 - ex)) + '" cy="26" r="2.8" fill="' + sk + '"' + O + '/>');
+    if (head === 'rond') s += '<ellipse cx="24" cy="25.4" rx="14" ry="13" fill="' + sk + '"' + O + '/>';
+    else if (head === 'ovale') s += '<ellipse cx="24" cy="25" rx="11.6" ry="14.4" fill="' + sk + '"' + O + '/>';
+    else if (head === 'carre') s += '<rect x="10.8" y="12" width="26.4" height="26.4" rx="6" fill="' + sk + '"' + O + '/>';
+    else s += '<rect x="11" y="12" width="26" height="26" rx="11" fill="' + sk + '"' + O + '/>';
+    // joues
+    const ch = L.cheeks || 'aucun';
+    if (ch === 'joues' || ch === 'deux') s += both((d) => '<ellipse cx="' + (24 + d * 8.4) + '" cy="29.2" rx="2.6" ry="1.6" fill="#ff7eb0" opacity=".5"/>');
+    if (ch === 'taches' || ch === 'deux') s += both((d) => [[7.8, 27.4], [9.8, 28.4], [6.8, 29.2], [8.8, 30]].map(([x, y]) => '<circle cx="' + (24 + d * x) + '" cy="' + y + '" r=".65" fill="#8a5434" opacity=".75"/>').join(''));
+    // barbe
+    const bd = L.beard || 'pleine';
+    const moust = fill('M24 28.6c-1.6-1.2-4.6-1.4-6.6.6 1 1.6 4.4 1.8 6.6.2 2.2 1.6 5.6 1.4 6.6-.2-2-2-5-1.8-6.6-.6z', hc, O2);
+    if (bd === 'pleine') s += fill('M11.2 26c0 9 5.6 15 12.8 15s12.8-6 12.8-15c-2 3.6-4.8 5.4-8 5.6-1.4-1.6-3-2.2-4.8-2.2s-3.4.6-4.8 2.2c-3.2-.2-6-2-8-5.6z', hc, O2);
+    else if (bd === 'courte') s += fill('M11.4 26c.4 7.6 5.6 12.4 12.6 12.4s12.2-4.8 12.6-12.4c-1.6 4-4 6.6-7.2 7.6-1.6-.8-3.4-1.2-5.4-1.2s-3.8.4-5.4 1.2c-3.2-1-5.6-3.6-7.2-7.6z', hc, O2) + moust;
+    else if (bd === 'bouc') s += fill('M20.6 34.6c.6 3.6 1.8 6 3.4 6s2.8-2.4 3.4-6c-2.2.8-4.6.8-6.8 0z', hc, O2) + moust;
+    else if (bd === 'moustache') s += moust;
+    // yeux
+    const eyes = L.eyes || 'points';
+    const dot = (d) => '<ellipse cx="' + (24 + d * 5) + '" cy="24.5" rx="1.4" ry="1.9" fill="' + E + '"/>';
+    const happy = (d) => line('M' + (24 + d * 5 - 2.2) + ' 25.4c1.2-2.2 3.2-2.2 4.4 0', E, 1.8);
+    if (eyes === 'grands') s += both((d) => '<circle cx="' + (24 + d * 5) + '" cy="24.4" r="3" fill="#fff" stroke="' + E + '" stroke-width="1.2"/><circle cx="' + (24 + d * 4.7) + '" cy="24.8" r="1.8" fill="' + E + '"/><circle cx="' + (24.7 + d * 4.7) + '" cy="24" r=".7" fill="#fff"/>');
+    else if (eyes === 'rieurs') s += both(happy);
+    else if (eyes === 'endormis') s += both((d) => fill('M' + (24 + d * 5 - 2) + ' 24.4h4a2 1.6 0 0 1-4 0z', E) + line('M' + (24 + d * 5 - 2.6) + ' ' + (24.2 - d * 0.2).toFixed(1) + 'L' + (24 + d * 5 + 2.6) + ' ' + (24.2 + d * 0.2).toFixed(1), E, 1.4));
+    else if (eyes === 'clin') s += dot(-1) + happy(1);
+    else s += both(dot);
+    // sourcils (couleur des cheveux)
+    const br = L.brows || 'epais';
+    if (br === 'epais') s += both((d) => '<rect x="' + (24 + d * 5 - 3) + '" y="19.2" width="6" height="2.6" rx="1.2" fill="' + hc + '" stroke="' + E + '" stroke-width="1"/>');
+    else if (br === 'fins') s += both((d) => line('M' + (24 + d * 5 - 2.6) + ' ' + (21 + d * 0.3) + 'L' + (24 + d * 5 + 2.6) + ' ' + (21 - d * 0.3), hc, 1.5));
+    else if (br === 'hauts') s += both((d) => line('M' + (24 + d * 5 - 2.6) + ' 20.4c1.4-2.6 3.8-2.6 5.2 0', hc, 1.6));
+    // bouche
+    const mo = L.mouth || 'sourire', MR = '#7a2a3a';
+    if (mo === 'rire') s += fill('M20.4 30.8h7.2c0 3.2-1.6 4.8-3.6 4.8s-3.6-1.6-3.6-4.8z', MR, ' stroke="' + E + '" stroke-width="1" stroke-linejoin="round"') +
+      '<ellipse cx="24" cy="33.8" rx="1.8" ry="1" fill="#ff7a8a"/><rect x="21.2" y="30.8" width="5.6" height="1.2" fill="#fff"/>';
+    else if (mo === 'o') s += '<ellipse cx="24" cy="32.2" rx="1.5" ry="1.9" fill="' + MR + '" stroke="' + E + '" stroke-width="1"/>';
+    else if (mo === 'malin') s += line('M21 32.4c2 1 4.4.6 6.2-1.6', E, 1.8);
+    else if (mo === 'neutre') s += line('M21.4 32.2h5.2', E, 1.8);
+    else s += line('M21.2 31.4c1.8 1.8 3.8 1.8 5.6 0', E, 1.8);
+    const out = back + s + top;
+    return P.zoom ? '<g transform="translate(24 25) scale(' + P.zoom + ') translate(-24 -25)">' + out + '</g>' : out;
+  }
+  // tête du joueur en cours (couleurs comprises), avec un choix remplacé pour la tuile
+  function crLook(cur, over) {
+    const opts = skinOptions(), L = Object.assign({}, cur, over || {});
+    const col = (cat, def) => { const o = (opts[cat] || []).find((x) => x.id === L[cat]); return (o && o.color) || def; };
+    L.skin = col('skin', '#e2b38f'); L.hair = col('hair', '#4a3424');
+    return L;
+  }
   // dessin d'un choix (tuile) : teinte → silhouette colorée ; objet → petite illustration
   function crArt(cat, o) {
+    if (CR_FACE_CATS.includes(cat)) { // visage et coupe : la tête du joueur, ce choix appliqué
+      const over = { [cat]: o.id };
+      if (['eyes', 'brows', 'mouth', 'cheeks'].includes(cat)) over.beard = 'aucune'; // (sans barbe : le détail se lit mieux)
+      return crHead(crLook(crCurrent(), over), cat === 'hairStyle' ? { zoom: 0.92 } : { noHair: true, zoom: cat === 'head' ? 1.05 : 1.25 });
+    }
     if (o.id === 'none') return CR_NONE;
     if (o.color) return (CR_SWATCH[cat] || ((c) => '<circle class="o" cx="24" cy="24" r="15" fill="' + c + '"/>'))(o.color);
     if (cat === 'shield') return crShield(o.id);
@@ -2605,6 +2697,8 @@
   }
   // dessin d'un onglet : la teinte portée (tunique, cape…) ou un objet représentatif
   function crTabArt(cat, opts, cur) {
+    if (cat === 'face') return crHead(crLook(cur), { noHair: true, zoom: 1.2 });
+    if (cat === 'hair') return crHead(crLook(cur), { zoom: 0.92 });
     if (CR_SWATCH[cat]) {
       const list = opts[cat] || [];
       const o = list.find((x) => x.id === cur[cat] && x.color) || list.find((x) => x.color);
@@ -2644,7 +2738,7 @@
     'cape:or': 20,
     'accessory:laurel': 22
   };
-  const OUTFIT_FREE = ['hair', 'skin'];
+  const OUTFIT_FREE = ['hair', 'skin'].concat(CR_FACE_CATS); // (visage et coupe : identité, toujours libres)
   const brainLevel = () => playerStats().level;
   const outfitNeed = (cat, id) => (OUTFIT_FREE.includes(cat) ? 0 : OUTFIT_UNLOCK[cat + ':' + id] || 0);
   const outfitKept = () => (C.store.outfitKeep = C.store.outfitKeep || []);
@@ -2662,9 +2756,25 @@
     const opts = skinOptions(), cur = crCurrent();
     const parts = crParts(opts);
     if (!parts.includes(wdPart) && parts.length) wdPart = parts[0];
+    // onglets : une pastille par catégorie, ou par groupe (Cheveux, Visage)
+    const groups = [];
+    parts.forEach((k) => { const g = crGroupOf(k); if (!groups.includes(g)) groups.push(g); });
+    groups.sort((a, b) => (CR_ORDER.indexOf(a) + 1 || 99) - (CR_ORDER.indexOf(b) + 1 || 99));
+    const subsOf = (g) => (CR_GROUPS[g] || [g]).filter((k) => parts.includes(k));
+    const curG = crGroupOf(wdPart);
+    crSubLast[curG] = wdPart;
     const tabs = $('#wd-tabs');
-    tabs.style.setProperty('--n', parts.length);
-    tabs.innerHTML = parts.map((k) => '<button class="cr-tab' + (k === wdPart ? ' on' : '') + '" role="tab" aria-selected="' + (k === wdPart) + '" data-part="' + k + '" aria-label="' + crName(k, opts) + '" title="' + crName(k, opts) + '">' + crSvg(crTabArt(k, opts, cur)) + '</button>').join('');
+    tabs.style.setProperty('--n', groups.length);
+    tabs.innerHTML = groups.map((g) => {
+      const on = g === curG, open = crSubLast[g] && parts.includes(crSubLast[g]) ? crSubLast[g] : subsOf(g)[0];
+      return '<button class="cr-tab' + (on ? ' on' : '') + '" role="tab" aria-selected="' + on + '" data-part="' + open + '" aria-label="' + crName(g, opts) + '" title="' + crName(g, opts) + '">' + crSvg(crTabArt(g, opts, cur)) + '</button>';
+    }).join('');
+    // volets du groupe (Coupe · Couleur, Forme · Yeux · Sourcils…) : petite rangée de pastilles
+    const subs = subsOf(curG), sub = $('#wd-sub');
+    if (sub) {
+      sub.hidden = subs.length < 2;
+      sub.innerHTML = subs.length < 2 ? '' : subs.map((k) => '<button class="cr-sub-b' + (k === wdPart ? ' on' : '') + '" role="tab" aria-selected="' + (k === wdPart) + '" data-sub="' + k + '">' + (CR_SUBNAMES[k] || crName(k, opts)) + '</button>').join('');
+    }
     const list = opts[wdPart] || [];
     const sel = cur[wdPart] || (list[0] && list[0].id);
     const grid = $('#wd-choices');
@@ -2755,8 +2865,13 @@
       return;
     }
     if (btn.classList.contains('cr-tab')) {
-      if (btn.dataset.part === wdPart) return;
+      if (crGroupOf(btn.dataset.part) === crGroupOf(wdPart)) return;
       wdPart = btn.dataset.part; renderWardrobe(true); $('#wd-choices').scrollTop = 0; C.sfx.tap();
+      return;
+    }
+    if (btn.classList.contains('cr-sub-b')) {
+      if (btn.dataset.sub === wdPart) return;
+      wdPart = btn.dataset.sub; renderWardrobe(true); $('#wd-choices').scrollTop = 0; C.sfx.tap();
       return;
     }
     if (btn.classList.contains('cr-tile')) {

@@ -3778,6 +3778,7 @@
       head.add(eye);
     });
     head.add(face, hair, beard);
+    hero.procHair = hair; hero.procBeard = beard;
     // longue cape blanche, doublure à la couleur de l'île
     const capeMat = lambert('#f4f2ec', { side: THREE.DoubleSide });
     const cape = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.27, 0.72, 14, 3, true, Math.PI * 0.62, Math.PI * 0.76), capeMat);
@@ -3868,7 +3869,38 @@
     hair: [
       { id: 'brun', name: 'Brun', color: '#4a3424' }, { id: 'noir', name: 'Noir', color: '#1d1916' },
       { id: 'chatain', name: 'Châtain', color: '#6f4b2e' }, { id: 'blond', name: 'Blond', color: '#c49a5e' },
-      { id: 'roux', name: 'Roux', color: '#94451f' }, { id: 'gris', name: 'Gris', color: '#9b958d' }
+      { id: 'roux', name: 'Roux', color: '#94451f' }, { id: 'gris', name: 'Gris', color: '#9b958d' },
+      { id: 'blanc', name: 'Blanc', color: '#e8e4dc' }, { id: 'miel', name: 'Miel', color: '#e0b25a' },
+      { id: 'cuivre', name: 'Cuivre', color: '#c4602a' }, { id: 'bleu', name: 'Bleu nuit', color: '#2f4a8a' },
+      { id: 'rose', name: 'Rose', color: '#e06a9a' }, { id: 'vert', name: 'Vert mer', color: '#2f9a7a' }
+    ],
+    // identité (toujours libre) : coupe, forme du visage, yeux, sourcils, bouche, barbe, joues
+    hairStyle: [
+      { id: 'boucles', name: 'Boucles' }, { id: 'courtes', name: 'Bouclettes' }, { id: 'lisses', name: 'Mèche' },
+      { id: 'ras', name: 'Ras' }, { id: 'longs', name: 'Longs' }, { id: 'queue', name: 'Queue' },
+      { id: 'chignon', name: 'Chignon' }, { id: 'tresses', name: 'Tresses' }, { id: 'crete', name: 'Crête' },
+      { id: 'chauve', name: 'Chauve' }
+    ],
+    head: [
+      { id: 'base', name: 'Classique' }, { id: 'rond', name: 'Ronde' }, { id: 'ovale', name: 'Ovale' }, { id: 'carre', name: 'Carrée' }
+    ],
+    eyes: [
+      { id: 'points', name: 'Points' }, { id: 'grands', name: 'Grands' }, { id: 'rieurs', name: 'Rieurs' },
+      { id: 'endormis', name: 'Endormis' }, { id: 'clin', name: "Clin d'œil" }
+    ],
+    brows: [
+      { id: 'epais', name: 'Épais' }, { id: 'fins', name: 'Fins' }, { id: 'hauts', name: 'Étonnés' }, { id: 'aucun', name: 'Aucun' }
+    ],
+    mouth: [
+      { id: 'sourire', name: 'Sourire' }, { id: 'rire', name: 'Rire' }, { id: 'o', name: 'Oh !' },
+      { id: 'malin', name: 'Malin' }, { id: 'neutre', name: 'Calme' }
+    ],
+    beard: [
+      { id: 'pleine', name: 'Barbe' }, { id: 'courte', name: 'Courte' }, { id: 'bouc', name: 'Bouc' },
+      { id: 'moustache', name: 'Moustache' }, { id: 'aucune', name: 'Rasé' }
+    ],
+    cheeks: [
+      { id: 'aucun', name: 'Aucun' }, { id: 'joues', name: 'Joues roses' }, { id: 'taches', name: 'Taches' }, { id: 'deux', name: 'Les deux' }
     ],
     skin: [
       { id: 's1', name: 'Ivoire', color: '#f2d3bb' }, { id: 's2', name: 'Sable', color: '#e2b38f' },
@@ -3888,8 +3920,11 @@
       { id: 'oeil', name: 'Œil' }, { id: 'soleil', name: 'Soleil' }
     ]
   };
-  const SKIN_LABELS = { outfit: 'Costume', tunic: 'Tunique', cape: 'Cape', hair: 'Cheveux', skin: 'Peau', accessory: 'Coiffe', weapon: 'Arme', shield: 'Bouclier' };
-  const SKIN_DEFAULT = { outfit: 'voyageur', tunic: 'egee', cape: 'blanc', hair: 'brun', skin: 's2', accessory: 'none', weapon: 'spear', shield: 'none' };
+  const SKIN_LABELS = { outfit: 'Costume', tunic: 'Tunique', cape: 'Cape', hair: 'Cheveux', skin: 'Peau', accessory: 'Coiffe', weapon: 'Arme', shield: 'Bouclier',
+    hairStyle: 'Coupe', head: 'Visage', eyes: 'Yeux', brows: 'Sourcils', mouth: 'Bouche', beard: 'Barbe', cheeks: 'Joues' };
+  // (valeurs par défaut = l'Ulysse d'origine : un joueur qui n'a rien choisi ne voit aucun changement)
+  const SKIN_DEFAULT = { outfit: 'voyageur', tunic: 'egee', cape: 'blanc', hair: 'brun', skin: 's2', accessory: 'none', weapon: 'spear', shield: 'none',
+    hairStyle: 'boucles', head: 'base', eyes: 'points', brows: 'epais', mouth: 'sourire', beard: 'pleine', cheeks: 'aucun' };
   const skinState = Object.assign({}, SKIN_DEFAULT);
   const skinOpt = (cat, id) => SKIN_OPTIONS[cat].find((o) => o.id === id) || SKIN_OPTIONS[cat].find((o) => o.id === SKIN_DEFAULT[cat]);
 
@@ -4026,25 +4061,10 @@
     const leafMat = toonMat({ color: '#4cbf3a' });
     const crestMat = toonMat({ color: '#ff4f4f' });
     const bandMat = toonMat({ color: '#ff4f4f' });
-    const hairMat = toonMat({ color: '#6b4226' });
-    const acc = {};
-    // boucles de cheveux : une calotte de petites boules (on ne garde que le haut et l'arrière)
-    {
-      const parts = [], N = 46;
-      for (let i = 0; i < N; i++) {
-        const y = 1 - (i + 0.5) / N * 2, rad = Math.sqrt(1 - y * y), a = i * 2.39996;
-        const x = Math.cos(a) * rad, z = Math.sin(a) * rad;
-        if (y < -0.05 && z > -0.35) continue;          // pas de boucles sur le visage ni le cou
-        if (z > 0.45 && y < 0.5) continue;             // le front reste dégagé
-        if (y < -0.45) continue;
-        parts.push({ geo: geoLib().ball, color: '#ffffff', m: M4(x * hr * 1.0, y * hr * 1.0 + hr * 0.08, z * hr * 1.06, 0, hr * 0.62) });
-      }
-      const hair = new THREE.Mesh(mergeParts(parts), toonMat({ color: '#6b4226', vertexColors: true }));
-      hair.castShadow = true;
-      hair.position.copy(headC);
-      acc.hair = attach(B.head, hair);
-      acc.hairMat = hair.material;
-    }
+    const hairMat = toonMat({ color: '#6b4226', vertexColors: true }); // cheveux, barbe, sourcils
+    const acc = { hairMat };
+    // visage et coiffure : construits sous l'os de la tête, dans le repère du modèle (voir setupFace)
+    acc.face = headMesh && headMesh.isSkinnedMesh ? setupFace(headMesh, B.head, hairMat, matRigid) : null;
     {
       const g = new THREE.Group(); // couronne de laurier
       const leaf = new THREE.SphereGeometry(1, 6, 4);
@@ -4164,6 +4184,339 @@
     applySkin();
   }
 
+  // ------------------------------------------------------------------
+  // Visage et coiffure d'Ulysse (modèle KayKit).
+  // La tête du modèle est un seul maillage : crâne (pastille peau), barbe et sourcils (pastille
+  // cheveux), yeux (pastille sombre). On trie ses triangles par pastille pour pouvoir masquer la
+  // barbe, les sourcils ou les yeux d'origine (index reconstruit) ; les variantes sont de petites
+  // pièces fusionnées (un appel de dessin par matériau), posées sur la peau par lancer de rayons.
+  // Tout vit dans un groupe accroché à l'os de la tête dont la matrice ramène au repère du modèle
+  // (pose de liaison) : les pièces suivent l'animation sans calcul. La forme du visage déforme les
+  // sommets de la tête (copie d'origine gardée) et la même fonction place les pièces.
+  // ------------------------------------------------------------------
+  function setupFace(mesh, bone, hairMat, paletteMat) {
+    const geo = mesh.geometry, uv = geo.attributes.uv, P = geo.attributes.position;
+    const idx = Array.from(geo.index.array);
+    const cellOf = (i) => Math.floor(uv.getX(i) * 8) + ',' + Math.floor(uv.getY(i) * 4);
+    const tris = { skin: [], hairy: [], eyes: [] };
+    for (let t = 0; t < idx.length; t += 3) {
+      const c = cellOf(idx[t]);
+      (c === '1,0' ? tris.hairy : c === '2,0' ? tris.eyes : tris.skin).push(idx[t], idx[t + 1], idx[t + 2]);
+    }
+    if (!tris.eyes.length || !tris.hairy.length) return null;
+    // hauteur des yeux : au-dessus = sourcils, au-dessous = barbe (moustache comprise)
+    let eyeY = 0;
+    tris.eyes.forEach((i) => { eyeY += P.getY(i); });
+    eyeY /= tris.eyes.length;
+    const brows = [], beard = [];
+    for (let t = 0; t < tris.hairy.length; t += 3) {
+      const tri = tris.hairy.slice(t, t + 3);
+      (Math.min(...tri.map((i) => P.getY(i))) > eyeY ? brows : beard).push(...tri);
+    }
+    geo.computeBoundingBox();
+    const bb = geo.boundingBox.clone();
+    // sondes de lancer de rayons (pose d'origine, non déformée) : crâne seul, barbe seule
+    const probe = (list) => {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(Float32Array.from(P.array), 3));
+      g.setIndex(list);
+      const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial());
+      m.updateMatrixWorld(true);
+      return m;
+    };
+    const grp = new THREE.Group();
+    grp.matrixAutoUpdate = false;
+    grp.name = 'heroFace';
+    const bi = mesh.skeleton.bones.indexOf(bone);
+    grp.matrix.copy(bi >= 0 ? mesh.skeleton.boneInverses[bi] : new THREE.Matrix4()).multiply(mesh.bindMatrix);
+    bone.add(grp);
+    const decoMat = toonMat({ color: '#ffffff', vertexColors: true }); // yeux, bouche, rubans : couleurs fixes
+    const blushMat = toonMat({ color: '#f29a9a' });
+    const freckMat = toonMat({ color: '#9a6040' });
+    // menton : le crâne du modèle est ouvert sous le nez, c'est la barbe qui fait la mâchoire. Sans la
+    // barbe d'origine, on reprend sa forme, un peu plus petite, peinte dans la pastille peau de la palette.
+    const N = geo.attributes.normal, top = eyeY - 0.15, chinBase = [], cn = [], cu = [];
+    beard.forEach((i) => {
+      chinBase.push(P.getX(i) * 0.94, top - (top - P.getY(i)) * 0.82, P.getZ(i) * 0.9);
+      cn.push(N.getX(i), N.getY(i), N.getZ(i));
+      cu.push(uv.getX(i) - 0.125, uv.getY(i)); // (pastille cheveux → pastille peau, juste à gauche)
+    });
+    const chinGeo = new THREE.BufferGeometry();
+    chinGeo.setAttribute('position', new THREE.Float32BufferAttribute(chinBase.slice(), 3));
+    chinGeo.setAttribute('normal', new THREE.Float32BufferAttribute(cn, 3));
+    chinGeo.setAttribute('uv', new THREE.Float32BufferAttribute(cu, 2));
+    const chin = new THREE.Mesh(chinGeo, paletteMat);
+    chin.castShadow = true; chin.frustumCulled = false;
+    grp.add(chin);
+    const chinProbe = new THREE.Mesh(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(chinBase.slice(), 3)), new THREE.MeshBasicMaterial());
+    chinProbe.updateMatrixWorld(true);
+    return { mesh, geo, base: Float32Array.from(P.array), tris: { skin: tris.skin, beard, brows, eyes: tris.eyes }, eyeY,
+      bb, skull: probe(tris.skin), beardProbe: probe(beard), chin, chinBase, chinProbe, grp, hairMat, decoMat, blushMat, freckMat, key: '', parts: {} };
+  }
+
+  // forme du visage : déformation douce autour du centre du crâne (v : Vector3, modifié et rendu)
+  function headShapeFn(F, id) {
+    const C = new THREE.Vector3((F.bb.min.x + F.bb.max.x) / 2, F.bb.max.y - (F.bb.max.y - F.bb.min.y) * 0.5, 0);
+    const hw = (F.bb.max.x - F.bb.min.x) * 0.42, hh = (F.bb.max.y - F.bb.min.y) * 0.5;
+    const d = new THREE.Vector3();
+    if (id === 'base' || !id) return (v) => v;
+    return (v) => {
+      d.copy(v).sub(C);
+      const n = d.length(), m = Math.max(Math.abs(d.x) / hw, Math.abs(d.y) / hh, Math.abs(d.z) / hw) * Math.min(hw, hh);
+      const low = Math.max(0, Math.min(1, -d.y / hh)); // 0 au milieu, 1 au menton
+      if (id === 'rond') { // plus rond, un peu plus large, joues pleines
+        if (n > 1e-4) d.multiplyScalar(1 + (m / n - 1) * 0.5);
+        d.x *= 1.06 + low * 0.04; d.y *= 0.94; d.z *= 1.02;
+      } else if (id === 'ovale') { // plus haut, plus étroit, menton affiné
+        d.x *= 0.92 * (1 - low * 0.16); d.y *= 1.07; d.z *= 0.97;
+      } else if (id === 'carre') { // coins marqués, mâchoire large
+        if (m > 1e-4) d.multiplyScalar(1 + (n / m - 1) * 0.3);
+        d.x *= 1.03 + low * 0.1; d.y *= 0.97;
+      }
+      return v.copy(C).add(d);
+    };
+  }
+
+  // reconstruit les pièces du visage et de la coiffure choisies (seulement si le choix a changé)
+  function buildFace(F, st) {
+    const key = [st.head, st.hairStyle, st.eyes, st.brows, st.mouth, st.beard, st.cheeks].join('|');
+    if (key === F.key) return;
+    F.key = key;
+    // forme : sommets de la tête déformés depuis la copie d'origine
+    const shape = headShapeFn(F, st.head);
+    const P = F.geo.attributes.position, v = new THREE.Vector3();
+    for (let i = 0; i < P.count; i++) {
+      v.set(F.base[i * 3], F.base[i * 3 + 1], F.base[i * 3 + 2]);
+      shape(v);
+      P.setXYZ(i, v.x, v.y, v.z);
+    }
+    P.needsUpdate = true;
+    const CP = F.chin.geometry.attributes.position;
+    for (let i = 0; i < CP.count; i++) {
+      v.set(F.chinBase[i * 3], F.chinBase[i * 3 + 1], F.chinBase[i * 3 + 2]);
+      shape(v);
+      CP.setXYZ(i, v.x, v.y, v.z);
+    }
+    CP.needsUpdate = true;
+    F.chin.visible = st.beard !== 'pleine';
+    // pièces d'origine gardées ou masquées
+    const keep = F.tris.skin.slice();
+    if (st.beard === 'pleine') keep.push(...F.tris.beard);
+    if (st.brows === 'epais') keep.push(...F.tris.brows);
+    if (st.eyes === 'points') keep.push(...F.tris.eyes);
+    F.geo.setIndex(keep);
+    // on jette les anciennes pièces
+    Object.keys(F.parts).forEach((k) => { const o = F.parts[k]; F.grp.remove(o); o.geometry.dispose(); });
+    F.parts = {};
+
+    const lib = geoLib(), rc = new THREE.Raycaster();
+    const _fz = new THREE.Vector3(0, 0, 1), _fy = new THREE.Vector3(0, 1, 0);
+    const V = (x, y, z) => new THREE.Vector3(x, y, z);
+    // point de la peau touché par un rayon (pose d'origine) ; n = normale de la face
+    const skin = st.beard === 'pleine' ? [F.skull] : [F.skull, F.chinProbe]; // (peau : crâne + menton)
+    const hit = (probe, o, dir) => {
+      rc.set(o, dir.normalize());
+      const h = rc.intersectObjects(probe)[0];
+      return h ? { p: h.point.clone(), n: h.face.normal.clone() } : null;
+    };
+    const front = (x, y, probe) => hit(probe ? [probe] : skin, V(x, y, 3), V(0, 0, -1)) || { p: V(x, y, 0.42), n: V(0, 0, 1) };
+    const around = (a, y) => hit(skin, V(Math.sin(a) * 3, y, Math.cos(a) * 3), V(-Math.sin(a), 0, -Math.cos(a))) ||
+      { p: V(Math.sin(a) * 0.45, y, Math.cos(a) * 0.45), n: V(Math.sin(a), 0, Math.cos(a)) };
+    const lists = { hairTop: [], hairTall: [], hairHang: [], beard: [], deco: [], blush: [], freck: [] };
+    // pièce posée : géométrie, centre (pose d'origine, déformé par la forme), axe z tourné vers n, roulis, échelles
+    const q = new THREE.Quaternion(), qr = new THREE.Quaternion(), sc = new THREE.Vector3();
+    const put = (list, geo, p, n, sx, sy, sz, color, roll, up) => {
+      q.setFromUnitVectors(up ? _fy : _fz, (n || _fz).clone().normalize());
+      if (roll) q.multiply(qr.setFromAxisAngle(up ? _fy : _fz, roll));
+      list.push({ geo, color: color || '#ffffff', m: new THREE.Matrix4().compose(shape(p.clone()), q, sc.set(sx, sy == null ? sx : sy, sz == null ? sx : sz)) });
+    };
+    const out = (h, k) => h.p.clone().addScaledVector(h.n, k); // décollé de la peau
+    const INK = '#2a2220', WHITE = '#ffffff';
+
+    // ---------- coiffures ----------
+    const hb = F.bb, hr = (hb.max.x - hb.min.x) * 0.5;
+    const hc = V((hb.min.x + hb.max.x) / 2, hb.max.y - hr * 0.95, (hb.min.z + hb.max.z) / 2);
+    // points répartis sur la sphère (spirale dorée), filtrés par la zone de la coupe
+    const sphere = (N, keepFn, fn) => {
+      for (let i = 0; i < N; i++) {
+        const y = 1 - (i + 0.5) / N * 2, rad = Math.sqrt(1 - y * y), a = i * 2.39996;
+        const x = Math.cos(a) * rad, z = Math.sin(a) * rad;
+        if (keepFn(x, y, z)) fn(x, y, z);
+      }
+    };
+    // point du crâne dans la direction d depuis le centre de la tête (rayon lancé de l'extérieur)
+    const onSkull = (x, y, z, off) => {
+      const d = V(x, y, z), h = hit([F.skull], hc.clone().addScaledVector(d, 3), d.clone().negate());
+      return h ? h.p.addScaledVector(d, hr * off) : V(hc.x + x * hr * (0.9 + off), hc.y + y * hr * (0.9 + off), hc.z + z * hr * (0.9 + off));
+    };
+    // calotte lisse : les triangles du crâne (haut et arrière), un peu agrandis autour du centre de la tête
+    // (off : épaisseur relative ; low, fr : bas des côtés et avant du front dégagés)
+    const shell = (list, off, low, fr) => {
+      const keepFn = (x, y, z) => !(y < low && z > -0.3) && !(z > fr && y < 0.42) && y >= -0.45;
+      const pos = [], nor = [], tri = F.tris.skin, B = F.base, NN = F.geo.attributes.normal, w = V(0, 0, 0), d = V(0, 0, 0);
+      for (let t = 0; t < tri.length; t += 3) {
+        d.set(0, 0, 0); // (direction du centre du triangle)
+        for (let k = 0; k < 3; k++) { const i = tri[t + k] * 3; d.x += B[i] - hc.x; d.y += B[i + 1] - hc.y; d.z += B[i + 2] - hc.z; }
+        d.normalize();
+        if (!keepFn(d.x, d.y, d.z)) continue;
+        for (let k = 0; k < 3; k++) {
+          const i = tri[t + k];
+          w.set(B[i * 3], B[i * 3 + 1], B[i * 3 + 2]).sub(hc).multiplyScalar(1 + off).add(hc);
+          shape(w);
+          pos.push(w.x, w.y, w.z); nor.push(NN.getX(i), NN.getY(i), NN.getZ(i));
+        }
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+      list.push({ geo: g, color: '#ffffff', m: new THREE.Matrix4() }); // (déjà déformée : pas de matrice)
+    };
+    const tie = (p, n, s) => put(lists.deco, lib.torus, p, n, s, s, s * 1.4, '#ff4f4f');
+    const hs = st.hairStyle;
+    if (hs === 'boucles') { // les grosses boucles d'origine
+      sphere(46, (x, y, z) => !(y < -0.05 && z > -0.35) && !(z > 0.45 && y < 0.5) && y >= -0.45,
+        (x, y, z) => put(lists.hairTop, lib.ball, V(hc.x + x * hr, hc.y + y * hr + hr * 0.08, hc.z + z * hr * 1.06), null, hr * 0.62));
+    } else if (hs === 'courtes') { // petites bouclettes serrées
+      sphere(84, (x, y, z) => !(y < 0 && z > -0.3) && !(z > 0.42 && y < 0.55) && y >= -0.35,
+        (x, y, z) => put(lists.hairTop, lib.ball, onSkull(x, y, z, 0.07), null, hr * 0.42));
+    } else if (hs === 'lisses') { // courts et lisses, mèche sur le côté
+      shell(lists.hairTop, 0.08, -0.02, 0.5);
+      [-1.5, -0.5, 0.5, 1.5].forEach((k, j) => {
+        const d = V(k * 0.24, 0.6 - Math.abs(k) * 0.04, 0.76).normalize();
+        put(lists.hairTop, lib.ball, onSkull(d.x, d.y, d.z, 0.1), d, hr * 0.5, hr * 0.26, hr * 0.2, null, -0.45 + j * 0.06);
+      });
+    } else if (hs === 'ras') { // coupe rase
+      shell(lists.hairTop, 0.035, 0.05, 0.5);
+    } else if (hs === 'longs') { // longs et ondulés, jusqu'aux épaules
+      shell(lists.hairTop, 0.08, -0.02, 0.48);
+      for (let j = 0; j < 7; j++) for (let k = -3; k <= 3; k++) {
+        const y = hc.y + hr * 0.15 - j * hr * 0.26, a = Math.PI + k * 0.34;
+        const rr = hr * (j < 3 ? 0.86 : 0.74) + Math.sin(j * 1.7 + k) * hr * 0.04;
+        put(lists.hairHang, lib.ball, V(hc.x + Math.sin(a) * rr + Math.sin(j * 1.3 + k * 2) * hr * 0.05, y, hc.z - 0.05 + Math.cos(a) * rr), null, hr * 0.56);
+      }
+    } else if (hs === 'queue' || hs === 'chignon' || hs === 'tresses') { // tirés en arrière
+      shell(lists.hairTop, 0.06, -0.02, 0.5);
+      if (hs === 'queue') {
+        const dq = V(0, 0.3, -0.95).normalize(), top = onSkull(dq.x, dq.y, dq.z, 0.1);
+        tie(top, dq, hr * 0.3);
+        for (let t = 0; t < 7; t++) {
+          put(lists.hairHang, lib.ball, V(hc.x + Math.sin(t * 0.9) * hr * 0.05, top.y - t * hr * 0.2, top.z - hr * 0.12 - Math.sin(t * 0.45) * hr * 0.22), null, hr * (0.5 - t * 0.035));
+        }
+      } else if (hs === 'chignon') {
+        const d = V(0, 0.8, -0.6).normalize(), c = onSkull(d.x, d.y, d.z, 0.3);
+        put(lists.hairTall, lib.ball, c, null, hr * 0.78);
+        [[0.2, 0.15, 0.1], [-0.2, 0.12, 0.08], [0, 0.26, -0.12], [0.05, -0.05, -0.24]].forEach(([x, y, z]) => put(lists.hairTall, lib.ball, c.clone().add(V(x * hr, y * hr, z * hr)), null, hr * 0.4));
+        tie(onSkull(d.x, d.y, d.z, 0.06), d, hr * 0.32);
+      } else { // deux tresses derrière les oreilles, un ruban au bout
+        [-1, 1].forEach((s) => {
+          const x0 = hc.x + s * hr * 0.74, z0 = hc.z - hr * 0.45;
+          for (let t = 0; t < 8; t++) {
+            put(lists.hairHang, lib.ball, V(x0 + (t % 2 ? 1 : -1) * hr * 0.04, hc.y - hr * 0.1 - t * hr * 0.17, z0), null, hr * 0.32, hr * 0.27, hr * 0.32);
+          }
+          put(lists.deco, lib.ball, V(x0, hc.y - hr * 0.1 - 8 * hr * 0.17, z0), null, hr * 0.22, hr * 0.14, hr * 0.22, '#ff4f4f');
+        });
+      }
+    } else if (hs === 'crete') { // crête de casque : côtés ras, une crête du front à la nuque
+      shell(lists.hairTop, 0.035, 0.1, 0.5);
+      for (let t = 0; t < 9; t++) {
+        const th = 0.8 + t * 0.33; // du front (en avant) à la nuque (en arrière)
+        const d = V(0, Math.sin(th), Math.cos(th));
+        put(lists.hairTall, lib.ball, onSkull(d.x, d.y, d.z, 0.12), d, hr * 0.26, hr * (0.8 - Math.abs(t - 3) * 0.06), hr * 0.5, null, 0, true);
+      }
+    }
+    // ('chauve' : rien)
+
+    // ---------- barbes (couleur des cheveux) ----------
+    const moustache = (k) => [-1, 1].forEach((s) => {
+      const h = front(s * 0.08, 1.435);
+      put(lists.beard, lib.ball, out(h, 0.03), h.n, 0.19 * k, 0.08 * k, 0.09 * k, null, s * -0.35);
+      const t = front(s * 0.17, 1.405);
+      put(lists.beard, lib.ball, out(t, 0.02), t.n, 0.08 * k, 0.07 * k, 0.07 * k);
+    });
+    if (st.beard === 'moustache') moustache(1);
+    else if (st.beard === 'courte') {
+      moustache(0.85);
+      for (let a = -1.3; a <= 1.31; a += 0.1) {
+        [1.25, 1.31, 1.37].forEach((y) => {
+          if (Math.abs(a) < 0.42 && y > 1.3) return; // la bouche reste dégagée
+          const h = around(a, y);
+          put(lists.beard, lib.ball, out(h, 0.008), h.n, 0.16, 0.14, 0.045);
+        });
+      }
+    } else if (st.beard === 'bouc') {
+      moustache(0.75);
+      for (let a = -0.36; a <= 0.37; a += 0.18) [1.22, 1.29].forEach((y) => { const h = around(a, y); put(lists.beard, lib.ball, out(h, 0.02), h.n, 0.15, 0.15, 0.08); });
+      const h = around(0, 1.17);
+      put(lists.beard, lib.ball, out(h, 0.04), h.n, 0.13, 0.2, 0.11);
+    }
+
+    // ---------- yeux ----------
+    const eye = (s) => front(s * 0.2, F.eyeY);
+    const dot = (s, k) => { const h = eye(s); put(lists.deco, lib.ball, out(h, 0.012), h.n, 0.1 * k, 0.13 * k, 0.06, INK); };
+    const happy = (s) => { const h = eye(s); put(lists.deco, lib.arc, out(h, 0.02).add(V(0, -0.025, 0)), h.n, 0.12, 0.12, 0.2, INK); };
+    if (st.eyes === 'grands') [-1, 1].forEach((s) => {
+      const h = eye(s);
+      put(lists.deco, lib.ball, out(h, 0.01), h.n, 0.16, 0.18, 0.07, WHITE);
+      put(lists.deco, lib.ball, out(h, 0.04).add(V(-s * 0.008, -0.01, 0)), h.n, 0.1, 0.12, 0.05, INK);
+      put(lists.deco, lib.ball, out(h, 0.06).add(V(-s * 0.008 + 0.022, 0.022, 0)), h.n, 0.035, 0.035, 0.02, WHITE);
+    });
+    else if (st.eyes === 'rieurs') [-1, 1].forEach(happy);
+    else if (st.eyes === 'endormis') [-1, 1].forEach((s) => {
+      const h = eye(s);
+      put(lists.deco, lib.ball, out(h, 0.012).add(V(0, -0.02, 0)), h.n, 0.11, 0.055, 0.05, INK);
+      put(lists.deco, lib.box, out(h, 0.03).add(V(0, 0.008, 0)), h.n, 0.14, 0.016, 0.02, INK, s * -0.15);
+    });
+    else if (st.eyes === 'clin') { dot(-1, 1); happy(1); }
+
+    // ---------- sourcils (couleur des cheveux) ----------
+    const browAt = (s) => front(s * 0.2, F.eyeY + 0.15);
+    if (st.brows === 'fins') [-1, 1].forEach((s) => { const h = browAt(s); put(lists.beard, lib.box, out(h, 0.012), h.n, 0.17, 0.03, 0.035, null, s * -0.12); });
+    else if (st.brows === 'hauts') [-1, 1].forEach((s) => { const h = browAt(s); put(lists.beard, lib.arc, out(h, 0.012).add(V(0, 0.0, 0)), h.n, 0.19, 0.19, 0.25); });
+
+    // ---------- bouche ----------
+    // sur la barbe d'origine si elle est là ; le sourire d'origine reste caché sous la moustache
+    const mo = st.beard === 'pleine' ? front(0, 1.35, F.beardProbe) : front(0, 1.37);
+    const mk = (k) => out(mo, k);
+    if (st.mouth === 'sourire' && st.beard !== 'pleine') put(lists.deco, lib.arc, mk(0.02).add(V(0, 0.04, 0)), mo.n, 0.15, 0.15, 0.22, INK, Math.PI);
+    else if (st.mouth === 'rire') {
+      put(lists.deco, lib.ball, mk(0.01).add(V(0, -0.005, 0)), mo.n, 0.17, 0.12, 0.06, '#4a1c22');
+      put(lists.deco, lib.ball, mk(0.03).add(V(0, -0.03, 0)), mo.n, 0.09, 0.045, 0.03, '#ff7a8a');
+      put(lists.deco, lib.box, mk(0.025).add(V(0, 0.035, 0)), mo.n, 0.13, 0.025, 0.02, WHITE);
+    } else if (st.mouth === 'o') put(lists.deco, lib.ball, mk(0.012), mo.n, 0.06, 0.08, 0.05, '#4a1c22');
+    else if (st.mouth === 'malin') put(lists.deco, lib.arc, mk(0.02).add(V(0.03, 0.035, 0)), mo.n, 0.13, 0.11, 0.22, INK, Math.PI + 0.4);
+    else if (st.mouth === 'neutre') put(lists.deco, lib.box, mk(0.015), mo.n, 0.11, 0.02, 0.02, INK);
+
+    // ---------- joues ----------
+    if (st.cheeks === 'joues' || st.cheeks === 'deux') [-1, 1].forEach((s) => { const h = front(s * 0.26, F.eyeY - 0.12); put(lists.blush, lib.ball, out(h, 0.004), h.n, 0.13, 0.08, 0.03); });
+    if (st.cheeks === 'taches' || st.cheeks === 'deux') [-1, 1].forEach((s) => {
+      [[0.17, -0.1], [0.23, -0.07], [0.29, -0.11], [0.21, -0.14], [0.27, -0.15]].forEach(([x, y]) => {
+        const h = front(s * x, F.eyeY + y); put(lists.freck, lib.ball, out(h, 0.006), h.n, 0.022);
+      });
+    });
+
+    // fusion : un maillage par matériau
+    const mats = { hairTop: F.hairMat, hairTall: F.hairMat, hairHang: F.hairMat, beard: F.hairMat, deco: F.decoMat, blush: F.blushMat, freck: F.freckMat };
+    Object.keys(lists).forEach((k) => {
+      if (!lists[k].length) return;
+      const m = new THREE.Mesh(mergeParts(lists[k]), mats[k]);
+      m.castShadow = k.startsWith('hair');
+      m.frustumCulled = false;
+      F.grp.add(m);
+      F.parts[k] = m;
+    });
+  }
+
+  // applique le visage choisi (et masque ce que la coiffe recouvre) : appelé par applySkin
+  function applyFace(F, st, skinHex, accId) {
+    const id = (cat) => skinOpt(cat, st[cat]).id;
+    buildFace(F, { head: id('head'), hairStyle: id('hairStyle'), eyes: id('eyes'), brows: id('brows'), mouth: id('mouth'), beard: id('beard'), cheeks: id('cheeks') });
+    const P = F.parts;
+    if (P.hairTop) P.hairTop.visible = accId !== 'helmet';                         // sous le casque : pas de calotte
+    if (P.hairTall) P.hairTall.visible = accId !== 'helmet' && accId !== 'petasos'; // chignon, crête : sous les chapeaux
+    F.blushMat.color.copy(new THREE.Color(skinHex).lerp(new THREE.Color('#ff6f8f'), 0.55)).convertSRGBToLinear();
+    F.freckMat.color.copy(new THREE.Color(skinHex).multiplyScalar(0.62)).convertSRGBToLinear();
+  }
+
   // tenues : couleurs des liserés, du cuir, du métal, des jambes et des lanières
   const OUTFIT_COL = {
     // 'T+' / 'T-' = la couleur de la tunique, éclaircie / foncée : les bordures de fourrure et la grosse
@@ -4225,6 +4578,9 @@
       if (pm) {
         setLin(pm.tunic.color, col('tunic')); setLin(pm.hair.color, col('hair')); setLin(pm.skin.color, col('skin'));
       }
+      // (héros de secours : seulement cheveux et barbe présents ou non)
+      if (hero.procHair) hero.procHair.visible = skinOpt('hairStyle', st.hairStyle).id !== 'chauve';
+      if (hero.procBeard) hero.procBeard.visible = ['pleine', 'courte', 'bouc'].includes(skinOpt('beard', st.beard).id);
       return;
     }
     const outfit = skinOpt('outfit', st.outfit).id;
@@ -4240,7 +4596,7 @@
     setLin(A.hairMat.color, hairHex);
     const accId = skinOpt('accessory', st.accessory).id;
     ['laurel', 'helmet', 'band', 'petasos'].forEach((n) => { A[n].visible = accId === n; });
-    A.hair.visible = accId !== 'helmet';
+    if (A.face) applyFace(A.face, st, skinHex, accId);
     setLin(A.band.children[0].material.color, capeId === 'none' || capeId === 'blanc' ? '#ff4f4f' : capeHex);
     const w = skinOpt('weapon', st.weapon).id;
     ['spear', 'staff', 'bow', 'sword'].forEach((n) => { A[n].visible = w === n; A[n].userData.hidden = false; });
@@ -5971,13 +6327,14 @@
   };
   World.skinLabels = () => Object.assign({}, SKIN_LABELS);
   World.getSkin = () => Object.assign({}, skinState);
-  // setSkin({ outfit, tunic, cape, hair, skin, accessory, weapon, shield }) : immédiat, sans coût notable ;
+  // setSkin({ outfit, tunic, cape, hair, skin, accessory, weapon, shield, hairStyle, head, eyes, brows, mouth, beard, cheeks }) : immédiat, sans coût notable ;
   // peut être appelé avant l'init ou avant le chargement du modèle (appliqué ensuite)
   World.setSkin = (s) => {
     if (s) Object.keys(SKIN_DEFAULT).forEach((k) => {
       if (s[k] == null || !SKIN_OPTIONS[k].some((o) => o.id === s[k])) return;
       // vitrine : une nouvelle cape, un bouclier ou un arc se portent dans le dos → il se retourne
-      if (showcaseOn && s[k] !== skinState[k] && (k === 'cape' || k === 'shield' || (k === 'weapon' && s[k] === 'bow'))) showBack = 2.6;
+      if (showcaseOn && s[k] !== skinState[k] && (k === 'cape' || k === 'shield' || (k === 'weapon' && s[k] === 'bow') ||
+        (k === 'hairStyle' && ['queue', 'chignon', 'tresses', 'longs'].includes(s[k])))) showBack = 2.6; // (on montre le dos : cape, bouclier, arc, queue de cheval…)
       skinState[k] = s[k];
     });
     if (THREE && hero.group) applySkin();
