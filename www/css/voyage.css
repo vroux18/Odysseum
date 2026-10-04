@@ -415,3 +415,44 @@
 #home.bubble .lvcard .lc-nav[data-d="-1"] { left: calc((100% - 58px) / 2 - 26px); }
 #home.bubble .lvcard .lc-nav[data-d="1"] { left: calc((100% - 58px) / 2 + 4px); }
 #home.bubble #go { top: calc(var(--by) - 14px - 94px / 2 - 28px) !important; }
+
+/* ---------- Bandeau du niveau, version finale : une pilule fine, centrée en bas ----------
+   [‹]   Niveau 9 · icônes · étoiles   [›]  (▶)   — navigation simple, Play rond vert à droite */
+#home { --W: min(340px, calc(100vw - 32px)); --lc-h: 66px; }
+.lvcard { display: grid !important; grid-template-columns: 1fr !important; grid-template-rows: auto auto !important; justify-items: center !important;
+  align-content: center !important; row-gap: 3px !important; padding: 6px 104px 6px 46px !important; border-radius: 33px !important; height: var(--lc-h) !important; }
+.lvcard::before, .lvcard::after { display: none !important; }
+.lvcard .lc-isle { display: none !important; }
+.lvcard .lc-title { grid-row: 1 !important; grid-column: 1 !important; justify-self: center !important; font-size: 17px !important; gap: 0 !important; }
+.lvcard .lc-games { grid-row: 2 !important; grid-column: 1 !important; justify-self: center !important; display: flex; align-items: center; gap: 4px !important; }
+.lvcard .lc-chip i { width: 20px !important; height: 20px !important; }
+.lvcard .lc-chip svg { width: 12px !important; height: 12px !important; }
+.lvcard .lc-stars { grid-row: 2 !important; grid-column: 1 !important; justify-self: end !important; align-self: center; margin-right: -2px; }
+.lvcard .lc-st svg { width: 10px !important; height: 10px !important; }
+/* flèches : aux deux extrémités gauche du bandeau et juste avant Play */
+.lvcard .lc-nav { position: absolute !important; top: 50%; margin: 0 !important; transform: translateY(-50%); width: 30px !important; height: 30px !important; font-size: 20px !important; }
+.lvcard .lc-nav[data-d="-1"] { left: 10px; }
+.lvcard .lc-nav[data-d="1"] { right: 68px; left: auto; }
+/* Play rond vert, dans le bandeau à droite */
+#home #go { width: 54px !important; height: 54px !important; border-radius: 50% !important; transform: none !important;
+  left: calc(50% + var(--W) / 2 - 60px) !important; right: auto !important; top: auto !important;
+  bottom: calc(var(--lc-b) + (var(--lc-h) - 54px) / 2 + 2px) !important; }
+#home #go::after { content: none !important; display: none !important; }
+#home #go svg.ic, #home #go svg { width: 24px !important; height: 24px !important; }
+
+/* ---------- Bandeau du niveau : encadré (niveau, étoiles, mini-jeux) entre ‹ et ›, grand bouton vert « Jouer » dessous ---------- */
+#home { --lc-h: 128px; }
+.lvcard { grid-template-rows: auto auto auto 50px !important; padding: 8px 52px 10px !important; row-gap: 3px !important; border-radius: 28px !important; height: var(--lc-h) !important; align-content: start !important; }
+.lvcard .lc-title { grid-row: 1 !important; font-size: 18px !important; }
+.lvcard .lc-stars { grid-row: 2 !important; justify-self: center !important; margin: 0 !important; }
+.lvcard .lc-st svg { width: 12px !important; height: 12px !important; }
+.lvcard .lc-games { grid-row: 3 !important; }
+.lvcard .lc-nav { top: 37px !important; width: 34px !important; height: 34px !important; font-size: 22px !important; }
+.lvcard .lc-nav[data-d="-1"] { left: 12px !important; }
+.lvcard .lc-nav[data-d="1"] { right: 12px !important; left: auto !important; }
+#home #go { width: calc(var(--W) - 28px) !important; height: 46px !important; border-radius: 23px !important;
+  left: calc(50% - var(--W) / 2 + 14px) !important; bottom: calc(var(--lc-b) + 10px) !important; display: flex !important; align-items: center; justify-content: center; gap: 8px; }
+#home #go::after { content: 'Jouer' !important; display: inline !important; position: static !important; inset: auto !important; border: 0 !important; animation: none !important;
+  font: 700 18px/1 var(--k-font, 'Fredoka', sans-serif); color: #fff; opacity: 1 !important; transform: none !important; width: auto; height: auto; background: none !important; }
+#home #go.boss::after { content: 'Épreuve' !important; }
+#home #go svg.ic, #home #go svg { width: 20px !important; height: 20px !important; }
