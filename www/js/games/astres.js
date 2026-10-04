@@ -10,12 +10,10 @@
   // symboles foncés posés sur des pastilles colorées (soleil doré, lune bleue)
   // soleil rayonnant et croissant de lune, clairs sur leur pastille colorée
   // symboles cartoon : un soleil rieur aux joues roses, une lune qui somnole avec son étoile
-  const SUN_SVG = '<svg viewBox="0 0 24 24" class="gl-sun"><path class="ray" d="M12 1.6v2.6M12 19.8v2.6M1.6 12h2.6M19.8 12h2.6M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8"/>' +
-    '<circle class="face" cx="12" cy="12" r="6.6"/><circle class="eye" cx="9.7" cy="11.1" r="1"/><circle class="eye" cx="14.3" cy="11.1" r="1"/>' +
-    '<circle class="cheek" cx="8.3" cy="13.5" r="1.1"/><circle class="cheek" cx="15.7" cy="13.5" r="1.1"/><path class="smile" d="M9.9 13.7q2.1 1.9 4.2 0"/></svg>';
-  const MOON_SVG = '<svg viewBox="0 0 24 24" class="gl-moon"><path class="face" d="M14.6 2.8a9.3 9.3 0 1 0 6.6 15.6A7.6 7.6 0 0 1 14.6 2.8z"/>' +
-    '<path class="lid" d="M7.6 11.2q1.3 1.2 2.6 0"/><circle class="cheek" cx="8.4" cy="14" r="1.1"/><path class="smile" d="M9.6 15.6q1 .8 2 0"/>' +
-    '<path class="star" d="M19.4 3.2l.7 1.6 1.6.7-1.6.7-.7 1.6-.7-1.6-1.6-.7 1.6-.7z"/></svg>';
+  // version épurée : deux symboles très simples, foncés sur tuile pastel — un carré au trait (vert) et un rond plein (bleu)
+  // (les noms SUN / MOON restent ceux de la logique du jeu)
+  const SUN_SVG = '<svg viewBox="0 0 24 24" class="gl-sun"><rect class="core" x="4.5" y="4.5" width="15" height="15" rx="4"/></svg>';
+  const MOON_SVG = '<svg viewBox="0 0 24 24" class="gl-moon"><circle class="crescent" cx="12" cy="12" r="8"/></svg>';
 
   // triples alignés en diagonale passant par la case i
   function diagTriples(n, i) {
@@ -283,8 +281,9 @@
           if (v && v !== puzzle.solution[i]) wrong.push(i);
           else if (!v) empty.push(i);
         });
-        const name = (v, pl) => (v === SUN ? 'soleil' : 'lune') + (pl ? 's' : '');
-        const un = (v) => (v === SUN ? 'un soleil' : 'une lune');
+        // symboles affichés : un carré (SUN) et un rond (MOON), tous deux masculins
+        const name = (v, pl) => (v === SUN ? 'carré' : 'rond') + (pl ? 's' : '');
+        const un = (v) => (v === SUN ? 'un carré' : 'un rond');
         const rowOf = (i) => Math.floor(i / n), colOf = (i) => i % n;
         const rowCells = (r) => [...Array(n)].map((_, k) => r * n + k), colCells = (c) => [...Array(n)].map((_, k) => k * n + c);
         const put = (i, v, text, why) => {
@@ -320,8 +319,7 @@
               if (at(-1) === o && at(-2) === o) pair = [line[k - 1], line[k - 2]];
               else if (at(1) === o && at(2) === o) pair = [line[k + 1], line[k + 2]];
               else if (at(-1) === o && at(1) === o) pair = [line[k - 1], line[k + 1]];
-              // (soleil masculin, lune féminin : « deux soleils surlignés », « deux lunes surlignées »)
-              const fem = o === MOON;
+              const fem = false; // (carré et rond sont masculins)
               if (pair) return {
                 text: (pair[0] === line[k - 1] && pair[1] === line[k + 1] ? 'Entre deux ' : 'Juste à côté de deux ') + name(o, true) + (fem ? ' surlignées' : ' surlignés') +
                   (word === 'diagonale' ? ' (en diagonale)' : '') + ', ' + (fem ? 'une troisième' : 'un troisième') + ' ferait trois à la suite : ici, c\'est ' + un(v) + '.', why: pair };
@@ -338,7 +336,7 @@
           }
           if (rule === 'count') {
             const row = rowCells(r), col = colCells(c);
-            const full = (word) => 'Cette ' + word + ' a déjà ses ' + half + ' ' + name(o, true) + ' (' + (o === MOON ? 'surlignées' : 'surlignés') + '), soit la moitié : ses cases vides sont des ' + name(v, true) + '. Ici, c\'est ' + un(v) + '.';
+            const full = (word) => 'Cette ' + word + ' a déjà ses ' + half + ' ' + name(o, true) + ' (surlignés), soit la moitié : ses cases vides sont des ' + name(v, true) + '. Ici, c\'est ' + un(v) + '.';
             if (row.filter((j) => state[j] === o).length === half) return { text: full('ligne'), why: row.filter((j) => state[j] === o) };
             if (col.filter((j) => state[j] === o).length === half) return { text: full('colonne'), why: col.filter((j) => state[j] === o) };
           }
@@ -361,7 +359,7 @@
   C.register({
     id: 'astres',
     name: 'Astres',
-    tagline: 'Équilibre soleils et lunes',
+    tagline: 'Équilibre carrés et ronds',
     accent: '#ff8c42',
     icon: '<svg viewBox="0 0 12 12" shape-rendering="crispEdges"><path d="M2 3h3v1h1v3H5v1H2V7H1V4h1zM8 2h3v1h-2v1H8v3h1v1h2v1H8V8H7V3h1z" fill="currentColor"/></svg>',
     variants: [
@@ -370,15 +368,15 @@
     ],
     rules: {
       classic: [
-        'Remplis chaque case d\'un <b>soleil</b> ou d\'une <b>lune</b> : touche une fois pour le soleil, deux fois pour la lune, trois pour vider.',
+        'Remplis chaque case d\'un <b>carré</b> ou d\'un <b>rond</b> : touche une fois pour le carré, deux fois pour le rond, trois pour vider.',
         'Jamais <b>trois pareils</b> à la suite, en ligne comme en colonne.',
-        'Chaque ligne et chaque colonne a <b>autant de soleils que de lunes</b>.',
+        'Chaque ligne et chaque colonne a <b>autant de carrés que de ronds</b>.',
         '<b>=</b> entre deux cases : les mêmes. <b>×</b> : différents.'
       ],
       diagonales: [
-        'Remplis chaque case d\'un <b>soleil</b> ou d\'une <b>lune</b> : touche une fois pour le soleil, deux fois pour la lune, trois pour vider.',
+        'Remplis chaque case d\'un <b>carré</b> ou d\'un <b>rond</b> : touche une fois pour le carré, deux fois pour le rond, trois pour vider.',
         'Jamais <b>trois pareils</b> à la suite, <b>même en diagonale</b>.',
-        'Chaque ligne et chaque colonne a <b>autant de soleils que de lunes</b>.',
+        'Chaque ligne et chaque colonne a <b>autant de carrés que de ronds</b>.',
         '<b>=</b> entre deux cases : les mêmes. <b>×</b> : différents.'
       ]
     },

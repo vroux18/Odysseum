@@ -1,0 +1,136 @@
+/* ==================================================================
+   Déblocage des mini-jeux (app.js, « Déblocage des mini-jeux ») :
+   - carte plein écran « Île terminée ! » / « Monde terminé ! » (emblème de la saga), confettis,
+     nouveaux jeux révélés un par un, récapitulatif de la saga, bouton Essayer + fermer ;
+   - jeux verrouillés de la liste : grisés, cadenas, « île N », petit tremblement au toucher.
+   Couleurs de saga : [data-saga] dans voyage.css (--saga, --saga2). Feuille chargée en dernier.
+   ================================================================== */
+
+/* ---------- Carte plein écran ---------- */
+.unlock-card {
+  position: fixed; inset: 0; z-index: 8990; display: flex; align-items: center; justify-content: center; overflow: hidden;
+  padding: calc(24px + env(safe-area-inset-top, 0px)) 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  background: radial-gradient(circle at 50% 36%, var(--saga2, #3fe0d0) 0, var(--saga, #3d8ee8) 72%); color: #fff;
+}
+.unlock-card[hidden] { display: none; }
+:root[data-theme="dark"] .unlock-card {
+  background: radial-gradient(circle at 50% 36%, color-mix(in srgb, var(--saga2, #3fe0d0) 72%, #141729) 0, color-mix(in srgb, var(--saga, #3d8ee8) 58%, #141729) 72%);
+}
+.unlock-card.in { animation: ucFade .4s ease-out both; }
+.unlock-card.out { animation: ucOut .3s ease-in both; }
+
+.unlock-card .uc-inner {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center;
+  width: 100%; max-width: 380px; max-height: 100%; overflow-y: auto; padding: 16px 0 12px; box-sizing: border-box;
+}
+
+/* blason : laurier doré et étoile (île), emblème de la saga (monde) */
+.unlock-card .uc-crest {
+  position: relative; width: 112px; height: 112px; flex: none; border-radius: 50%; display: grid; place-items: center;
+  background: #fff; color: var(--saga, #3d8ee8);
+  box-shadow: 0 8px 0 rgba(0, 0, 0, .12), 0 0 0 10px rgba(255, 255, 255, .25);
+  animation: ucCrest .7s .1s var(--k-ease, ease-out) both;
+}
+:root[data-theme="dark"] .unlock-card .uc-crest { background: var(--k-cream, #1d2038); color: var(--saga2, #3fe0d0); }
+.unlock-card .uc-crest .saga-emblem { width: 62px; height: 62px; padding: 0; background: none; box-shadow: none; animation: none;
+  fill: currentColor; stroke: none; border-radius: 0; }
+.unlock-card .uc-laurel { position: absolute; inset: 14px; width: auto; height: auto; color: var(--k-sun-dk, #e08f00); fill: currentColor; stroke: none; }
+.unlock-card .uc-star { position: relative; width: 38px; height: 38px; fill: var(--k-sun, #ffc93d); stroke: var(--k-sun-dk, #e08f00); stroke-width: 1.2;
+  animation: ucStar .6s .45s var(--k-ease, ease-out) both; }
+
+.unlock-card .uc-title { font: 700 34px/1.05 var(--k-font, 'Fredoka', sans-serif); text-shadow: 0 3px 0 rgba(0, 0, 0, .15);
+  animation: ucUp .5s .25s ease-out both; }
+.unlock-card .uc-sub { font: 600 16px/1.1 var(--k-font, 'Fredoka', sans-serif); font-style: normal; opacity: .88; margin-top: -4px;
+  animation: ucUp .5s .4s ease-out both; }
+
+/* nouveaux jeux : la pastille éclot, puis le nom */
+.unlock-card .uc-new { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px 22px; margin-top: 10px; }
+.unlock-card .uc-game { display: flex; flex-direction: column; align-items: center; gap: 8px; animation: ucPop .6s var(--d, 1s) var(--k-ease, ease-out) both; }
+.unlock-card .uc-ic {
+  position: relative; width: 84px; height: 84px; border-radius: 50%; display: grid; place-items: center; color: #fff;
+  background: radial-gradient(circle at 38% 30%, color-mix(in srgb, var(--game) 60%, #fff), var(--game) 72%);
+  border: 4px solid #fff; box-shadow: 0 6px 0 color-mix(in srgb, var(--game) 62%, #2a1f3d), 0 10px 22px rgba(0, 0, 0, .18), inset 0 3px 0 rgba(255, 255, 255, .45);
+}
+/* halo qui tourne derrière le nouveau jeu */
+.unlock-card .uc-ic::before {
+  content: ''; position: absolute; inset: -16px; z-index: -1; border-radius: 50%;
+  background: repeating-conic-gradient(rgba(255, 255, 255, .34) 0 12deg, transparent 12deg 30deg);
+  -webkit-mask: radial-gradient(circle, #000 40%, transparent 72%); mask: radial-gradient(circle, #000 40%, transparent 72%);
+  animation: ucSpin 9s linear infinite;
+}
+.unlock-card .uc-ic svg { width: 40px; height: 40px; stroke-width: 2.4; }
+.unlock-card .uc-ic svg .f { fill: #fff; }
+.unlock-card .uc-game em { font: 700 18px/1.1 var(--k-font, 'Fredoka', sans-serif); font-style: normal; text-shadow: 0 2px 0 rgba(0, 0, 0, .15); }
+
+/* fin de saga : tous les jeux ouverts pendant la saga, en petites pastilles */
+.unlock-card .uc-recap { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 300px; margin-top: 6px; }
+.unlock-card .uc-mini {
+  width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; color: #fff;
+  background: radial-gradient(circle at 38% 30%, color-mix(in srgb, var(--game) 60%, #fff), var(--game) 72%);
+  border: 3px solid #fff; box-shadow: 0 3px 0 color-mix(in srgb, var(--game) 62%, #2a1f3d);
+  animation: ucPop .45s var(--d, 1s) var(--k-ease, ease-out) both;
+}
+.unlock-card .uc-mini svg { width: 18px; height: 18px; stroke-width: 2.6; }
+.unlock-card .uc-mini svg .f { fill: #fff; }
+
+/* boutons : fermer (petit, rond, blanc translucide) + essayer (gros, à la couleur du jeu) */
+.unlock-card .uc-actions { display: flex; align-items: center; justify-content: center; gap: 18px; margin-top: 16px;
+  animation: ucUp .45s var(--d, 1.5s) ease-out both; }
+.unlock-card .uc-close:not(.next-btn) {
+  width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; color: #fff; cursor: pointer;
+  background: rgba(255, 255, 255, .22); border: 3px solid rgba(255, 255, 255, .6); padding: 0;
+}
+.unlock-card .uc-close:not(.next-btn) svg.ic { width: 22px; height: 22px; }
+.unlock-card .uc-close:active { transform: translateY(2px); }
+.unlock-card .next-btn { width: 84px; height: 84px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; padding: 0; }
+.unlock-card .next-btn svg.ic { width: 38px; height: 38px; }
+.unlock-card .uc-try { animation: ucBeat 1.6s 2.6s ease-in-out infinite; }
+
+/* confettis et étoiles qui tombent */
+.unlock-card .uc-deco { position: absolute; inset: 0; pointer-events: none; animation: ucFade .8s .2s ease-out both; }
+.unlock-card .uc-bit {
+  position: absolute; top: -24px; left: var(--x); width: 10px; height: 16px; border-radius: 3px; background: var(--c);
+  transform: rotate(var(--r)); opacity: .9; animation: ucFall var(--t, 3s) var(--d, 0s) linear infinite;
+}
+.unlock-card .uc-bit.star { width: 22px; height: 22px; background: none; }
+.unlock-card .uc-bit.star svg { width: 100%; height: 100%; fill: var(--c); stroke: none; }
+
+@keyframes ucFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ucOut { to { opacity: 0; } }
+@keyframes ucCrest { from { transform: scale(.2) rotate(-30deg); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes ucStar { from { transform: scale(0) rotate(-90deg); } to { transform: none; } }
+@keyframes ucUp { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes ucPop { 0% { transform: scale(0); opacity: 0; } 70% { transform: scale(1.12); opacity: 1; } 100% { transform: none; opacity: 1; } }
+@keyframes ucSpin { to { transform: rotate(360deg); } }
+@keyframes ucBeat { 0%, 100% { transform: none; } 50% { transform: scale(1.07); } }
+@keyframes ucFall {
+  0% { transform: translate3d(0, 0, 0) rotate(var(--r)); }
+  100% { transform: translate3d(30px, 110vh, 0) rotate(calc(var(--r) + 540deg)); }
+}
+
+/* animations réduites : tout est posé d'emblée, confettis immobiles */
+.unlock-card.still, .unlock-card.still *, .unlock-card.still *::before { animation: none !important; }
+.unlock-card.still .uc-bit { top: var(--y); opacity: .5; }
+html.a11y-motion .unlock-card *, html.a11y-motion .unlock-card *::before, html.a11y-motion .unlock-card { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .unlock-card, .unlock-card *, .unlock-card *::before { animation: none !important; }
+}
+
+/* ---------- Liste des mini-jeux : jeux pas encore débloqués ---------- */
+#library .tile.unlock-locked { opacity: .6; }
+#library .tile.unlock-locked .tile-icon { position: relative; filter: grayscale(.85); }
+#library .tile.unlock-locked .tile-icon .ul-lock {
+  position: absolute; right: -6px; bottom: -6px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--k-bubble, #fff); color: var(--k-ink-soft, #8a83a3); box-shadow: 0 2px 0 var(--k-edge, #d9cfe8); font-style: normal;
+}
+#library .tile.unlock-locked .tile-icon .ul-lock svg.ic { width: 14px !important; height: 14px !important; }
+#library .tile.unlock-locked .ul-isle { color: var(--k-ink-soft, #8a83a3); background: var(--k-well, #f1ecf8); }
+#library .tile.ul-shake { animation: ulShake .42s ease-in-out; }
+@keyframes ulShake {
+  0%, 100% { transform: none; } 20% { transform: translateX(-6px) rotate(-2deg); } 40% { transform: translateX(5px) rotate(2deg); }
+  60% { transform: translateX(-3px); } 80% { transform: translateX(2px); }
+}
+html.a11y-motion #library .tile.ul-shake { animation: none; }
+@media (prefers-reduced-motion: reduce) { #library .tile.ul-shake { animation: none; } }
+/* bulle « île N » : le cadenas à côté du nom */
+.xp-toast svg.ic { width: 15px; height: 15px; display: inline-block; vertical-align: -2px; margin-right: 6px; }

@@ -107,7 +107,7 @@
 
   // ------------------------------------------------------------------
   // La quête principale :
-  // - Chaque monde (île) ajoute des mini-jeux : 3 au premier (Flux, Reines, Tuyaux), puis 5, 7, et les 9 au 4e monde.
+  // - Chaque monde (île) terminé débloque un mini-jeu : 3 au premier (Flux, Tuyaux, Amphores), puis +1 par île (voir UNLOCK).
   // - Un niveau = une petite série de 2 à 3 mini-jeux enchaînés (2 au tout début).
   // - Les nouveaux jeux d'un monde ouvrent ses premiers niveaux (avec leur tutoriel).
   // - La difficulté monte d'île en île et au fil de chaque île.
@@ -121,10 +121,20 @@
   // ordre d'apparition des mini-jeux dans la quête (un jeu absent est ignoré)
   const ORDER = ['flux', 'reines', 'tuyaux', 'astres', 'paves', 'pixels', 'serpent', 'lumieres', 'coffre',
     'demineur', 'simon', 'amphores', 'mosaique', 'oracle', 'rushhour', 'bataille'].filter((id) => C.games.some((g) => g.id === id));
-  // jeux disponibles dans les mondes 1, 2, 3… (les derniers venus — Amphores, Mosaïque, Oracle — et ceux
-  // qu'ils décalent restent atteignables grâce aux mondes 7 et 8)
-  const POOL_SIZE = [3, 5, 7, 9, 11, 13, 15, 16];
-  const poolOf = (c) => ORDER.slice(0, POOL_SIZE[Math.min(c, POOL_SIZE.length - 1)]);
+  // Déblocage des mini-jeux : trois jeux immédiats au départ, puis chaque île terminée (épreuve réussie)
+  // en ouvre un nouveau, du plus intuitif au plus exigeant, en alternant les capacités.
+  // jeu → île (numérotée à partir de 1) qu'il faut terminer pour l'ouvrir ; 0 = ouvert dès le départ.
+  // C'est aussi l'index (à partir de 0) de la première île où il entre dans la quête.
+  // Tout dépend de J.done seul (voir « Déblocage des mini-jeux » plus bas pour la célébration).
+  const UNLOCK = {
+    flux: 0, tuyaux: 0, amphores: 0, // relier, tourner, retrouver des paires : rien à expliquer
+    reines: 1, pixels: 2, lumieres: 3, simon: 4, astres: 5, serpent: 6, paves: 7,
+    coffre: 8, mosaique: 9, demineur: 10, rushhour: 11, oracle: 12,
+    bataille: 13 // (pas encore chargé dans index.html : ignoré tant qu'il est absent)
+  };
+  const unlockAt = (id) => UNLOCK[id] || 0; // (un jeu absent du tableau est ouvert d'office)
+  // jeux disponibles sur l'île c (index à partir de 0), dans l'ordre de ORDER
+  const poolOf = (c) => ORDER.filter((id) => unlockAt(id) <= c);
 
   // Les trois sagas du voyage (mêmes bornes que SAGAS dans world.js) : l'Odyssée (îles 0–29),
   // les Douze Travaux d'Héraclès (30–44), les Argonautes (45–65) ; après, tout recommence.
@@ -184,9 +194,12 @@
     } else {
       const count = c === 0 && k < 6 ? 2 : 3;
       ids = [];
-      // les premiers niveaux d'un monde présentent ses nouveaux jeux
-      if (k * 2 < fresh.length) ids.push(fresh[k * 2]);
-      if (k * 2 + 1 < fresh.length) ids.push(fresh[k * 2 + 1]);
+      // les premiers niveaux d'un monde présentent ses nouveaux jeux : au premier monde, deux par niveau ;
+      // ensuite, le jeu tout juste débloqué ouvre les 3 premiers niveaux de l'île
+      if (c === 0) {
+        if (k * 2 < fresh.length) ids.push(fresh[k * 2]);
+        if (k * 2 + 1 < fresh.length) ids.push(fresh[k * 2 + 1]);
+      } else if (k < 3) fresh.slice(0, count - 1).forEach((id) => ids.push(id));
       const others = rng.shuffle(pool.slice());
       others.forEach((id) => { if (ids.length < count && !ids.includes(id)) ids.push(id); });
     }
@@ -310,6 +323,125 @@
   let selected = J.done; // Ulysse se tient toujours sur le niveau en cours
   let standing = true; // le voyageur est sur une pierre (sinon il se promène)
   let worldReady = false;
+
+  // ------------------------------------------------------------------
+  // Déblocage des mini-jeux (tableau UNLOCK, en tête de la quête) : un jeu est ouvert dès que le joueur a
+  // terminé l'île qui l'ouvre — fonction de J.done seule. La quête, le défi du jour, les défis des îles et
+  // la concentration ne tirent que des jeux ouverts ; la liste des mini-jeux montre les autres sous cadenas.
+  // Une île terminée : carte « Île terminée ! » (« Monde terminé ! » en fin de saga, avec le récapitulatif
+  // des jeux ouverts pendant la saga), puis les nouveaux jeux, un par un, et un bouton pour les essayer.
+  // J.unlockSeen = nombre d'îles terminées déjà fêtées (une ancienne sauvegarde : tout est déjà vu, sans fête).
+  // ------------------------------------------------------------------
+  const islesDone = () => Math.floor((J.done || 0) / PER);
+  function isUnlocked(id) { return unlockAt(id) <= islesDone(); }
+  function unlockedIds() { return poolOf(islesDone()); }
+  if (J.unlockSeen == null) { J.unlockSeen = islesDone(); C.save(); }
+  let unlockAfter = null, unlockTimer = 0;
+  const unlockBusy = () => !!unlockTimer || !!(document.getElementById('unlock-card') && !document.getElementById('unlock-card').hidden);
+  // jeux ouverts en terminant l'île c (index à partir de 0) : au premier tour seulement
+  const unlockedBy = (c) => ORDER.filter((id) => unlockAt(id) === c + 1);
+  // toucher un jeu verrouillé : il tremble, et une petite bulle dit quelle île l'ouvre
+  function lockedNudge(id, el) {
+    C.sfx.tap();
+    if (el) { el.classList.remove('ul-shake'); void el.offsetWidth; el.classList.add('ul-shake'); }
+    showXp(LOCK + '<b>' + game(id).name + '</b> · île ' + unlockAt(id), ACCENT[id]);
+  }
+  // au retour sur la carte : une île vient d'être terminée ? la carte arrive une fois l'île fleurie (~2 s)
+  function scheduleUnlockCard() {
+    const done = islesDone();
+    if ((J.unlockSeen || 0) >= done) {
+      if (unlockAfter && !unlockBusy()) { const f = unlockAfter; unlockAfter = null; setTimeout(f, 600); } // carte de saga laissée en attente
+      return;
+    }
+    clearTimeout(unlockTimer);
+    unlockTimer = setTimeout(() => {
+      unlockTimer = 0;
+      // partie relancée entre-temps : on attend le prochain retour sur la carte
+      if (screens.home.hidden || (J.unlockSeen || 0) >= islesDone()) return;
+      const from = J.unlockSeen || 0, to = islesDone() - 1;
+      J.unlockSeen = islesDone();
+      C.save();
+      let fresh = [], sagaEnd = null;
+      for (let c = from; c <= to; c++) {
+        fresh = fresh.concat(unlockedBy(c));
+        if (sagaOf(c).last === c) sagaEnd = sagaOf(c);
+      }
+      if (fresh.length || sagaEnd) showUnlockCard(to, fresh, sagaEnd);
+      else if (unlockAfter) { const f = unlockAfter; unlockAfter = null; f(); }
+    }, 2200);
+  }
+  function showUnlockCard(c, fresh, sg) {
+    let el = $('#unlock-card');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'unlock-card';
+      el.className = 'unlock-card';
+      el.setAttribute('role', 'dialog');
+      el.setAttribute('aria-modal', 'true');
+      el.addEventListener('click', (e) => {
+        const t = e.target.closest('.uc-try');
+        if (t) { hideUnlockCard(t.dataset.game); return; }
+        if (e.target.closest('.uc-close') || e.target === el) hideUnlockCard();
+      });
+      document.body.appendChild(el);
+    }
+    const s = sagaOf(c);
+    // fin de saga : récapitulatif des jeux ouverts pendant la saga (au départ compris pour la première)
+    const recap = sg ? ORDER.filter((id) => { const u = unlockAt(id) - 1; return (u >= sg.first && u <= sg.last) || (u < 0 && sg.first === 0); }) : [];
+    const motion = !(document.documentElement.classList.contains('a11y-motion') || matchMedia('(prefers-reduced-motion: reduce)').matches);
+    // confettis et étoiles (décor ; immobiles si les animations sont réduites)
+    let deco = '';
+    const COLORS = ['#ffc93d', '#ff7eb0', '#3fe0d0', '#5cc93b', '#5ec3f2', '#ee7a4d'];
+    for (let i = 0; i < 26; i++) {
+      const star = i % 4 === 0;
+      const r = C.makeRng('confetti:' + i); // (positions fixes d'une fois à l'autre, bien éparpillées)
+      deco += '<i class="uc-bit' + (star ? ' star' : '') + '" style="--x:' + Math.round(r() * 100) + '%;--y:' + Math.round(r() * 100) + '%;--r:' + Math.round(r() * 360) + 'deg;--d:' + (-r() * 3).toFixed(2) + 's;--t:' + (2.6 + r() * 1.8).toFixed(2) + 's;--c:' + COLORS[i % COLORS.length] + '">' +
+        (star ? '<svg viewBox="0 0 24 24"><path d="' + STAR_D + '"/></svg>' : '') + '</i>';
+    }
+    const t0 = 0.9; // les nouveaux jeux arrivent après le titre, un par un
+    const games = fresh.map((id, i) => '<div class="uc-game" style="--game:' + ACCENT[id] + ';--d:' + (t0 + i * 0.55).toFixed(2) + 's">' +
+      '<span class="uc-ic">' + icon(id) + '</span><em>' + game(id).name + '</em></div>').join('');
+    const rd = t0 + fresh.length * 0.55 + 0.2;
+    const recapHtml = recap.length ? '<div class="uc-recap" aria-label="Jeux débloqués pendant la saga">' + recap.map((id, i) =>
+      '<span class="uc-mini" style="--game:' + ACCENT[id] + ';--d:' + (rd + i * 0.06).toFixed(2) + 's" title="' + game(id).name + '">' + icon(id) + '</span>').join('') + '</div>' : '';
+    const first = fresh[0];
+    el.dataset.saga = s.index;
+    el.classList.toggle('saga-end', !!sg);
+    el.innerHTML = '<div class="uc-deco" aria-hidden="true">' + deco + '</div>' +
+      '<div class="uc-inner">' +
+        '<div class="uc-crest">' + (sg ? sagaEmblem(sg.emblem) : '<svg class="uc-laurel" viewBox="0 0 512 512" aria-hidden="true"><use href="assets/ui/icons.svg#g-laurels"/></svg>' +
+          '<svg class="uc-star" viewBox="0 0 24 24" aria-hidden="true"><path d="' + STAR_D + '"/></svg>') + '</div>' +
+        '<b class="uc-title">' + (sg ? 'Monde terminé !' : 'Île terminée !') + '</b>' +
+        '<i class="uc-sub">' + (sg ? sg.name : voyageName(c)) + '</i>' +
+        (games ? '<div class="uc-new">' + games + '</div>' : '') + recapHtml +
+        '<div class="uc-actions" style="--d:' + (rd + recap.length * 0.06 + 0.1).toFixed(2) + 's">' +
+          (first ? '<button class="uc-close" aria-label="Fermer">' + UI('x') + '</button>'
+            : '<button class="next-btn uc-close" style="--game:var(--k-grass)" aria-label="Continuer">' + UI('arrow-right') + '</button>') +
+          (first ? '<button class="next-btn uc-try" data-game="' + first + '" style="--game:' + ACCENT[first] + '" aria-label="Essayer ' + game(first).name + '">' + UI('play') + '</button>' : '') +
+        '</div>' +
+      '</div>';
+    el.classList.toggle('still', !motion);
+    el.hidden = false;
+    el.classList.remove('out', 'in'); void el.offsetWidth; el.classList.add('in');
+    if (C.sfx) {
+      if (C.sfx.win) C.sfx.win();
+      if (C.sfx.star) fresh.forEach((id, i) => setTimeout(() => { if (!el.hidden) C.sfx.star(Math.min(2, i)); }, (t0 + i * 0.55) * 1000 + 250));
+    }
+  }
+  // fermer (ou essayer le nouveau jeu : son premier niveau, avec son tutoriel au premier lancement)
+  function hideUnlockCard(tryId) {
+    const el = $('#unlock-card');
+    if (!el || el.hidden) return;
+    el.classList.add('out');
+    setTimeout(() => { el.hidden = true; el.classList.remove('in', 'out'); }, 300);
+    C.sfx.tap();
+    if (tryId) {
+      const nx = nextTier(tryId);
+      setTimeout(() => startTier(tryId, nx ? nx.tier.id : TIERS[0].id, nx ? nx.k : 1), 250);
+      return; // (une carte de saga en attente passera au retour sur la carte)
+    }
+    if (unlockAfter) { const f = unlockAfter; unlockAfter = null; setTimeout(f, 350); }
+  }
 
   function initWorld() {
     worldReady = !!(C.world && C.world.init($('#world'), {
@@ -987,6 +1119,7 @@
   // le chrono en direct s'affiche en régate, pendant une série de la quête
   setInterval(() => {
     const t = $('#play-timer');
+    if (!t) return;
     const info = session && session.info;
     const on = isCompet() && info && info.t0 && !info.free && !screens.play.hidden;
     t.hidden = !on;
@@ -999,7 +1132,6 @@
     if (navigator.share) {
       navigator.share({ title: 'Odysseus', text: txt, url }).catch(() => { /* partage annulé */ });
     } else if (navigator.clipboard) {
-    if (!t) return;
       navigator.clipboard.writeText(txt + ' ' + url).then(() => showXp('message copié, colle-le à tes amis', '#5f9fd8')).catch(() => {});
     }
   }
@@ -1164,6 +1296,9 @@
     if (session) session.stop();
     session = null;
     show('home');
+    // île terminée : « Île terminée ! » et ses nouveaux mini-jeux, après la floraison de l'île
+    // (programmée avant la marche d'Ulysse : une carte de saga à l'arrivée attendra la sienne)
+    scheduleUnlockCard();
     if (worldReady) {
       C.world.endConcentrate();
       C.world.start();
@@ -1188,6 +1323,7 @@
     refreshEvents(); // une île atteinte ouvre son totem ; un événement réussi devient une coupe
     renderPlay();
     renderBadge();
+    scheduleOutfitCard(); // niveau de cerveau gagné : « Nouvelle tenue ! », après les autres cartes
   }
 
   // étoiles des niveaux de la quête sur la carte (animate : les nouvelles montent de leur pierre)
@@ -1222,7 +1358,9 @@
   function dailyInfo(date) {
     date = date || C.todayKey();
     const seed = 'daily:' + date;
-    const id = ORDER[C.hashString(seed) % ORDER.length];
+    // tiré parmi tous les jeux (le même pour tous) ; s'il n'est pas encore débloqué, parmi ceux du joueur
+    const h = C.hashString(seed), mine = unlockedIds();
+    const id = isUnlocked(ORDER[h % ORDER.length]) ? ORDER[h % ORDER.length] : mine[h % mine.length];
     const level = Math.max(8, Math.min(32, levelInfo(J.done).steps[0].level + 5)); // moyen-difficile
     return { L: -1, free: true, daily: date, id, accent: ACCENT[id], seed, steps: [{ id, variant: 'classic', level, seed }] };
   }
@@ -1356,11 +1494,15 @@
       }
       const v = VARIANTS_ON && libMode === 'variant' && g.variants && g.variants[1] ? g.variants[1].id : 'classic';
       const b = document.createElement('button');
-      b.className = 'tile';
+      const open = isUnlocked(g.id);
+      b.className = 'tile' + (open ? '' : ' locked unlock-locked');
       b.style.setProperty('--game', ACCENT[g.id]);
-      b.innerHTML = '<span class="tile-icon">' + icon(g.id) + '</span><span class="tile-name">' + g.name + '</span>' +
-        '<span class="tile-lvl">niv. ' + gameLvl(g.id) + '</span>';
-      b.addEventListener('click', () => openLevels(g.id));
+      // pas encore débloqué : grisé, cadenas et l'île qui l'ouvre (« île 5 »)
+      b.innerHTML = '<span class="tile-icon">' + icon(g.id) + (open ? '' : '<i class="ul-lock">' + LOCK + '</i>') + '</span>' +
+        '<span class="tile-name">' + g.name + '</span>' +
+        (open ? '<span class="tile-lvl">niv. ' + gameLvl(g.id) + '</span>' : '<span class="tile-lvl ul-isle">île ' + unlockAt(g.id) + '</span>');
+      if (!open) b.setAttribute('aria-label', g.name + ' · se débloque après l\'île ' + unlockAt(g.id));
+      b.addEventListener('click', () => (open ? openLevels(g.id) : lockedNudge(g.id, b)));
       group.appendChild(b);
     });
     renderMegaLib(gl);
@@ -1432,7 +1574,10 @@
   let focusTurn = 0;
   function startFocus(sk) {
     focusTurn++;
-    const g = game(sk.games[focusTurn % sk.games.length]);
+    // seulement les jeux débloqués de la capacité (à défaut, n'importe quel jeu débloqué)
+    const list = sk.games.filter(isUnlocked);
+    const pick = list.length ? list : unlockedIds();
+    const g = game(pick[focusTurn % pick.length]);
     const v = VARIANTS_ON && g.variants && g.variants[1] && Math.random() < 0.4 ? g.variants[1].id : 'classic';
     const d = C.gameData(dataKey(g, v));
     $('#brain').hidden = true;
@@ -1507,6 +1652,7 @@
   // Bandeau des niveaux d'un mini-jeu : onglets de palier (+ Méga pour les jeux à grande grille), grille de 150 niveaux
   let lv = null;
   function openLevels(id, tier) {
+    if (!isUnlocked(id)) { lockedNudge(id); return; } // jeu pas encore débloqué : pas de bandeau des niveaux
     let k = 0;
     TIERS.forEach((t, i) => { if (tierOpen(id, i)) k = i; });
     lv = { id, tier: tier === 'mega' && MEGA_TRACK[id] ? 'mega' : TIERS[k].id };
@@ -2176,6 +2322,8 @@
     if (L == null || L !== J.done || L % PER !== 0) return;
     const c = L / PER;
     if (c === 0 || sagaOf(c).first !== c || (J.sagaSeen || 0) >= c) return;
+    // la carte « Monde terminé ! » passe d'abord ; celle de la nouvelle saga suit sa fermeture
+    if (unlockBusy()) { unlockAfter = () => maybeSagaCard(L); return; }
     J.sagaSeen = c;
     C.save();
     showSagaCard(c);
@@ -2471,7 +2619,44 @@
   const crParts = (opts) => Object.keys(opts).filter((k) => Array.isArray(opts[k]) && opts[k].length)
     .sort((a, b) => (CR_ORDER.indexOf(a) + 1 || 99) - (CR_ORDER.indexOf(b) + 1 || 99));
   const crName = (k, opts) => CR_NAMES[k] || (worldReady && C.world.skinLabels && C.world.skinLabels()[k]) || (SKIN_PARTS.find((p) => p.id === k) || {}).name || k;
-  let crHistory = [], crLabelT = 0;
+  // ---------- Tenues à débloquer (niveau de cerveau = niveau du joueur, badge en haut à gauche) ----------
+  // Au départ : la tenue par défaut et un ou deux choix par catégorie. Peau et cheveux : toujours libres
+  // (on ne débloque pas son identité). Chaque niveau ouvre une ou deux pièces, des plus simples aux plus
+  // prestigieuses. Pièce absente du tableau : libre dès le départ. (carte « Nouvelle tenue ! » : voir plus bas)
+  const OUTFIT_UNLOCK = {
+    'tunic:olive': 2,
+    'cape:rouge': 3, 'outfit:pelerin': 3,
+    'weapon:bow': 4,
+    'tunic:ocean': 5, 'accessory:petasos': 5,
+    'tunic:safran': 6,
+    'outfit:hoplite': 7,
+    'cape:nuit': 8,
+    'tunic:nuit': 9,
+    'shield:poulpe': 10,
+    'accessory:helmet': 11,
+    'weapon:sword': 12,
+    'shield:oeil': 13,
+    'tunic:tyr': 14,
+    'cape:tyr': 15,
+    'shield:chouette': 16,
+    'outfit:roi': 18,
+    'cape:or': 20,
+    'accessory:laurel': 22
+  };
+  const OUTFIT_FREE = ['hair', 'skin'];
+  const brainLevel = () => playerStats().level;
+  const outfitNeed = (cat, id) => (OUTFIT_FREE.includes(cat) ? 0 : OUTFIT_UNLOCK[cat + ':' + id] || 0);
+  const outfitKept = () => (C.store.outfitKeep = C.store.outfitKeep || []);
+  const outfitLocked = (cat, id) => outfitNeed(cat, id) > brainLevel() && !outfitKept().includes(cat + ':' + id);
+  // première fois (sauvegarde d'avant les déblocages) : rien n'est retiré, ses pièces portées restent à lui ;
+  // les niveaux déjà atteints ne sont pas fêtés après coup
+  if (C.store.outfitSeen == null) {
+    const st = skinState();
+    Object.keys(st).forEach((k) => { if (outfitNeed(k, st[k]) > brainLevel()) outfitKept().push(k + ':' + st[k]); });
+    C.store.outfitSeen = brainLevel();
+    C.save();
+  }
+  let crHistory = [], crLabelT = 0, crFresh = null;
   function renderWardrobe(animate) {
     const opts = skinOptions(), cur = crCurrent();
     const parts = crParts(opts);
@@ -2483,8 +2668,15 @@
     const sel = cur[wdPart] || (list[0] && list[0].id);
     const grid = $('#wd-choices');
     grid.setAttribute('aria-label', crName(wdPart, opts));
-    grid.innerHTML = list.map((o, k) => '<button class="cr-tile' + (o.id === sel ? ' on' : '') + '" role="option" aria-selected="' + (o.id === sel) + '" data-id="' + o.id + '" title="' + o.name + '" style="--k:' + (animate ? k : 0) + (animate ? '' : ';animation:none') + '">' +
-      '<span class="cr-art">' + crSvg(crArt(wdPart, o)) + CR_CHECK + '</span><span class="cr-name">' + o.name + '</span></button>').join('');
+    // pièce verrouillée : grisée, cadenas et « niv. N » à la place du nom ; pièce neuve (carte « Nouvelle tenue ! ») : elle pulse
+    grid.innerHTML = list.map((o, k) => {
+      const lock = o.id !== sel && outfitLocked(wdPart, o.id), need = outfitNeed(wdPart, o.id);
+      const fresh = crFresh && crFresh.includes(wdPart + ':' + o.id);
+      return '<button class="cr-tile' + (o.id === sel ? ' on' : '') + (lock ? ' locked' : '') + (fresh ? ' fresh' : '') + '" role="option" aria-selected="' + (o.id === sel) + '"' +
+        (lock ? ' aria-disabled="true" aria-label="' + o.name + ' · se débloque au niveau ' + need + '"' : '') + ' data-id="' + o.id + '" title="' + o.name + '" style="--k:' + (animate ? k : 0) + (animate ? '' : ';animation:none') + '">' +
+        '<span class="cr-art">' + crSvg(crArt(wdPart, o)) + CR_CHECK + (lock ? '<i class="cr-lock">' + LOCK + '</i>' : '') + '</span>' +
+        '<span class="cr-name">' + (lock ? 'niv. ' + need : o.name) + '</span></button>';
+    }).join('');
     $('#cr-undo').disabled = !crHistory.length;
   }
   // pastille du choix courant (catégorie · nom), s'efface seule
@@ -2512,6 +2704,7 @@
   function crShowcase() {
     const on = !$('#wardrobe').hidden;
     document.documentElement.classList.toggle('creator-open', on); // (masque l'interface de la carte)
+    if (!on) crFresh = null; // (les pièces neuves ne pulsent qu'à la première visite)
     if (!worldReady || !C.world.showcase) return;
     C.world.showcase(on, on ? crFrame() : undefined);
   }
@@ -2542,8 +2735,10 @@
       // une tenue au hasard (différente de l'actuelle dans chaque catégorie quand c'est possible)
       const opts = skinOptions(), cur = crCurrent(), next = {};
       crParts(opts).forEach((k) => {
-        const pool = opts[k].filter((o) => o.id !== cur[k]);
-        const o = (pool.length ? pool : opts[k])[Math.floor(Math.random() * (pool.length || opts[k].length))];
+        const open = opts[k].filter((o) => !outfitLocked(k, o.id)); // (seulement les pièces débloquées)
+        const pool = open.filter((o) => o.id !== cur[k]);
+        if (!open.length) return;
+        const o = (pool.length ? pool : open)[Math.floor(Math.random() * (pool.length || open.length))];
         next[k] = o.id;
       });
       crApply(next);
@@ -2565,6 +2760,14 @@
     }
     if (btn.classList.contains('cr-tile')) {
       const id = btn.dataset.id;
+      if (btn.classList.contains('locked')) {
+        // verrouillée : petit tremblement et rappel du niveau, rien n'est choisi
+        btn.classList.remove('shake'); void btn.offsetWidth; btn.classList.add('shake');
+        crShowLabel(wdPart, id);
+        $('#cr-label').innerHTML = LOCK + $('#cr-label').textContent.replace(/[<>&]/g, '') + ' · niv. ' + outfitNeed(wdPart, id);
+        C.sfx.tap();
+        return;
+      }
       if (crCurrent()[wdPart] === id) { crShowLabel(wdPart, id); return; }
       crApply({ [wdPart]: id });
       crShowLabel(wdPart, id);
@@ -2601,6 +2804,91 @@
     stage.addEventListener('pointerup', end);
     stage.addEventListener('pointercancel', end);
   })();
+
+  // ---------- Carte « Nouvelle tenue ! » (niveau de cerveau gagné) ----------
+  // Au retour sur la carte (goHome) : si le niveau a monté et ouvre des pièces, une petite carte les montre,
+  // après les autres cartes (île terminée, saga, récapitulatif…). C.store.outfitSeen = dernier niveau fêté.
+  let outfitTimer = 0;
+  function scheduleOutfitCard() {
+    clearTimeout(outfitTimer);
+    if (brainLevel() <= (C.store.outfitSeen || 0)) return;
+    outfitTimer = setTimeout(function wait() {
+      outfitTimer = 0;
+      if (screens.home.hidden) return; // partie relancée entre-temps : au prochain retour sur la carte
+      const open = (s) => { const e = $(s); return !!(e && !e.hidden); };
+      if (unlockBusy() || unlockAfter || OB.on || ['#wardrobe', '#level-done', '#saga-card', '#outfit-card', '#rules'].some(open)) {
+        outfitTimer = setTimeout(wait, 700); // une autre carte est à l'écran : on attend qu'elle parte
+        return;
+      }
+      const from = C.store.outfitSeen || 0, now = brainLevel(), opts = skinOptions(), fresh = [];
+      C.store.outfitSeen = now;
+      C.save();
+      Object.keys(OUTFIT_UNLOCK).forEach((key) => {
+        const need = OUTFIT_UNLOCK[key], [cat, id] = key.split(':');
+        const o = (opts[cat] || []).find((x) => x.id === id);
+        if (o && need > from && need <= now) fresh.push({ cat, o, need });
+      });
+      fresh.sort((a, b) => a.need - b.need);
+      if (fresh.length) showOutfitCard(fresh, now);
+    }, 2700); // (la carte « Île terminée ! » part à 2,2 s : elle passe d'abord)
+  }
+  const OC_SHIRT = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3.5 4 6l1.6 4.2L7.5 9.4V20.5h9V9.4l1.9.8L20 6l-5-2.5c-.5 1.4-1.6 2.2-3 2.2S9.5 4.9 9 3.5z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+  function showOutfitCard(fresh, level) {
+    let el = $('#outfit-card');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'outfit-card';
+      el.className = 'outfit-card';
+      el.setAttribute('role', 'dialog');
+      el.setAttribute('aria-modal', 'true');
+      el.setAttribute('aria-labelledby', 'oc-title');
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('.oc-try')) { hideOutfitCard(true); return; }
+        if (e.target.closest('.oc-close') || e.target === el) hideOutfitCard(false);
+      });
+      document.body.appendChild(el);
+    }
+    const shown = fresh.slice(0, 4);
+    el._fresh = fresh;
+    el.innerHTML = '<div class="oc-inner">' +
+      '<div class="oc-items">' + shown.map((f, i) => '<span class="oc-item" style="--d:' + (0.35 + i * 0.3).toFixed(2) + 's">' +
+        '<span class="oc-ic">' + crSvg(crArt(f.cat, f.o)) + '</span><em>' + f.o.name + '</em></span>').join('') + '</div>' +
+      '<b class="oc-title" id="oc-title">Nouvelle tenue !</b>' +
+      '<i class="oc-sub">niveau ' + level + (fresh.length > shown.length ? ' · et ' + (fresh.length - shown.length) + ' autre' + (fresh.length - shown.length > 1 ? 's' : '') : '') + '</i>' +
+      '<div class="oc-actions">' +
+        '<button class="oc-close" aria-label="Plus tard">' + UI('x') + '</button>' +
+        '<button class="oc-try" aria-label="Essayer">' + OC_SHIRT + '<span>Essayer</span></button>' +
+      '</div></div>';
+    el.classList.toggle('still', obReduced());
+    el.hidden = false;
+    el.classList.remove('out', 'in'); void el.offsetWidth; el.classList.add('in');
+    if (C.sfx) {
+      if (C.sfx.win) C.sfx.win();
+      if (C.sfx.star) shown.forEach((f, i) => setTimeout(() => { if (!el.hidden) C.sfx.star(Math.min(2, i)); }, (0.35 + i * 0.3) * 1000 + 200));
+    }
+    setTimeout(() => { const b = el.querySelector('.oc-try'); if (b && !el.hidden) b.focus({ preventScroll: true }); }, 400);
+  }
+  // fermer, ou essayer : l'atelier s'ouvre sur la catégorie de la première pièce neuve, qui pulse
+  function hideOutfitCard(tryIt) {
+    const el = $('#outfit-card');
+    if (!el || el.hidden) return;
+    el.classList.add('out');
+    setTimeout(() => { el.hidden = true; el.classList.remove('in', 'out'); }, obReduced() ? 0 : 260);
+    C.sfx.tap();
+    if (!tryIt || !el._fresh || !el._fresh.length || screens.home.hidden) return;
+    const fresh = el._fresh;
+    setTimeout(() => {
+      wdPart = fresh[0].cat;
+      $('#open-wardrobe').click();
+      crFresh = fresh.map((f) => f.cat + ':' + f.o.id); // (après l'ouverture : renderWardrobe(true) relu ci-dessous)
+      renderWardrobe(true);
+      const t = $('#wd-choices .cr-tile.fresh');
+      if (t) t.scrollIntoView({ block: 'nearest' });
+    }, 200);
+  }
+  const ocBack = () => { const el = $('#outfit-card'); if (el && !el.hidden) hideOutfitCard(false); };
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') ocBack(); });
+  document.addEventListener('backbutton', ocBack);
   $('#settings').addEventListener('click', (e) => { if (e.target.id === 'settings') $('#settings').hidden = true; });
   $('#opt-sound').addEventListener('change', (e) => { C.audio.setSound(e.target.checked); C.sfx.tap(); });
   $('#opt-music').addEventListener('change', (e) => C.audio.setMusic(e.target.checked));
@@ -2899,7 +3187,8 @@
   // exposé pour les tests
   window.Odysseum = { levelInfo, journey: J, eventInfo, eventList, startEvent,
     session: () => session, targetTime, starsFor, dailyInfo, startDaily, renderDaily, dailyStreak, refreshStars, startLevel, startTier, openLevels,
-    startMega, megaParams, megaN, megaTrack: MEGA_TRACK, megaRec, zoom: Z, zoomTo };
+    startMega, megaParams, megaN, megaTrack: MEGA_TRACK, megaRec, zoom: Z, zoomTo,
+    unlock: { table: UNLOCK, isUnlocked, unlockedIds, poolOf, showUnlockCard, scheduleUnlockCard, finishLevel, goHome } };
   $('#open-daily').addEventListener('click', openDaily);
 
   // appli installée depuis Chrome : toujours à jour (voir sw.js) ; inutile dans l'APK

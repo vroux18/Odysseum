@@ -81,11 +81,11 @@
   T.astres = {
     steps: [
       { art: svg(grid(4) + sun(4, 1, 0) + moon(4, 1, 1) + sun(4, 1, 2) + moon(4, 1, 3)),
-        text: 'Remplis la grille de <b>soleils</b> et de <b>lunes</b> : autant de chaque par ligne et par colonne.' },
+        text: 'Remplis la grille de <b>carrés</b> et de <b>ronds</b> : autant de chaque par ligne et par colonne.' },
       { art: svg(grid(4) + sun(4, 1, 0) + sun(4, 1, 1) + sun(4, 1, 2) + '<line x1="16" y1="' + cx(4, 1) + '" x2="80" y2="' + cx(4, 1) + '" stroke="var(--bad-ink)" stroke-width="2"/>'),
         text: 'Jamais <b>trois pareils</b> à la suite, en ligne comme en colonne.' },
       { art: svg(grid(4) + sun(4, 1, 1) + sun(4, 1, 2) + text(4, 1, 1.5, '=', 'var(--muted)') + sun(4, 2, 1) + moon(4, 2, 2) + text(4, 2, 1.5, '×', 'var(--muted)')),
-        text: '<b>=</b> : les deux cases sont pareilles. <b>×</b> : elles sont différentes. Touche une case : soleil, puis lune, puis vide.' }
+        text: '<b>=</b> : les deux cases sont pareilles. <b>×</b> : elles sont différentes. Touche une case : carré, puis rond, puis vide.' }
     ],
     variants: {
       diagonales: { art: svg(grid(4) + moon(4, 0, 0) + moon(4, 1, 1) + moon(4, 2, 2) + '<line x1="20" y1="20" x2="78" y2="78" stroke="var(--bad-ink)" stroke-width="2"/>'),

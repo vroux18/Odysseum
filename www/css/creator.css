@@ -209,3 +209,76 @@
   .cr-stage, .cr-panel, .cr-tile, .cr-spin, .cr-dice.roll svg, #cr-cheer.pop svg { animation: none !important; }
 }
 .a11y-motion .cr-stage, .a11y-motion .cr-panel, .a11y-motion .cr-tile, .a11y-motion .cr-spin { animation: none !important; }
+
+/* ---------- Pièces à débloquer (niveau de cerveau, app.js OUTFIT_UNLOCK) ---------- */
+/* verrouillée : grisée, petit cadenas en coin, « niv. N » sous la tuile */
+.cr-tile.locked { cursor: default; }
+.cr-tile.locked .cr-art { background: var(--k-well); }
+.cr-tile.locked .cr-art svg { opacity: .38; filter: grayscale(.9); }
+.cr-tile.locked .cr-name { color: var(--k-ink-soft); opacity: .85; }
+.cr-tile .cr-lock {
+  position: absolute; right: -6px; bottom: -6px; width: 24px; height: 24px; border-radius: 50%;
+  display: grid; place-items: center; font-style: normal;
+  background: var(--k-bubble); color: var(--k-ink-soft); border: 2.5px solid var(--k-rim);
+  box-shadow: 0 2px 0 var(--k-edge);
+}
+.cr-tile .cr-lock svg.ic { width: 13px; height: 13px; opacity: 1; filter: none; }
+.cr-tile.shake .cr-art { animation: cr-shake .42s ease-in-out; }
+.cr-label svg.ic { width: 13px; height: 13px; display: inline-block; vertical-align: -2px; margin-right: 5px; }
+/* neuve (ouverte depuis la carte « Nouvelle tenue ! ») : halo doré qui pulse */
+.cr-tile.fresh:not(.on) .cr-art { border-color: var(--k-sun); animation: cr-fresh 1.4s ease-in-out 3; }
+.cr-tile.fresh .cr-name { color: var(--k-sun-dk); }
+@keyframes cr-shake {
+  0%, 100% { transform: none; } 20% { transform: translateX(-5px) rotate(-3deg); } 40% { transform: translateX(4px) rotate(2deg); }
+  60% { transform: translateX(-3px); } 80% { transform: translateX(2px); }
+}
+@keyframes cr-fresh { 50% { box-shadow: 0 0 0 5px var(--k-sun), 0 4px 0 var(--k-edge); transform: scale(1.06); } }
+
+/* carte « Nouvelle tenue ! » : petite carte centrée sur un voile, pièces qui éclosent une à une */
+.outfit-card {
+  position: fixed; inset: 0; z-index: 8980; display: flex; align-items: center; justify-content: center;
+  padding: calc(24px + env(safe-area-inset-top, 0px)) 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  background: rgba(30, 26, 60, .45); font-family: var(--k-font); color: var(--k-ink);
+}
+.outfit-card[hidden] { display: none; }
+.outfit-card.in { animation: cr-fade .3s ease-out both; }
+.outfit-card.out { animation: oc-out .26s ease-in both; }
+.outfit-card .oc-inner {
+  display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
+  width: 100%; max-width: 340px; padding: 22px 18px 20px; border-radius: var(--k-r-lg);
+  background: var(--k-bubble); border: 3px solid var(--k-rim); box-shadow: 0 6px 0 var(--k-edge), var(--k-drop);
+  animation: oc-pop .45s var(--k-ease) both;
+}
+.outfit-card .oc-items { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 16px; max-width: 250px; }
+.outfit-card .oc-item { display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: 96px;
+  animation: oc-pop .5s var(--d, .4s) var(--k-ease) both; }
+.outfit-card .oc-ic {
+  position: relative; width: 76px; height: 76px; border-radius: 24px; display: grid; place-items: center;
+  background: var(--k-sun-lt); border: 3px solid var(--k-sun); box-shadow: 0 0 0 3px var(--k-sun-dk), 0 5px 0 3px var(--k-sun-dk);
+}
+:root[data-theme="dark"] .outfit-card .oc-ic { background: var(--k-well); }
+.outfit-card .oc-ic svg { width: 78%; height: 78%; overflow: visible; color: var(--k-ink); }
+.outfit-card .oc-item em { font: 600 13px/1.15 var(--k-font); font-style: normal; color: var(--k-ink); }
+.outfit-card .oc-title { font: 700 26px/1.1 var(--k-font); margin-top: 6px; }
+.outfit-card .oc-sub { font: 600 14px/1.1 var(--k-font); font-style: normal; color: var(--k-ink-soft); margin-top: -4px; }
+.outfit-card .oc-actions { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 8px; }
+.outfit-card .oc-close {
+  width: 48px; height: 48px; padding: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  background: var(--k-well); color: var(--k-ink); border: 3px solid var(--k-rim); box-shadow: 0 3px 0 var(--k-edge);
+}
+.outfit-card .oc-close svg.ic { width: 20px; height: 20px; }
+.outfit-card .oc-try {
+  display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 10px 22px; border-radius: var(--k-r-pill); cursor: pointer;
+  font: 700 17px/1.2 var(--k-font); color: #fff; background: var(--k-grass); border: 3px solid var(--k-rim);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .2); box-shadow: 0 5px 0 #3a9a26, var(--k-drop-sm);
+}
+.outfit-card .oc-try svg.ic { width: 22px; height: 22px; color: #fff; }
+.outfit-card button:active { transform: translateY(2px); }
+@keyframes oc-pop { 0% { transform: scale(.4); opacity: 0; } 70% { transform: scale(1.06); opacity: 1; } 100% { transform: none; opacity: 1; } }
+@keyframes oc-out { to { opacity: 0; } }
+/* animations réduites : tout est posé d'emblée */
+.outfit-card.still, .outfit-card.still * { animation: none !important; }
+html.a11y-motion .outfit-card, html.a11y-motion .outfit-card *, html.a11y-motion .cr-tile.shake .cr-art, html.a11y-motion .cr-tile.fresh .cr-art { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .outfit-card, .outfit-card *, .cr-tile.shake .cr-art, .cr-tile.fresh .cr-art { animation: none !important; }
+}
