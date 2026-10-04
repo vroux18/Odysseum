@@ -507,6 +507,9 @@
 
 /* bandeau et barre d'onglets sur toute la largeur (petite marge) */
 #home { --W: calc(100vw - 24px); }
+/* le bloc niveau + Jouer, un peu moins large que la barre d'onglets */
+#home .lvcard { --lc-w: min(340px, calc(100vw - 72px)); }
+#home #go { --W: min(340px, calc(100vw - 72px)); }
 
 /* thème clair : cases des grilles nettement plus foncées que le fond ivoire, avec un liseré */
 :root:not([data-theme="dark"]) { --tile: #e9dcbd !important; --tile-hi: #f1e6cc !important; --tile-edge: #cdb98d !important; --given: #dcc9a0 !important; --grid-line: #d8c8a3 !important; }
