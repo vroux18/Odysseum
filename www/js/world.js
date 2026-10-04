@@ -71,6 +71,43 @@
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += uGlowCol * vGlow * uNight;');
   }
   const glowMat = (mat) => { mat.onBeforeCompile = glowCompile; return mat; };
+  // L'île meurtrie qui reverdit. Tant qu'Ulysse n'a pas réussi ses niveaux, le paysage est
+  // fané : prairie sèche couleur paille, feuillage terne et brunâtre, fleurs et fruits repliés,
+  // maisons et monuments un peu passés. Chaque pierre réussie soigne un disque autour d'elle
+  // (uHealS[k] = x, z, rayon), qui s'élargit à mesure qu'on avance ; l'île finie retrouve toute
+  // sa splendeur. Tout se passe dans le vertex shader (aucune géométrie reconstruite) ; uHealP
+  // ajoute un liseré lumineux sur le front qui s'étend. Attribut « heal » : pivot xyz (fleurs), nature.
+  function healCompile(sh) {
+    glowCompile(sh);
+    const H = this.userData.heal;
+    sh.uniforms.uHealS = H.stones; sh.uniforms.uHealP = H.pulse; sh.uniforms.uHealM = H.mode;
+    sh.vertexShader = 'attribute vec4 heal;\nuniform vec4 uHealS[' + PER + '];\nuniform float uHealP;\nuniform float uHealM;\n' + sh.vertexShader.replace('#include <begin_vertex>', [
+      '#include <begin_vertex>',
+      '{',
+      // fleurs : on mesure depuis leur pied, pour qu'elles éclosent d'un seul coup
+      '  vec2 hp = heal.w > 1.5 && heal.w < 2.5 ? heal.xz : position.xz;',
+      // (île entièrement fanée ou guérie, hors animation : uHealM le dit, on saute la boucle)
+      '  float hm = uHealM > 0.5 ? 9.0 : -9.0;',
+      '  if (uHealM < -0.5) for (int i = 0; i < ' + PER + '; i++) hm = max(hm, uHealS[i].z - distance(hp, uHealS[i].xy));',
+      '  float healed = smoothstep(-1.1, 0.3, hm);',
+      '  if (heal.w > 1.5 && heal.w < 2.5) transformed = heal.xyz + (transformed - heal.xyz) * healed * (1.0 + 0.4 * sin(3.14159 * healed));',
+      '#ifdef USE_COLOR',
+      '  vec3 c0 = vColor.rgb;',
+      '  float lu = dot(c0, vec3(0.2126, 0.7152, 0.0722));',
+      '  float mx = max(c0.r, max(c0.g, c0.b));',
+      '  float sat = (mx - min(c0.r, min(c0.g, c0.b))) / max(mx, 0.001);',
+      // teintes fanées (espace linéaire) : paille sèche, feuillage roussi, fleurs grises, bâti poussiéreux
+      '  vec3 dry = lu * vec3(1.08, 1.0, 0.88); float wk = 0.62;',
+      '  if (heal.w > 2.5) { dry = lu * vec3(1.15, 1.0, 0.45) * 0.8; wk = 0.88 * smoothstep(0.08, 0.3, sat); }',
+      '  else if (heal.w > 1.5) { dry = lu * vec3(1.05, 1.0, 0.92); wk = 0.85; }',
+      '  else if (heal.w > 0.5) { dry = lu * vec3(1.25, 1.0, 0.45) * 0.85; wk = 0.8; }',
+      '  vColor.rgb = mix(c0, dry, wk * (1.0 - healed)) + vec3(0.09, 0.13, 0.03) * uHealP * exp(-(hm + 0.4) * (hm + 0.4) * 2.5);',
+      '#endif',
+      '}'
+    ].join('\n'));
+  }
+  // matériau d'île meurtrie : ch.heal porte ses uniformes (voir healCompile)
+  const healMat = (mat, ch) => { mat.userData.heal = ch.heal; mat.onBeforeCompile = healCompile; return mat; };
   const OUTLINE = false; // contour encré du héros (non retenu : coûteux sur téléphone)
   const chapterOf = (L) => Math.floor(L / PER);
   const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -712,6 +749,11 @@
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    // (même programme que le décor : pas de lueur ; nature 3 = prairie, voir healCompile)
+    const nv = pos.length / 3, heal = new Float32Array(nv * 4);
+    for (let i = 0; i < nv; i++) heal[i * 4 + 3] = 3;
+    geo.setAttribute('glow', new THREE.Float32BufferAttribute(new Float32Array(nv), 1));
+    geo.setAttribute('heal', new THREE.Float32BufferAttribute(heal, 4));
     geo.setIndex(idx);
     geo.computeVertexNormals();
     geo.userData.base = Float32Array.from(col);
@@ -895,19 +937,25 @@
 
   // petite fusion de géométries colorées (un seul appel de dessin) : [{ geo, color, m: Matrix4 }]
   function mergeParts(parts) {
-    const pos = [], nor = [], col = [], glow = [];
-    const v = new THREE.Vector3(), c = new THREE.Color(), nm = new THREE.Matrix3();
+    const pos = [], nor = [], col = [], glow = [], heal = [];
+    const v = new THREE.Vector3(), c = new THREE.Color(), nm = new THREE.Matrix3(), hsl = {};
     parts.forEach((p) => {
       const g = p.geo.index ? p.geo.toNonIndexed() : p.geo;
       const P = g.attributes.position, N = g.attributes.normal;
       nm.getNormalMatrix(p.m);
+      c.set(p.color).getHSL(hsl);
       c.copy(lin(p.color));
       const gl = p.glow || 0; // lueur nocturne (fenêtre, lanterne) : voir glowCompile
+      // nature de la pièce pour l'île meurtrie (voir healCompile) : 2 = fleur/fruit (k.bud),
+      // 1 = feuillage (teinte verte franche), 0 = le reste (bâti, bois, rochers)
+      const kind = p.kind || (hsl.h > 0.17 && hsl.h < 0.47 && hsl.s > 0.3 && hsl.l > 0.18 && hsl.l < 0.82 ? 1 : 0);
+      const pv = p.pivot || v.set(0, 0, 0), px = pv.x, py = pv.y, pz = pv.z;
       for (let i = 0; i < P.count; i++) {
         v.fromBufferAttribute(P, i).applyMatrix4(p.m); pos.push(v.x, v.y, v.z);
         v.fromBufferAttribute(N, i).applyMatrix3(nm).normalize(); nor.push(v.x, v.y, v.z);
         col.push(c.r, c.g, c.b);
         glow.push(gl);
+        heal.push(px, py, pz, kind);
       }
     });
     const geo = new THREE.BufferGeometry();
@@ -915,6 +963,7 @@
     geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     geo.setAttribute('glow', new THREE.Float32BufferAttribute(glow, 1));
+    geo.setAttribute('heal', new THREE.Float32BufferAttribute(heal, 4));
     geo.computeBoundingSphere();
     return geo;
   }
@@ -1125,6 +1174,9 @@
       },
       // la dernière pièce s'allume la nuit (fenêtre, lanterne) : k.add(…).lit()
       lit(s) { parts[parts.length - 1].glow = s == null ? 1 : s; return k; },
+      // la dernière pièce est une fleur (ou un fruit) : elle se replie sur le point (x, y, z)
+      // tant que l'île est meurtrie, et éclôt quand elle guérit (voir healCompile)
+      bud(x, y, z) { const p = parts[parts.length - 1]; p.kind = 2; p.pivot = k.pt(x, y, z); return k; },
       at(x, y, z, ry, s, fn) { const prev = base; base = prev.clone().multiply(M4(x, y, z, ry, s, s, s)); fn(); base = prev; return k; },
       pt(x, y, z) { return new THREE.Vector3(x, y, z).applyMatrix4(base); },
       rot() { return new THREE.Euler().setFromRotationMatrix(base, 'YXZ').y; }
@@ -1205,7 +1257,10 @@
       k.add(G.ball, type === 'fig' ? '#3e9e48' : '#4cc04a', 0, 0.8, 0, 0.88 * j(), 0.66, 0.86);
       k.add(G.ball, type === 'fig' ? '#4fb156' : '#62d25a', 0.18, 0.98, 0.1, 0.5);
       const fc = type === 'fig' ? ['#8a4fa8', '#a565c0'] : ['#ff8a3d', '#ff5d5d', '#ffd23f'];
-      for (let i = 0; i < 6; i++) { const a = i * 1.05 + rng(); k.add(G.sphere, fc[i % fc.length], Math.cos(a) * 0.38, 0.72 + (i % 3) * 0.12, Math.sin(a) * 0.36, 0.12); }
+      for (let i = 0; i < 6; i++) {
+        const a = i * 1.05 + rng(), fx = Math.cos(a) * 0.38, fy = 0.72 + (i % 3) * 0.12, fz = Math.sin(a) * 0.36;
+        k.add(G.sphere, fc[i % fc.length], fx, fy, fz, 0.12).bud(fx, fy, fz);
+      }
       return;
     }
     // arbre rond (feuillus)
@@ -1227,9 +1282,9 @@
       const a = i * 2.4 + rng(), r = i ? 0.2 + rng() * 0.08 : 0;
       const x = Math.cos(a) * r, z = Math.sin(a) * r, h = 0.16 + rng() * 0.08;
       const col = palette[i % palette.length];
-      k.add(G.cyl6, '#3aa846', x, h / 2, z, 0.025, h, 0.025);
-      k.add(G.sphere, col, x, h + 0.02, z, 0.13, 0.08, 0.13);
-      k.add(G.sphere, '#ffe14d', x, h + 0.05, z, 0.05);
+      k.add(G.cyl6, '#3aa846', x, h / 2, z, 0.025, h, 0.025).bud(x, 0, z);
+      k.add(G.sphere, col, x, h + 0.02, z, 0.13, 0.08, 0.13).bud(x, 0, z);
+      k.add(G.sphere, '#ffe14d', x, h + 0.05, z, 0.05).bud(x, 0, z);
     }
   }
   function drawHouse(k, roof, style) {
@@ -2668,7 +2723,7 @@
   // matériau du décor fusionné d'une île (il s'estompe avec l'île dans la brume)
   function decorMaterial(ch) {
     if (!ch.decorMat) {
-      ch.decorMat = glowMat(toonMat({ color: '#ffffff', vertexColors: true, transparent: true }));
+      ch.decorMat = healMat(toonMat({ color: '#ffffff', vertexColors: true, transparent: true }), ch);
       ch.fadeMats.push(ch.decorMat);
     }
     return ch.decorMat;
@@ -3173,6 +3228,9 @@
     };
     const isle = isleOf(c);
     const ch = { c, group, r, rng, accent, fadeMats, m, isle, sheep: [], flowers: {}, fade: 0.2, phase: rng() * 6.28, open: 0 };
+    // santé de l'île (voir healCompile) : rayon soigné autour de chaque pierre, actuel et visé
+    ch.heal = { stones: { value: [] }, pulse: { value: 0 }, mode: { value: 0 }, from: new Array(PER).fill(-2), to: new Array(PER).fill(-2), t: 1, fresh: true };
+    for (let k = 0; k < PER; k++) ch.heal.stones.value.push(new THREE.Vector4(0, 0, -2, 0));
     // relief : une bosse douce au centre, deux plus petites
     ch.hills = [{ x: (rng() - 0.5) * r * 0.3, z: (rng() - 0.5) * r * 0.3, a: 0.32 + rng() * 0.12, s: r * 0.42 }];
     for (let k = 0; k < 2; k++) {
@@ -3181,7 +3239,7 @@
     }
 
     const colors = { low: lin(isle.grass[0]), fresh: lin(isle.grass[1]), high: lin(isle.grass[2]), sand: lin(isle.sand || SAND) };
-    const groundMat = toonMat({ vertexColors: true, transparent: true });
+    const groundMat = healMat(toonMat({ vertexColors: true, transparent: true }), ch);
     fadeMats.push(groundMat);
     const ground = new THREE.Mesh(terrain(ch, colors), groundMat);
     ground.receiveShadow = true;
@@ -3235,6 +3293,7 @@
       mesh.userData.level = c * PER + k;
       group.add(mesh);
       const n = { mesh, local: p, boss };
+      ch.heal.stones.value[k].x = p.x; ch.heal.stones.value[k].y = p.z;
       if (boss) { // fanion à la couleur du jeu : le boss se repère de loin
         n.rings = new THREE.Group();
         const pole = new THREE.Mesh(STONE_GEO.pole, BOSS_RING_MAT);
@@ -3571,6 +3630,39 @@
     if (ev.shake > 0) { ev.shake = Math.max(0, ev.shake - dt * 2.5); ev.group.rotation.z = Math.sin(ev.shake * 30) * 0.06 * ev.shake; }
   }
 
+  // Santé d'une île : n pierres réussies → un disque soigné autour de chacune, plus large pour
+  // les plus anciennes (la verdure gagne de proche en proche) ; l'île finie est soignée en entier.
+  // Animé (niveau qui vient d'être réussi) : les rayons glissent en ~1,4 s, depuis la pierre.
+  const HEAL_T = 1.4;
+  function setHeal(ch, animate) {
+    const H = ch.heal, S = H.stones.value;
+    const n = Math.max(0, Math.min(PER, done - ch.c * PER));
+    let changed = false;
+    for (let k = 0; k < PER; k++) {
+      const to = n >= PER ? ch.r * 2.6 : k < n ? 1.7 + 0.42 * (n - 1 - k) : -2;
+      if (to !== H.to[k]) changed = true;
+      H.to[k] = to;
+    }
+    if (!changed && !H.fresh) return;
+    const snap = H.fresh || !animate || reducedMotion();
+    H.fresh = false;
+    for (let k = 0; k < PER; k++) H.from[k] = snap ? H.to[k] : S[k].z;
+    H.t = snap ? 1 : -0.25; // (un court temps mort : la vague part quand on revient sur la carte)
+    H.done = false;
+    stepHeal(ch, 0);
+  }
+  function stepHeal(ch, dt) {
+    const H = ch.heal;
+    if (H.t >= 1 && H.pulse.value === 0 && H.done) return;
+    H.t = Math.min(1, H.t + dt / HEAL_T);
+    const u = Math.max(0, H.t), e = u * u * (3 - 2 * u); // (départ doux : on voit la vague naître)
+    H.stones.value.forEach((s, k) => { s.z = H.from[k] + (H.to[k] - H.from[k]) * e; });
+    H.pulse.value = H.t < 1 ? Math.sin(Math.PI * u) : 0;
+    H.done = H.t >= 1;
+    // -1 = calcul par sommet ; 0 = toute fanée ; 1 = toute guérie (le shader saute la boucle)
+    H.mode.value = !H.done ? -1 : H.to[0] < 0 ? 0 : H.to[PER - 1] > 0 ? 1 : -1;
+  }
+
   // Code couleur unique et lisible : fait = pierre dorée + étoile + laurier ; en cours = pierre
   // crème éclatante + anneau à la couleur du jeu (+ flèche qui rebondit) ; à venir = pastel doux.
   // Boss : grande pierre et fanion.
@@ -3579,6 +3671,7 @@
     pathU.target = done;
     chapters.forEach((ch) => {
       if (!ch) return;
+      setHeal(ch, animate);
       ch.nodes.forEach((n, k) => {
         const L = ch.c * PER + k;
         const mat = n.mesh.material;
@@ -4442,6 +4535,7 @@
       const rise = smooth(0.22, 0.95, ch.fade);
       ch.group.position.y = Math.sin(t * 0.5 + ch.phase) * 0.03 - (1 - rise) * 0.7;
       ch.fadeMats.forEach((m) => { m.opacity = ch.fade; m.transparent = ch.fade < 0.995; });
+      stepHeal(ch, dt);
       ch.nodes.forEach((n) => {
         n.mesh.material.opacity = Math.min(ch.fade, n.mesh.userData.alpha == null ? 1 : n.mesh.userData.alpha);
         if (n.rings) n.rings.visible = ch.fade > 0.3;
