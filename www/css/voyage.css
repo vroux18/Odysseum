@@ -457,6 +457,24 @@
 #home #go.boss::after { content: 'Épreuve' !important; }
 #home #go svg.ic, #home #go svg { width: 20px !important; height: 20px !important; }
 
+/* étoiles et icônes plus grandes, flèches resserrées vers le centre */
+#home { --lc-h: 140px; }
+.lvcard { grid-template-rows: auto auto auto 52px !important; row-gap: 4px !important; }
+.lvcard .lc-st svg { width: 17px !important; height: 17px !important; }
+.lvcard .lc-chip i { width: 28px !important; height: 28px !important; }
+.lvcard .lc-chip svg { width: 16px !important; height: 16px !important; }
+.lvcard .lc-games { gap: 6px !important; }
+.lvcard .lc-nav { top: 44px !important; }
+.lvcard .lc-nav[data-d="-1"] { left: calc(50% - 118px) !important; }
+.lvcard .lc-nav[data-d="1"] { right: calc(50% - 118px) !important; }
+/* pas d'élan vert : le bouton ne glisse plus à l'apparition et ne saute plus de côté quand on appuie */
+#home #go.in { animation: none !important; }
+#home #go:active { transform: translateY(3px) !important; }
+/* pendant la marche : ⏩ pour arriver tout de suite */
+#home #go.ff { background: var(--k-card, #fff) !important; box-shadow: 0 4px 0 var(--k-edge, #d9cfe8) !important; color: var(--k-ink, #3b3355); }
+#home #go.ff::after { content: 'Arriver' !important; color: var(--k-ink, #3b3355) !important; }
+#home #go.ff svg .f { fill: var(--k-ink, #3b3355) !important; }
+
 /* ---- Sagas : l'Odyssée, les Douze Travaux, les Argonautes (app.js : sagaEmblem, showSagaCard) ---- */
 .saga-emblem { width: 1em; height: 1em; fill: currentColor; flex: none; }
 [data-saga="0"] { --saga: #3d8ee8; --saga2: #3fe0d0; }

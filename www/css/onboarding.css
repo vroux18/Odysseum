@@ -1,0 +1,178 @@
+/* =====================================================================
+   Premier lancement : carte « Bienvenue », atelier du héros en mode accueil,
+   visite guidée à projecteur (voile sombre + découpe arrondie + bulle).
+   Le DOM est créé par app.js (section « Premier lancement ») puis retiré en entier.
+   Toujours la dernière feuille : elle s'appuie sur les jetons de cartoon.css (clair et sombre).
+   ===================================================================== */
+.ob-welcome, .ob-tour {
+  --ob-scrim: rgba(36, 28, 64, .62);
+  --ob-ring: var(--k-sun);
+  position: fixed; inset: 0; z-index: 95;
+  font-family: var(--k-font); color: var(--k-ink);
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  /* zones sûres (lues par app.js pour garder la bulle à l'écran) */
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+:root[data-theme="dark"] .ob-welcome, :root[data-theme="dark"] .ob-tour { --ob-scrim: rgba(4, 5, 18, .72); }
+
+/* ---------- 1. Carte « Bienvenue, voyageur ! » ---------- */
+.ob-welcome {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--ob-scrim);
+  animation: ob-fade .35s ease both;
+}
+.ob-welcome.out { animation: ob-fade-out .25s ease both; }
+.ob-card {
+  box-sizing: border-box; width: min(340px, calc(100% - 32px)); margin: 16px;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  padding: 22px 20px 20px; border-radius: var(--k-r-lg);
+  background: var(--k-bubble); border: 3px solid var(--k-rim);
+  box-shadow: 0 6px 0 var(--k-edge), var(--k-drop);
+  animation: ob-pop .45s var(--k-ease) both;
+}
+.ob-crest { width: 76px; height: 76px; margin-top: -2px; }
+.ob-crest svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.ob-hello { margin: 0; font: 700 24px/1.15 var(--k-font); text-align: center; color: var(--k-ink); }
+.ob-field { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+.ob-field > span { font: 600 13px/1 var(--k-font); color: var(--k-ink-soft); padding-left: 6px; }
+.ob-field input {
+  box-sizing: border-box; width: 100%; min-height: 50px; padding: 10px 16px;
+  font: 700 20px/1.2 var(--k-font); color: var(--k-ink); text-align: center;
+  background: var(--k-well); border: 3px solid var(--k-edge); border-radius: var(--k-r-pill);
+  outline: none; transition: border-color .15s ease, box-shadow .15s ease;
+}
+.ob-field input:focus { border-color: var(--k-sea); box-shadow: 0 0 0 4px color-mix(in srgb, var(--k-sea) 22%, transparent); }
+/* gros bouton vert (même recette que « C'est parfait » de l'atelier) */
+.ob-go {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 54px; padding: 12px; border-radius: var(--k-r-pill); cursor: pointer;
+  font: 700 18px/1.2 var(--k-font); color: #fff; border: 3px solid var(--k-rim);
+  background: var(--k-grass); text-shadow: 0 1px 0 rgba(0, 0, 0, .2);
+  box-shadow: 0 5px 0 #3a9a26, var(--k-drop-sm), var(--k-shine);
+  transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease;
+}
+.ob-go svg { width: 24px; height: 24px; fill: none; stroke: #fff; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.ob-go:active { transform: translateY(3px); box-shadow: 0 2px 0 #3a9a26, var(--k-shine); }
+.ob-go:disabled { opacity: .5; cursor: default; transform: none; }
+
+/* ---------- 2. Atelier du personnage en mode accueil ---------- */
+.creator.ob-mode .cr-gap { display: flex; justify-content: center; min-width: 0; }
+/* (la pose de joie laisse sa place au titre sur les écrans étroits) */
+.creator.ob-mode #cr-cheer { display: none; }
+.ob-cr-title {
+  max-width: 100%; padding: 7px 16px; border-radius: var(--k-r-pill);
+  font: 700 18px/1.1 var(--k-font); color: var(--k-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: var(--k-bubble); border: 3px solid var(--k-rim); box-shadow: 0 4px 0 var(--k-edge), var(--k-drop-sm);
+  animation: ob-pop .45s var(--k-ease) both;
+}
+/* le dé « tenue au hasard » est mis en avant : un anneau doré qui respire */
+.creator.ob-mode #cr-random { position: relative; }
+.creator.ob-mode #cr-random::after {
+  content: ''; position: absolute; inset: -6px; border-radius: 50%; pointer-events: none;
+  border: 3px solid var(--k-sun); animation: ob-breathe 1.6s ease-in-out infinite;
+}
+.creator.ob-mode.ob-rolled #cr-random::after { display: none; }
+
+/* ---------- 3. Visite guidée ---------- */
+.ob-tour { overflow: hidden; cursor: pointer; animation: ob-fade .3s ease both; }
+.ob-tour.out { animation: ob-fade-out .3s ease both; pointer-events: none; }
+/* la découpe : une boîte transparente dont l'ombre géante fait le voile */
+.ob-hole {
+  position: absolute; left: 0; top: 0; width: 0; height: 0; border-radius: 22px;
+  box-shadow: 0 0 0 3px var(--ob-ring), 0 0 0 9px color-mix(in srgb, var(--ob-ring) 28%, transparent), 0 0 0 200vmax var(--ob-scrim);
+  transition: transform .4s var(--k-ease), width .4s var(--k-ease), height .4s var(--k-ease), border-radius .4s ease, opacity .3s ease;
+  pointer-events: none; will-change: transform;
+}
+.ob-tour.first .ob-hole { transition: none; }
+.ob-tour.end .ob-hole { opacity: 0; }
+.ob-tour.end { background: var(--ob-scrim); }
+.ob-hole::after {
+  content: ''; position: absolute; inset: -4px; border-radius: inherit;
+  border: 3px solid var(--ob-ring); opacity: 0; animation: ob-ping 1.8s ease-out .4s infinite;
+}
+/* la bulle */
+.ob-tip {
+  position: absolute; left: 0; top: 0; box-sizing: border-box; width: min(320px, calc(100vw - 24px));
+  padding: 14px 16px 12px; border-radius: 22px; cursor: default;
+  background: var(--k-bubble); border: 3px solid var(--k-rim); color: var(--k-ink);
+  box-shadow: 0 5px 0 var(--k-edge), var(--k-drop);
+  transition: left .4s var(--k-ease), top .4s var(--k-ease);
+}
+.ob-tour.first .ob-tip { transition: none; }
+.ob-tip-in { animation: ob-pop .4s var(--k-ease) both; }
+.ob-tip::before { /* petite pointe vers la cible */
+  content: ''; position: absolute; left: var(--ax, 50%); width: 16px; height: 16px; margin-left: -8px;
+  background: var(--k-bubble); border: 3px solid var(--k-rim); border-radius: 4px; transform: rotate(45deg);
+}
+.ob-tip.above::before { bottom: -10px; border-top: 0; border-left: 0; }
+.ob-tip.below::before { top: -10px; border-bottom: 0; border-right: 0; }
+.ob-tip.center::before { display: none; }
+.ob-txt { margin: 0 0 12px; font: 600 17px/1.3 var(--k-font); }
+.ob-nw { white-space: nowrap; }
+/* étape « barre d'onglets » : 4 petites pastilles mot + rôle */
+.ob-tabs { list-style: none; margin: -2px 0 12px; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ob-tabs li {
+  display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; border-radius: 14px; background: var(--k-well);
+  font: 500 12.5px/1.2 var(--k-font); color: var(--k-ink-soft);
+}
+.ob-tabs b { font: 700 14px/1.15 var(--k-font); color: var(--k-ink); }
+.ob-foot { display: flex; align-items: center; gap: 10px; }
+.ob-dots { display: flex; gap: 6px; flex: 1; }
+.ob-dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--k-edge); transition: width .25s ease, background .25s ease; }
+.ob-dots i.on { width: 20px; border-radius: 6px; background: var(--k-sea); }
+.ob-skip, .ob-next {
+  font: 700 15px/1 var(--k-font); cursor: pointer; border-radius: var(--k-r-pill); min-height: 40px;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.ob-skip { padding: 0 10px; background: none; border: 0; color: var(--k-ink-soft); }
+.ob-next {
+  padding: 0 18px; color: #fff; background: var(--k-sea); border: 3px solid var(--k-rim);
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--k-sea) 60%, #000), var(--k-shine); text-shadow: 0 1px 0 rgba(0, 0, 0, .2);
+}
+.ob-next:active { transform: translateY(3px); box-shadow: 0 1px 0 color-mix(in srgb, var(--k-sea) 60%, #000), var(--k-shine); }
+.ob-skip:focus-visible, .ob-next:focus-visible { outline: 3px solid var(--k-sun); outline-offset: 2px; }
+
+/* ---------- fin : « Bon voyage ! » + petite gerbe de confettis ---------- */
+.ob-bye {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 18px 28px; border-radius: var(--k-r-lg); white-space: nowrap;
+  background: var(--k-bubble); border: 3px solid var(--k-rim); box-shadow: 0 6px 0 var(--k-edge), var(--k-drop);
+}
+.ob-bye b { font: 700 28px/1.1 var(--k-font); color: var(--k-ink); }
+.ob-bye small { font: 500 13px/1.2 var(--k-font); color: var(--k-ink-soft); }
+.ob-bye-in { animation: ob-pop-c .5s var(--k-ease) both; }
+.ob-confetti { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+.ob-confetti i {
+  position: absolute; left: -5px; top: -7px; width: 10px; height: 14px; border-radius: 3px; background: var(--c);
+  animation: ob-burst 1.1s cubic-bezier(.2, .7, .3, 1) var(--d, 0s) both;
+}
+.ob-confetti i:nth-child(3n) { border-radius: 50%; width: 10px; height: 10px; }
+
+/* réglages : bouton « Revoir le tutoriel » (même allure que « Crédits ») */
+.ob-replay { margin-bottom: 8px; }
+
+@keyframes ob-fade { from { opacity: 0; } }
+@keyframes ob-fade-out { to { opacity: 0; } }
+@keyframes ob-pop { from { opacity: 0; transform: scale(.86); } }
+@keyframes ob-pop-c { from { opacity: 0; transform: translate(-50%, -50%) scale(.7); } }
+@keyframes ob-breathe { 0%, 100% { transform: scale(1); opacity: .9; } 50% { transform: scale(1.14); opacity: .35; } }
+@keyframes ob-ping { 0% { opacity: .8; transform: scale(1); } 100% { opacity: 0; transform: scale(1.12); } }
+@keyframes ob-burst {
+  0% { opacity: 1; transform: translate(0, 0) rotate(0) scale(.6); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--x), var(--y)) rotate(var(--r)) scale(1); }
+}
+
+/* animations réduites (réglage du jeu ou du téléphone) : tout apparaît sans bouger */
+@media (prefers-reduced-motion: reduce) {
+  .ob-welcome, .ob-tour, .ob-card, .ob-cr-title, .ob-tip-in, .ob-bye-in, .ob-welcome.out, .ob-tour.out { animation: none; }
+  .ob-hole, .ob-tip { transition: none; }
+  .ob-hole::after, .ob-confetti { animation: none; display: none; }
+  .creator.ob-mode #cr-random::after { animation: none; } /* (l'anneau reste, immobile) */
+}
+html.a11y-motion .ob-welcome, html.a11y-motion .ob-tour, html.a11y-motion .ob-card, html.a11y-motion .ob-cr-title,
+html.a11y-motion .ob-tip-in, html.a11y-motion .ob-bye-in, html.a11y-motion .ob-welcome.out, html.a11y-motion .ob-tour.out { animation: none; }
+html.a11y-motion .ob-hole, html.a11y-motion .ob-tip { transition: none; }
+html.a11y-motion .ob-hole::after, html.a11y-motion .ob-confetti { display: none; }
+html.a11y-motion .creator.ob-mode #cr-random::after { animation: none; }

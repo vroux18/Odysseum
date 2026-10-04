@@ -123,6 +123,36 @@
   const POOL_SIZE = [3, 5, 7, 9, 11, 13, 15, 16];
   const poolOf = (c) => ORDER.slice(0, POOL_SIZE[Math.min(c, POOL_SIZE.length - 1)]);
 
+  // Les trois sagas du voyage (mêmes bornes que SAGAS dans world.js) : l'Odyssée (îles 0–29),
+  // les Douze Travaux d'Héraclès (30–44), les Argonautes (45–65) ; après, tout recommence.
+  const SAGA_LIST = [
+    { name: "L'Odyssée", first: 0, emblem: 'ship' },
+    { name: 'Les Douze Travaux', first: 30, emblem: 'club' },
+    { name: 'Les Argonautes', first: 45, emblem: 'fleece' }
+  ];
+  const SAGA_ISLES = 66; // îles d'un tour complet
+  function sagaOf(c) {
+    const i = ((c % SAGA_ISLES) + SAGA_ISLES) % SAGA_ISLES;
+    let s = 0;
+    while (s + 1 < SAGA_LIST.length && i >= SAGA_LIST[s + 1].first) s++;
+    const base = c - i, next = s + 1 < SAGA_LIST.length ? SAGA_LIST[s + 1].first : SAGA_ISLES;
+    return Object.assign({ index: s, first: base + SAGA_LIST[s].first, last: base + next - 1 }, SAGA_LIST[s]);
+  }
+  // Difficulté de la quête (niveau de générateur 1–40 : basique 1–12, difficile 12–25, expert 25–40).
+  // Courbe douce, linéaire par morceaux et toujours croissante sur tout le voyage :
+  //   l'Odyssée      (niveaux 0–179)   : de 1 à 24
+  //   les Travaux    (niveaux 180–269) : de 24 à 32
+  //   les Argonautes (niveaux 270–395) : de 32 à 40 (puis 40 au-delà)
+  // L'épreuve (boss) d'une île a 2 crans de plus ; plafond 40.
+  const CURVE = [[0, 1], [30 * PER - 1, 24], [45 * PER - 1, 32], [SAGA_ISLES * PER - 1, 40]];
+  function questLevel(L, boss) {
+    let i = 0;
+    while (i < CURVE.length - 2 && L > CURVE[i + 1][0]) i++;
+    const [a, va] = CURVE[i], [b, vb] = CURVE[i + 1];
+    const t = Math.max(0, Math.min(1, (L - a) / (b - a)));
+    return Math.min(40, Math.round(va + (vb - va) * t) + (boss ? 2 : 0));
+  }
+
   function levelInfo(L) {
     const c = Math.floor(L / PER), k = L % PER;
     const rng = C.makeRng('sentier:' + L);
@@ -154,10 +184,8 @@
       const others = rng.shuffle(pool.slice());
       others.forEach((id) => { if (ids.length < count && !ids.includes(id)) ids.push(id); });
     }
-    // montée très progressive sur tout le voyage (30 îles × 6 niveaux) : +1 de difficulté tous les 4 niveaux,
-    // jusqu'à 40 vers la fin ; l'épreuve d'une île a 2 crans de plus. Mêmes niveaux de générateur que les paliers
-    // (basique 1–12, difficile 12–25, expert 25–40) : on passe d'un palier à l'autre sans marche.
-    const level = Math.min(40, 1 + Math.floor(L / 4) + (boss ? 2 : 0));
+    // difficulté de la quête : voir questLevel (courbe douce sur les trois sagas, épreuve +2, plafond 40)
+    const level = questLevel(L, boss);
     const vChance = boss ? Math.min(0.7, 0.25 + c * 0.1) : Math.min(0.55, 0.12 + c * 0.08);
     const steps = ids.map((id) => ({ id, variant: pickVariant(id, vChance), level }));
     return { L, c, k, boss, id: steps[0].id, accent: ACCENT[steps[0].id], steps };
@@ -260,6 +288,7 @@
         standing = L != null;
         if (standing) { selected = L; J.selected = L; C.save(); }
         renderPlay();
+        maybeSagaCard(L); // arrivée dans une nouvelle saga : carte « changement de monde »
       }
     }));
   }
@@ -268,12 +297,15 @@
   function renderPlay() {
     const b = $('#go');
     const info = levelInfo(selected);
-    b.hidden = worldReady && !standing;
+    // Ulysse en route : le bouton devient ⏩ « Arriver » (il saute directement à la pierre)
+    const walking = worldReady && !standing && C.world.walking && C.world.walking();
+    b.classList.toggle('ff', !!walking);
+    b.hidden = worldReady && !standing && !walking;
     b.style.setProperty('--game', info.accent);
     b.classList.toggle('boss', info.boss);
     b.classList.toggle('replay', selected < J.done);
     // bouton play ; le numéro du niveau en petite étiquette dessous
-    b.innerHTML = UI('play');
+    b.innerHTML = walking ? '<svg class="ic" viewBox="0 0 24 24"><path class="f" d="M3 6l8 6-8 6zM12 6l8 6-8 6z"/></svg>' : UI('play');
     const lab = $('#go-label');
     // les mini-jeux qui attendent sur cette pierre, en pastilles de couleur, puis le numéro du niveau
     const ids = info.steps.map((s) => s.id).filter((id, i, a) => a.indexOf(id) === i);
@@ -300,11 +332,13 @@
       $('#home').appendChild(card);
     }
     const won = (J.stars && J.stars[selected]) || 0, past = selected < J.done;
-    card.hidden = b.hidden;
+    card.hidden = b.hidden || !!walking;
     card.classList.toggle('boss', info.boss);
     card.classList.remove('pop'); void card.offsetWidth; card.classList.add('pop');
     let isle = ''; // nom de l'île (la liste est définie plus bas : pas encore prête au tout premier affichage)
     try { isle = voyageName(Math.floor(selected / PER)); } catch (e) { /* premier rendu */ }
+    // petit emblème de la saga devant le nom de l'île (titre de la saga au survol)
+    if (isle) { const sg = sagaOf(Math.floor(selected / PER)); isle = '<i class="lc-saga" title="' + sg.name.replace(/"/g, '') + '">' + sagaEmblem(sg.emblem) + '</i>' + isle; }
     card.innerHTML = '<span class="lc-isle">' + isle + '</span><span class="lc-play-slot"></span>' +
       '<span class="lc-title"><i class="lc-nav" data-d="-1"' + (selected <= 0 ? ' hidden' : '') + '>‹</i>' +
       (info.boss ? 'Épreuve ' : 'Niveau ') + (selected + 1) +
@@ -1058,7 +1092,9 @@
         standing = false; // le bouton réapparaît à l'arrivée sur la nouvelle pierre
       } else if (pendingWalk && C.world.select) {
         C.world.select(selected); // niveau rejoué : Ulysse rejoint la pierre suivante
+        if (C.world.walking && C.world.walking()) standing = false;
       }
+      renderPlay(); // en route : bouton ⏩ pour arriver tout de suite
     } else if (pendingProgress) {
       selected = J.done;
     }
@@ -1937,8 +1973,9 @@
     const L = Math.max(0, Math.min(J.done, selected + d));
     if (L === selected) return;
     C.sfx.tap();
-    if (worldReady && C.world.select) C.world.select(L); // Ulysse marche jusqu'à la pierre
-    else { selected = L; J.selected = L; C.save(); renderPlay(); }
+    // le bandeau montre tout de suite le niveau visé ; Ulysse marche jusqu'à la pierre
+    selected = L; J.selected = L; C.save(); standing = true; renderPlay();
+    if (worldReady && C.world.select) C.world.select(L);
   }
   $('#prev-level').addEventListener('click', () => stepLevel(-1));
   $('#next-level').addEventListener('click', () => stepLevel(1));
@@ -1949,7 +1986,59 @@
   const VOYAGE_ISLANDS = ['Troie', 'Ismaros', 'Cap Malée', 'Les Lotus', 'Les Chèvres', 'Le Cyclope', 'Éolie', 'Ithaque en vue',
     'Lestrygons', 'Circé', 'Les Ombres', 'Elpénor', 'Les Sirènes', 'Roches Errantes', 'Charybde', 'Thrinacie', 'Le Naufrage',
     'Ogygie', 'Le Radeau', 'La Tempête', 'Nausicaa', 'Alcinoos', 'Les Jeux', 'Le Navire', 'Phorkys', 'Eumée', 'Le Palais',
-    'L\'Arc', 'Le Lit d\'olivier', 'Laërte'];
+    'L\'Arc', 'Le Lit d\'olivier', 'Laërte',
+    // saga 2 : les Douze Travaux d'Héraclès
+    'Thèbes', 'Delphes', 'Lion de Némée', 'Hydre de Lerne', 'Biche de Cérynie', 'Le Sanglier', 'Écuries d\'Augias',
+    'Le Stymphale', 'Taureau de Crète', 'Juments de Diomède', 'Les Amazones', 'Bœufs de Géryon', 'Les Hespérides',
+    'Cerbère', 'L\'Olympe',
+    // saga 3 : les Argonautes
+    'Iolcos', 'Lemnos', 'Cyzique', 'Mysie', 'Bébrycie', 'Phinée', 'Symplégades', 'Mariandyniens', 'Île d\'Arès',
+    'Colchide', 'Taureaux d\'airain', 'Guerriers semés', 'Toison d\'or', 'Médée', 'L\'Istros', 'Chez Circé', 'Orphée',
+    'Phéaciens', 'Libye', 'Talos', 'Retour à Iolcos'];
+  // emblèmes des sagas (pictos pleins, 24×24) : voile d'Ulysse, massue d'Héraclès, Toison d'or
+  function sagaEmblem(kind) {
+    const P = {
+      ship: '<path d="M12 2.5v12h7.5zM10.5 5.5L4.5 14.5h6z"/><path d="M2.5 16h19l-3.2 4.6H5.7z"/>',
+      club: '<circle cx="16" cy="8" r="5"/><circle cx="12.3" cy="11.6" r="2.4"/><path d="M4.2 21.4L2.6 19.8l8.6-9.4 2.4 2.4z"/><circle cx="19.6" cy="4.4" r="1.4"/>',
+      fleece: '<path d="M5.2 7.6C5 5.6 7 4.4 8.6 5.4 9.4 3.6 11.8 3.2 13 4.8c1.6-1.2 3.9-.5 4.2 1.4 2 .2 3 2.3 2 3.9 1.2 1.3.5 3.6-1.3 3.9-.3 1.9-2.4 2.8-4 1.8-1.3 1.3-3.6 1.2-4.6-.4-1.8.5-3.6-.7-3.4-2.6C4.3 12.2 3.8 9.3 5.2 7.6z"/><path d="M7.4 14.5l-.6 6M16.6 14.5l.6 6M11 15.5l-.2 4.5M13.2 15.5l.2 4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>'
+    };
+    return '<svg class="saga-emblem" viewBox="0 0 24 24" aria-hidden="true">' + (P[kind] || P.ship) + '</svg>';
+  }
+  // Changement de monde : carte plein écran (emblème + titre de la saga), ~2,5 s, un toucher la ferme
+  function showSagaCard(c) {
+    const sg = sagaOf(c);
+    let el = $('#saga-card');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'saga-card';
+      el.className = 'saga-card';
+      el.addEventListener('click', () => hideSagaCard());
+      document.body.appendChild(el);
+    }
+    el.dataset.saga = sg.index;
+    el.innerHTML = '<div class="sc-inner">' + sagaEmblem(sg.emblem) + '<b>' + sg.name + '</b><i>' + voyageName(c) + '</i></div>';
+    el.hidden = false;
+    el.classList.remove('out', 'in'); void el.offsetWidth; el.classList.add('in');
+    if (C.sfx && C.sfx.star) [0, 1, 2].forEach((i) => setTimeout(() => C.sfx.star(i), 250 + i * 180));
+    clearTimeout(showSagaCard.timer);
+    showSagaCard.timer = setTimeout(hideSagaCard, 2500);
+  }
+  function hideSagaCard() {
+    const el = $('#saga-card');
+    if (!el || el.hidden) return;
+    clearTimeout(showSagaCard.timer);
+    el.classList.add('out');
+    setTimeout(() => { el.hidden = true; el.classList.remove('in', 'out'); }, 320);
+  }
+  // à l'arrivée sur la première pierre d'une nouvelle saga (une seule fois par saga)
+  function maybeSagaCard(L) {
+    if (L == null || L !== J.done || L % PER !== 0) return;
+    const c = L / PER;
+    if (c === 0 || sagaOf(c).first !== c || (J.sagaSeen || 0) >= c) return;
+    J.sagaSeen = c;
+    C.save();
+    showSagaCard(c);
+  }
   const voyageName = (c) => VOYAGE_ISLANDS[c % VOYAGE_ISLANDS.length] + (c >= VOYAGE_ISLANDS.length ? ' ' + (Math.floor(c / VOYAGE_ISLANDS.length) + 1) : '');
   function renderVoyage() {
     const box = $('#vy-list');
@@ -1968,6 +2057,9 @@
           (st === 'done' ? '<i class="vy-stars">' + [0, 1, 2].map((s) => '<s class="' + (s < n ? 'on' : '') + '"></s>').join('') + '</i>' : '') +
           '</button>';
       }
+      // titre de saga au-dessus de ses îles (la liste va de la plus récente à la plus ancienne)
+      const sg = sagaOf(c);
+      if (c === last || sg.last === c) html += '<h2 class="vy-saga" data-saga="' + sg.index + '">' + sagaEmblem(sg.emblem) + '<span>' + sg.name + '</span></h2>';
       html += '<section class="vy-isle' + (c === last ? ' cur' : '') + '"><h3>' + voyageName(c) + '</h3><div class="vy-row">' + row + '</div></section>';
     }
     box.innerHTML = html;
@@ -1993,7 +2085,10 @@
       if (!p0) return;
       const moved = Math.hypot(e.clientX - p0.x, e.clientY - p0.y), quick = performance.now() - p0.t < 350;
       p0 = null;
-      if (moved < 8 && quick && !$('#home').hidden) $('#home').classList.toggle('calm');
+      if (!(moved < 8 && quick) || $('#home').hidden) return;
+      // Ulysse marche encore : un toucher le fait courir
+      if (worldReady && C.world.walking && C.world.walking()) { C.world.hurry(); return; }
+      $('#home').classList.toggle('calm');
     });
   }
   // crédits : depuis les réglages
@@ -2042,7 +2137,11 @@
     C.save();
     applyTheme();
   }));
-  $('#go').addEventListener('click', () => startLevel(selected));
+  $('#go').addEventListener('click', () => {
+    if ($('#go').classList.contains('ff')) { C.world.skipWalk(); return; } // ⏩ : arrivée immédiate
+    if (worldReady && C.world.walking && C.world.walking()) C.world.skipWalk(); // pas besoin d'attendre qu'il arrive
+    startLevel(selected);
+  });
   $('#back').addEventListener('click', stopPlay);
   $('#btn-undo').addEventListener('click', () => session && session.inst.undo());
   $('#btn-reset').addEventListener('click', () => session && session.inst.reset());
@@ -2405,6 +2504,229 @@
   $('#opt-vibrate').checked = !!C.store.settings.vibrate;
   $('#opt-mix').value = C.store.settings.mix;
 
+  // ------------------------------ Premier lancement ------------------------------
+  // Une seule fois (C.store.onboarded) : carte « Bienvenue » (nom du joueur), atelier du héros en mode
+  // accueil, puis une courte visite guidée à projecteur (voile + découpe arrondie qui suit les vrais boutons).
+  // Les joueurs déjà avancés (journey.done > 0) n'y ont pas droit, sauf via « Revoir le tutoriel » (réglages).
+  // Tout le DOM est créé ici et retiré en entier à la fin : rien ne reste pour gêner les touchers.
+  // Styles : css/onboarding.css.
+  const OB = { on: false, creator: false, tour: null, doneTxt: '' };
+  const obReduced = () => document.documentElement.classList.contains('a11y-motion') ||
+    !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const obNeeded = () => !C.store.onboarded && !((J.done || 0) > 0);
+  const obClamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  // rectangle visible d'un élément (ou de plusieurs : leur union) ; null si rien n'est à l'écran
+  function obRect(el) {
+    const list = (Array.isArray(el) ? el : [el]).filter(Boolean);
+    let r = null;
+    list.forEach((e) => {
+      if (e.hidden || e.closest('[hidden]')) return;
+      const b = e.getBoundingClientRect();
+      if (b.width < 2 || b.height < 2 || getComputedStyle(e).visibility === 'hidden') return;
+      r = r ? { left: Math.min(r.left, b.left), top: Math.min(r.top, b.top), right: Math.max(r.right, b.right), bottom: Math.max(r.bottom, b.bottom) }
+        : { left: b.left, top: b.top, right: b.right, bottom: b.bottom };
+    });
+    if (r) { r.width = r.right - r.left; r.height = r.bottom - r.top; }
+    return r;
+  }
+  function obDone() { if (!C.store.onboarded) { C.store.onboarded = true; C.save(); } }
+  function startOnboarding() {
+    if (OB.on) return;
+    OB.on = true;
+    obWelcome();
+  }
+  // petit navire d'Ulysse (même esprit que l'icône) pour la carte d'accueil
+  const OB_SHIP = '<svg viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="42" r="36" fill="var(--k-lagoon)" opacity=".28"/>' +
+    '<path d="M40 12v40" stroke="#3a3550" stroke-width="3.4" stroke-linecap="round"/><path d="M40 12l11 3.4L40 19z" fill="var(--k-coral)" stroke="#3a3550" stroke-width="2.4" stroke-linejoin="round"/>' +
+    '<path d="M25 23q15-3 30 0 5 13-1 25-14 3-28 0-6-12-1-25z" fill="#fffaf0" stroke="#3a3550" stroke-width="3" stroke-linejoin="round"/>' +
+    '<path d="M36.5 21.6h7v27.6h-7z" fill="#d94b3d" opacity=".9"/>' +
+    '<path d="M16 52h48c-2 9-9 14-18 14H34c-9 0-16-5-18-14z" fill="#c0643a" stroke="#3a3550" stroke-width="3" stroke-linejoin="round"/>' +
+    '<circle cx="56" cy="57" r="2" fill="#3a3550"/></svg>';
+  // 1. carte « Bienvenue, voyageur ! » : le nom (1 à 16 caractères), puis l'atelier
+  function obWelcome() {
+    const ov = document.createElement('div');
+    ov.className = 'ob-welcome';
+    ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-labelledby', 'ob-hello');
+    ov.innerHTML = '<form class="ob-card" novalidate><span class="ob-crest">' + OB_SHIP + '</span>' +
+      '<h2 id="ob-hello" class="ob-hello">Bienvenue, voyageur !</h2>' +
+      '<label class="ob-field"><span>Ton nom</span><input id="ob-name" maxlength="16" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="go"></label>' +
+      '<button class="ob-go" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 12.5l4.2 4.2 8.8-9.4"/></svg>Créer mon héros</button></form>';
+    document.body.appendChild(ov);
+    const inp = ov.querySelector('#ob-name'), go = ov.querySelector('.ob-go');
+    const clean = () => inp.value.replace(/[<>]/g, '').trim().slice(0, 16);
+    inp.value = playerName();
+    const sync = () => { go.disabled = !clean(); };
+    inp.addEventListener('input', sync); sync();
+    ov.querySelector('form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = clean();
+      if (!name) { inp.focus(); return; }
+      if (name !== String(profileOf().name || '')) { profileOf().name = name; C.save(); }
+      inp.blur();
+      C.sfx.tap();
+      ov.classList.add('out');
+      setTimeout(() => { ov.remove(); obCreator(); }, obReduced() ? 0 : 240);
+    });
+  }
+  // 2. l'atelier du personnage, en mode accueil : titre « Ton héros », dé mis en avant, « C'est parti ! »
+  function obCreator() {
+    const wd = $('#wardrobe'), done = $('#wd-done'), gap = wd.querySelector('.cr-top .cr-gap');
+    OB.creator = true;
+    $('#open-wardrobe').click(); // même ouverture que le bouton Tenue (caméra, tenue, rendu)
+    wd.classList.add('ob-mode'); wd.classList.remove('ob-rolled');
+    if (gap) gap.innerHTML = '<span class="ob-cr-title">Ton héros</span>';
+    const t = done.lastChild;
+    if (t && t.nodeType === 3) { OB.doneTxt = t.textContent; t.textContent = 'C\'est parti !'; }
+  }
+  // fin de l'atelier (bouton, retour, Échap…) : on remet l'atelier normal et la visite commence
+  function obCreatorDone() {
+    const wd = $('#wardrobe'), done = $('#wd-done'), gap = wd.querySelector('.cr-top .cr-gap');
+    OB.creator = false;
+    wd.classList.remove('ob-mode', 'ob-rolled');
+    if (gap) gap.innerHTML = '';
+    const t = done.lastChild;
+    if (OB.doneTxt && t && t.nodeType === 3) t.textContent = OB.doneTxt;
+    setTimeout(obTour, obReduced() ? 250 : 650); // (la caméra revient vers Ulysse)
+  }
+  $('#cr-random').addEventListener('click', () => $('#wardrobe').classList.add('ob-rolled'));
+  if (window.MutationObserver) new MutationObserver(() => { if (OB.creator && $('#wardrobe').hidden) obCreatorDone(); }).observe($('#wardrobe'), { attributes: true, attributeFilter: ['hidden'] });
+
+  // 3. visite guidée : une bulle par élément, « Passer » / « Suivant », points d'étape
+  const OB_STEPS = [
+    { el: () => $('#lvcard'), txt: 'Voici ton prochain niveau : ses <span class="ob-nw">mini-jeux</span> et tes étoiles.' },
+    { el: () => { const n = Array.from(document.querySelectorAll('#lvcard .lc-nav')).filter((x) => !x.hidden); return n.length ? n : $('#lvcard .lc-title'); },
+      txt: 'Navigue entre les niveaux déjà atteints.', pad: 6 },
+    { el: () => $('#go'), txt: 'Lance le niveau !', pad: 6 },
+    { el: () => ['#open-daily', '#open-wardrobe', '#cam-mode', '#open-library'].map((s) => $(s)), txt: 'Tes raccourcis :',
+      extra: '<ul class="ob-tabs"><li><b>Défi</b>un défi chaque jour</li><li><b>Tenue</b>change de look</li><li><b>Vue</b>explore l\'île</li><li><b>Jeux</b>mini-jeux et paliers</li></ul>' },
+    { el: () => $('#open-brain'), txt: 'Ta carte de joueur et le classement.' }
+  ];
+  function obTour() {
+    let tries = 0;
+    const begin = () => {
+      if (!OB.on || OB.tour) return;
+      // on attend que le bouton Jouer soit posé (Ulysse sur sa pierre, interface de la carte visible)
+      if (!obRect($('#go')) && tries++ < 40) { setTimeout(begin, 100); return; }
+      const steps = OB_STEPS.filter((s) => obRect(s.el()));
+      const ov = document.createElement('div');
+      ov.className = 'ob-tour first';
+      ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'Visite guidée');
+      ov.innerHTML = '<i class="ob-hole" aria-hidden="true"></i><div class="ob-tip"><div class="ob-body" aria-live="polite"></div>' +
+        '<div class="ob-foot"><span class="ob-dots" aria-hidden="true">' + steps.map(() => '<i></i>').join('') + '</span>' +
+        '<button type="button" class="ob-skip">Passer</button><button type="button" class="ob-next">Suivant</button></div></div>';
+      document.body.appendChild(ov);
+      const T = OB.tour = { ov, steps, i: -1, key: '', raf: 0, timer: 0, ending: false,
+        hole: ov.querySelector('.ob-hole'), tip: ov.querySelector('.ob-tip'), body: ov.querySelector('.ob-body'), next: ov.querySelector('.ob-next') };
+      ov.addEventListener('click', (e) => {
+        if (T.ending) { obClose(); return; }
+        if (e.target.closest('.ob-skip')) { C.sfx.tap(); obClose(); return; }
+        if (e.target.closest('.ob-next') || !e.target.closest('.ob-tip')) obNext(); // toucher le voile = suivant
+      });
+      if (!steps.length) { obEnd(); return; }
+      obShow(0);
+      const tick = () => { if (OB.tour !== T) return; obPlace(); T.raf = requestAnimationFrame(tick); };
+      T.raf = requestAnimationFrame(tick);
+      requestAnimationFrame(() => requestAnimationFrame(() => ov.classList.remove('first')));
+    };
+    begin();
+  }
+  function obShow(i) {
+    const T = OB.tour, s = T.steps[i];
+    T.i = i;
+    T.body.innerHTML = '<p class="ob-txt">' + s.txt + '</p>' + (s.extra || '');
+    T.ov.querySelectorAll('.ob-dots i').forEach((d, k) => d.classList.toggle('on', k === i));
+    T.next.textContent = i === T.steps.length - 1 ? 'Terminer' : 'Suivant';
+    T.tip.classList.remove('ob-tip-in'); void T.tip.offsetWidth; T.tip.classList.add('ob-tip-in');
+    T.key = '';
+    obPlace();
+    try { T.next.focus({ preventScroll: true }); } catch (e) { /* rien */ }
+  }
+  function obNext() {
+    const T = OB.tour;
+    if (!T || T.ending) return;
+    C.sfx.tap();
+    if (T.i < T.steps.length - 1) obShow(T.i + 1); else obEnd();
+  }
+  // place la découpe sur la cible et la bulle au-dessus (ou en dessous), dans les zones sûres ;
+  // appelé à chaque image : la découpe suit la cible (rotation, clavier, animation des boutons…)
+  function obPlace() {
+    const T = OB.tour;
+    if (!T || T.ending || T.i < 0) return;
+    const s = T.steps[T.i], r = obRect(s.el());
+    if (!r) return; // cible momentanément cachée : on garde la dernière position
+    const W = window.innerWidth, H = window.innerHeight, p = s.pad == null ? 8 : s.pad;
+    const x = r.left - p, y = r.top - p, w = r.width + 2 * p, h = r.height + 2 * p;
+    const tw = T.tip.offsetWidth, th = T.tip.offsetHeight;
+    const key = [x, y, w, h, W, H, tw, th].map(Math.round).join();
+    if (key === T.key) return;
+    T.key = key;
+    const hs = T.hole.style;
+    hs.transform = 'translate(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px)';
+    hs.width = w.toFixed(1) + 'px'; hs.height = h.toFixed(1) + 'px';
+    hs.borderRadius = Math.min(26, Math.min(w, h) / 2).toFixed(1) + 'px';
+    const cs = getComputedStyle(T.ov), m = 12, gap = 16;
+    const sa = { t: parseFloat(cs.paddingTop) || 0, r: parseFloat(cs.paddingRight) || 0, b: parseFloat(cs.paddingBottom) || 0, l: parseFloat(cs.paddingLeft) || 0 };
+    const roomAbove = y - sa.t - m, roomBelow = H - sa.b - m - (y + h);
+    const above = roomAbove >= th + gap || roomAbove > roomBelow;
+    const ty = obClamp(above ? y - gap - th : y + h + gap, sa.t + m, Math.max(sa.t + m, H - sa.b - m - th));
+    const cx = x + w / 2, tx = obClamp(cx - tw / 2, sa.l + m, Math.max(sa.l + m, W - sa.r - m - tw));
+    T.tip.style.left = tx.toFixed(1) + 'px'; T.tip.style.top = ty.toFixed(1) + 'px';
+    T.tip.classList.toggle('above', above); T.tip.classList.toggle('below', !above);
+    T.tip.style.setProperty('--ax', obClamp(cx - tx, 26, tw - 26).toFixed(1) + 'px');
+  }
+  // fin : « Bon voyage ! » et une petite gerbe de confettis, puis tout disparaît
+  function obEnd() {
+    const T = OB.tour;
+    if (!T || T.ending) return;
+    T.ending = true;
+    obDone();
+    T.ov.classList.add('end');
+    T.tip.remove();
+    const cols = ['var(--k-sun)', 'var(--k-coral)', 'var(--k-sea)', 'var(--k-grass)', 'var(--k-lagoon)', 'var(--k-roof)'];
+    const conf = document.createElement('div');
+    conf.className = 'ob-confetti'; conf.setAttribute('aria-hidden', 'true');
+    let bits = '';
+    for (let k = 0; k < 18; k++) {
+      const a = (k / 18) * Math.PI * 2 + Math.random() * 0.3, d = 110 + Math.random() * 70;
+      bits += '<i style="--c:' + cols[k % cols.length] + ';--x:' + (Math.cos(a) * d).toFixed(0) + 'px;--y:' + (Math.sin(a) * d * 0.8 - 30).toFixed(0) + 'px;--r:' +
+        Math.round(Math.random() * 540 - 270) + 'deg;--d:' + (Math.random() * 0.12).toFixed(2) + 's"></i>';
+    }
+    conf.innerHTML = bits;
+    const bye = document.createElement('div');
+    bye.className = 'ob-bye ob-bye-in'; bye.setAttribute('role', 'status');
+    bye.innerHTML = '<b>Bon voyage !</b>';
+    T.ov.append(conf, bye);
+    C.sfx.win();
+    T.timer = setTimeout(obClose, 2200);
+  }
+  // retire tout (voile, bulle, écouteurs) : les touchers retrouvent la carte aussitôt
+  function obClose() {
+    const T = OB.tour;
+    obDone();
+    OB.on = false; OB.tour = null;
+    if (!T) return;
+    cancelAnimationFrame(T.raf); clearTimeout(T.timer);
+    T.ov.classList.add('out');
+    setTimeout(() => T.ov.remove(), obReduced() ? 0 : 300);
+  }
+  document.addEventListener('keydown', (e) => {
+    if (!OB.tour) return;
+    if (e.key === 'Escape') obClose();
+    else if (e.key === 'ArrowRight') obNext();
+  });
+  document.addEventListener('backbutton', () => { if (OB.tour) obClose(); });
+  // réglages : « Revoir le tutoriel » (pour tout le monde, même les joueurs avancés)
+  {
+    const b = document.createElement('button');
+    b.id = 'replay-tour'; b.className = 'credits-btn ob-replay';
+    b.innerHTML = '<svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-compass"/></svg>Revoir le tutoriel';
+    b.addEventListener('click', () => { $('#settings').hidden = true; C.sfx.tap(); setTimeout(startOnboarding, 200); });
+    const cr = $('#open-credits');
+    if (cr) cr.before(b); else $('#settings .sheet').appendChild(b);
+  }
+  // sans écran d'intro (cas de secours), l'accueil démarre seul ; sinon embark() s'en charge
+  if (!$('#intro') && obNeeded()) setTimeout(startOnboarding, 800);
+
   // Intro : un toucher pour embarquer (lance la musique), l'écran s'ouvre, la caméra plonge vers Ulysse.
   const intro = $('#intro');
   function embark() {
@@ -2413,7 +2735,7 @@
     C.sfx.win(); // un petit accord de départ
     intro.classList.add('leaving');
     if (worldReady && C.world.swoop) C.world.swoop();
-    setTimeout(() => intro.remove(), 1500);
+    setTimeout(() => { intro.remove(); if (obNeeded()) startOnboarding(); }, 1500); // premier lancement : accueil
   }
   if (intro) {
     // le voilier traverse l'écran jusqu'à droite : quand il sort, le voyage commence.

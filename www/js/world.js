@@ -344,8 +344,41 @@
     if (clockT <= 0 || Math.abs(d) > 0.004) { clockT = 1; applyLight(); } // (la course lente de l'horloge : une mise à jour par seconde suffit)
   }
 
+  // Changement de monde : chaque saga teinte légèrement ciel, brume, mer et horizon. La teinte suit
+  // la caméra (position en îles, sagaU) et glisse d'une saga à l'autre pendant la traversée du portail.
+  let sagaU = 0, sagaKey = '';
+  function sagaTint(p, s) {
+    const S = SAGAS[s];
+    if (!S || !S.tint) return p;
+    const T = S.tint, k = S.k * (1 - 0.6 * p.night);
+    return Object.assign({}, p, {
+      sky: p.sky.map((c, i) => mix(c, T.sky[i], k)), fog: mix(p.fog, T.fog, k),
+      sea: p.sea.map((c, i) => mix(c, T.sea[i], k * 1.1)), mtn: mix(p.mtn, T.mtn, k),
+      cloud: [mix(p.cloud[0], T.cloud, k), p.cloud[1]]
+    });
+  }
+  function sagaBlend(u) {
+    const c = Math.max(0, Math.floor(u)), a = sagaIdx(c), b = sagaIdx(c + 1);
+    return a === b ? { a, b, t: 0 } : { a, b, t: smooth(c + 0.25, c + 0.75, u) };
+  }
+  function sagaTinted(p) {
+    const { a, b, t } = sagaBlend(sagaU);
+    const pa = sagaTint(p, a);
+    if (!t) return pa;
+    const pb = sagaTint(p, b), out = Object.assign({}, pa);
+    ['sky', 'fog', 'sea', 'mtn', 'cloud'].forEach((key) => { out[key] = mix(pa[key], pb[key], t); });
+    return out;
+  }
+  // appelé à chaque image : ne recalcule la lumière que si la teinte de saga a bougé
+  function stepSaga() {
+    sagaU = Math.max(0, cam.tx / SPACING);
+    const { a, b, t } = sagaBlend(sagaU);
+    const key = a + ':' + b + ':' + t.toFixed(2);
+    if (key !== sagaKey) { sagaKey = key; applyLight(); }
+  }
+
   function applyLight() {
-    const p = paletteAt(lightHour);
+    const p = sagaTinted(paletteAt(lightHour));
     const key = p.sky.join();
     if (key !== skyKey) { skyKey = key; paintSky(p.sky); } // (repeint seulement si le ciel change)
     setLin(scene.fog.color, p.fog);
@@ -892,6 +925,40 @@
     return m;
   }
 
+  // Le portail entre deux sagas : dalles-nuages aux couleurs de l'arc-en-ciel (une teinte par
+  // dalle), grande arche arc-en-ciel posée sur deux nuages, constellation dorée au-dessus.
+  let portalGeos = null, portalMatS = null, archGeo = null, archMat = null;
+  function portalSegment(i) {
+    if (!portalGeos) {
+      const G = geoLib();
+      portalGeos = ['#ff6b6b', '#ffa53d', '#ffd23f', '#6fd64a', '#3fb6e8', '#8a7fe0'].map((col) => mergeParts([
+        { geo: G.cyl, color: col, m: M4(0, -0.03, 0, 0, 0.74, 0.08, 0.5) },
+        { geo: G.cyl, color: '#ffffff', m: M4(0, 0.005, 0, 0, 0.5, 0.02, 0.3) },
+        { geo: G.ball, color: '#ffffff', m: M4(-0.4, -0.05, 0, 0, 0.3, 0.18, 0.34) },
+        { geo: G.ball, color: '#ffffff', m: M4(0.4, -0.05, 0, 0, 0.3, 0.18, 0.34) }
+      ]));
+      portalMatS = toonMat({ color: '#ffffff', vertexColors: true, emissive: lin('#ffffff').multiplyScalar(0.12) });
+    }
+    const m = new THREE.Mesh(portalGeos[i % portalGeos.length], portalMatS);
+    m.castShadow = m.receiveShadow = true;
+    return m;
+  }
+  function portalArchGeo() {
+    if (archGeo) return archGeo;
+    const G = geoLib(), parts = [];
+    RAINBOW.forEach((col, i) => parts.push({ geo: new THREE.TorusGeometry(2.9 - i * 0.18, 0.1, 6, 40, Math.PI), color: col, glow: 0.4, m: M4(0, 0, 0) }));
+    [-1, 1].forEach((sd) => [[0, 0.1, 0, 1.2], [0.4, 0.3, 0.25, 0.75], [-0.35, 0.25, -0.2, 0.85]].forEach(([x, y, z, s]) =>
+      parts.push({ geo: G.ball, color: '#ffffff', m: M4(sd * 2.45 + x, y, z, 0, s, s * 0.7, s) })));
+    for (let i = 0; i < 9; i++) {
+      const a = 0.3 + i * (Math.PI - 0.6) / 8, r = 3.45 + (i % 2) * 0.4;
+      parts.push({ geo: G.star, color: '#fff3b0', glow: 1.4, m: M4(Math.cos(a) * r, Math.sin(a) * r, 0, 0, 0.13 + (i % 3) * 0.05) });
+    }
+    return (archGeo = mergeParts(parts));
+  }
+  function portalArchMat() {
+    return archMat || (archMat = glowMat(toonMat({ color: '#ffffff', vertexColors: true, transparent: true, emissive: lin('#ffffff').multiplyScalar(0.18) })));
+  }
+
   // ------------------------------------------------------------------
   // Les îles de l'Odyssée. Chacune est dessinée comme une planche de dessin animé :
   // une plage en anneau, un plateau d'herbe, UN village groupé autour d'une placette,
@@ -935,8 +1002,62 @@
     { id: 'palais', grass: ['#7fd250', '#96dc62', '#bde87a'], tree: 'cypress', grove: 'orchard', roofs: ['#ee7a4d', '#f2c14e'], flowers: ['#ff5d8f', '#ffd23f'], animals: ['dog', 1], landmark: 'feast', rock: '#e8d4b0', path: 'loop' },
     { id: 'arc', grass: ['#82d34e', '#99dd60', '#c0e978'], tree: 'olive', grove: 'orchard', roofs: ['#ee7a4d', '#f4a259'], flowers: ['#ff5d8f', '#ffd23f'], animals: null, landmark: 'axes', rock: '#e2cfae', path: 's' },
     { id: 'lit', grass: ['#7ed656', '#96e068', '#bdec82'], tree: 'olive', grove: 'ring', roofs: ['#ee7a4d', '#ff8fb1'], flowers: ['#ff8fc0', '#ffffff'], animals: null, landmark: 'bed', rock: '#e6d3b0', path: 'coast' },
-    { id: 'laerte', grass: ['#80d251', '#97dd62', '#bfe97a'], tree: 'fruit', grove: 'orchard', roofs: ['#ee7a4d', '#f4a259'], flowers: ['#ff5d8f', '#ffd23f', '#ffffff'], animals: ['sheep', 3], landmark: 'home', rock: '#e2cfae', path: 'loop' }
+    { id: 'laerte', grass: ['#80d251', '#97dd62', '#bfe97a'], tree: 'fruit', grove: 'orchard', roofs: ['#ee7a4d', '#f4a259'], flowers: ['#ff5d8f', '#ffd23f', '#ffffff'], animals: ['sheep', 3], landmark: 'home', rock: '#e2cfae', path: 'loop' },
+    // Saga 2 — les Douze Travaux d'Héraclès (dans l'ordre canonique), de Thèbes à l'Olympe :
+    // collines d'oliviers dorées du Péloponnèse → marais → neiges de l'Érymanthe → côte crétoise →
+    // Thrace sombre → couchant de l'Extrême-Occident → Enfers (doux, mauves) → nuages de l'Olympe
+    { id: 'thebes', grass: ['#9ccf4a', '#b0d95a', '#cfe678'], tree: 'olive', grove: 'orchard', roofs: ['#e8743c', '#f4a259'], flowers: ['#ffd23f', '#ff7a5c'], animals: ['sheep', 2], landmark: 'cradle', rock: '#e8cf9e', path: 's' },
+    { id: 'delphes', grass: ['#8fcf58', '#a5da68', '#c8e888'], tree: 'cypress', grove: 'orchard', roofs: ['#e8743c', '#3d8ee8'], flowers: ['#ffffff', '#ffd23f'], animals: ['goat', 3], landmark: 'oracle', rock: '#e6dcc8', path: 'zigzag' },
+    { id: 'nemee', grass: ['#b5d24a', '#c6db5c', '#e0e87e'], tree: 'olive', grove: 'ring', roofs: ['#d9824a', '#ee7a4d'], flowers: ['#ffb43d', '#ffffff'], animals: null, landmark: 'lion', rock: '#f0c98a', path: 'coast' },
+    { id: 'lerne', grass: ['#4fcf8a', '#62d99a', '#93e6b6'], tree: 'willow', grove: 'ring', roofs: ['#3db8c9', '#5aa9f0'], flowers: ['#d68bff', '#7ec8ff'], animals: null, landmark: 'hydra', rock: '#a9c8b8', sand: '#ece6b4', path: 'spiral' },
+    { id: 'cerynie', grass: ['#7ad65e', '#93e070', '#bdec86'], tree: 'round', grove: 'ring', roofs: ['#f2c14e', '#ee7a4d'], flowers: ['#ffd23f', '#ff8fc0'], animals: null, landmark: 'hind', rock: '#dcd0b8', path: 'loop' },
+    { id: 'erymanthe', grass: ['#dceaf4', '#eef6fc', '#ffffff'], tree: 'snowpine', grove: 'ring', roofs: ['#c96f45', '#d9824a'], flowers: ['#ffffff', '#7ec8ff'], animals: ['goat', 2], landmark: 'boar', rock: '#b9c6d6', sand: '#f4f1e8', path: 'zigzag' },
+    { id: 'augias', grass: ['#8cd24e', '#a2dc60', '#c6e87a'], tree: 'fruit', grove: 'orchard', roofs: ['#c98b4f', '#ee7a4d'], flowers: ['#ffd23f', '#ffffff'], animals: ['sheep', 2], landmark: 'stables', rock: '#d9c7b0', path: 's' },
+    { id: 'stymphale', grass: ['#5fd0a0', '#74daae', '#a2e8c8'], tree: 'willow', grove: 'ring', roofs: ['#8a7fe0', '#3db8c9'], flowers: ['#c7b8ff', '#ffffff'], animals: null, landmark: 'birds', rock: '#9fb0c0', sand: '#e6e4c4', path: 'coast' },
+    { id: 'cretebull', grass: ['#86d653', '#9ee066', '#c4ec84'], tree: 'olive', grove: 'orchard', roofs: ['#d9473d', '#3d8ee8'], flowers: ['#ff5d5d', '#ffd23f'], animals: null, landmark: 'bull', rock: '#f0d2a0', path: 'loop' },
+    { id: 'diomede', grass: ['#5cc86a', '#70d27a', '#9cdf98'], tree: 'pine', grove: 'ring', roofs: ['#8a5a30', '#c96f45'], flowers: ['#ff5d5d', '#ffffff'], animals: null, landmark: 'mares', rock: '#b8aea0', path: 'spiral' },
+    { id: 'amazones', grass: ['#8ad86a', '#a0e27c', '#c6ee9a'], tree: 'cypress', grove: 'ring', roofs: ['#e85d8a', '#f2c14e'], flowers: ['#ff8fc0', '#ffd23f'], animals: null, landmark: 'belt', rock: '#e6c8b8', path: 's' },
+    { id: 'geryon', grass: ['#c2d24e', '#d4dc62', '#ece888'], tree: 'olive', grove: 'ring', roofs: ['#e8743c', '#ff9f3d'], flowers: ['#ff9f3d', '#ff5d5d'], animals: null, landmark: 'cattle', rock: '#f0a070', sand: '#ffd9a0', path: 'coast' },
+    { id: 'hesperides', grass: ['#6fd860', '#88e272', '#b4ee90'], tree: 'fruit', grove: 'orchard', roofs: ['#f2c14e', '#ff8f6b'], flowers: ['#ffd23f', '#ff9f3d', '#ffffff'], animals: null, landmark: 'apples', beach: 'palms', rock: '#f0c890', path: 'loop' },
+    { id: 'cerbere', grass: ['#7fd6b4', '#97e0c4', '#c0ecd8'], tree: 'poplar', grove: 'orchard', roofs: ['#8a7fe0', '#a99cf0'], flowers: ['#c7b8ff', '#ffd23f'], animals: null, landmark: 'cerberus', rock: '#b0a6d6', path: 'zigzag' },
+    { id: 'olympe', grass: ['#9be27a', '#b2ea8e', '#d6f4b0'], tree: 'cypress', grove: 'orchard', roofs: ['#f2c14e', '#3d8ee8'], flowers: ['#ffffff', '#ffd23f'], animals: null, landmark: 'olympus', rock: '#eae4f0', path: 'spiral' },
+    // Saga 3 — les Argonautes : Jason et la Toison d'or, d'Iolcos à la Colchide et retour.
+    // Mers lointaines plus exotiques : émeraudes, lilas, terres rouges de Colchide, désert de Libye
+    { id: 'iolcos', grass: ['#6fd46a', '#86de7c', '#b0ea98'], tree: 'pine', grove: 'orchard', roofs: ['#3d8ee8', '#ee7a4d'], flowers: ['#ffd23f', '#ffffff'], animals: ['sheep', 2], landmark: 'argo', rock: '#d8c8b0', path: 's' },
+    { id: 'lemnos', grass: ['#94d050', '#a8da62', '#cae67e'], tree: 'fig', grove: 'ring', roofs: ['#ff8fb1', '#ee7a4d'], flowers: ['#ff8fc0', '#ff5d5d', '#ffd23f'], animals: null, landmark: 'forge', rock: '#c8a090', sand: '#f0d8b8', path: 'coast' },
+    { id: 'cyzique', grass: ['#70d070', '#88da84', '#b0e6a4'], tree: 'round', grove: 'ring', roofs: ['#3db8c9', '#f2c14e'], flowers: ['#7ec8ff', '#ffd23f'], animals: ['goat', 3], landmark: 'giant', rock: '#bcb4a8', path: 'zigzag' },
+    { id: 'mysie', grass: ['#58d68e', '#70e0a0', '#a0ecc0'], tree: 'willow', grove: 'ring', roofs: ['#3db8c9', '#5ad1c9'], flowers: ['#d68bff', '#ffffff'], animals: null, landmark: 'spring', rock: '#b8d0c8', path: 'loop' },
+    { id: 'bebrycie', grass: ['#a6d24c', '#b8dc5c', '#d6e87a'], tree: 'olive', grove: 'orchard', roofs: ['#c96f45', '#d9824a'], flowers: ['#ff5d5d', '#ffd23f'], animals: ['sheep', 2], landmark: 'boxing', rock: '#e0b890', path: 's' },
+    { id: 'phinee', grass: ['#7ccf6a', '#94da7c', '#bce698'], tree: 'cypress', grove: 'ring', roofs: ['#8a7fe0', '#ee7a4d'], flowers: ['#c7b8ff', '#ffd23f'], animals: null, landmark: 'harpies', rock: '#c8bcd8', path: 'spiral' },
+    { id: 'symplegades', grass: ['#64d6a0', '#7ce0b0', '#a8eccc'], tree: 'bent', grove: 'ring', roofs: ['#3d8ee8', '#5aa9f0'], flowers: ['#7ec8ff', '#ffffff'], animals: null, landmark: 'doves', rock: '#98aee0', path: 'zigzag' },
+    { id: 'mariandyniens', grass: ['#86d25a', '#9cdc6c', '#c0e888'], tree: 'olive', grove: 'orchard', roofs: ['#ee7a4d', '#f2c14e'], flowers: ['#ffd23f', '#ff8fc0'], animals: ['sheep', 3], landmark: 'tumulus', rock: '#d8c4a0', path: 'coast' },
+    { id: 'ares', grass: ['#9ccc58', '#b0d66a', '#d0e48a'], tree: 'pine', grove: 'ring', roofs: ['#d9473d', '#c96f45'], flowers: ['#ff5d5d', '#ffffff'], animals: null, landmark: 'shields', rock: '#c8a888', path: 's' },
+    { id: 'colchide', grass: ['#5cd47c', '#74de90', '#a2eab0'], tree: 'cypress', grove: 'orchard', roofs: ['#f2c14e', '#c86fd6'], flowers: ['#ffd23f', '#d68bff'], animals: null, landmark: 'aietes', rock: '#e8d0a0', path: 'loop' },
+    { id: 'taureaux', grass: ['#a0d050', '#b4da62', '#d2e680'], tree: 'olive', grove: 'ring', roofs: ['#c96f45', '#f2c14e'], flowers: ['#ff9f3d', '#ffd23f'], animals: null, landmark: 'bronzebulls', rock: '#d8a878', path: 'coast' },
+    { id: 'semes', grass: ['#8ed058', '#a2da6a', '#c4e686'], tree: 'round', grove: 'orchard', roofs: ['#c96f45', '#3d8ee8'], flowers: ['#ff5d5d', '#ffd23f'], animals: null, landmark: 'sown', rock: '#c8b8a0', path: 'zigzag' },
+    { id: 'toison', grass: ['#4ed07a', '#66da8c', '#98e8ae'], tree: 'round', grove: 'ring', roofs: ['#f2c14e', '#c86fd6'], flowers: ['#ffd23f', '#ffffff'], animals: null, landmark: 'fleece', rock: '#c0b4a0', path: 'spiral' },
+    { id: 'medee', grass: ['#62d0a0', '#7adab0', '#a6e6c8'], tree: 'cypress', grove: 'ring', roofs: ['#c86fd6', '#8a7fe0'], flowers: ['#d68bff', '#7ec8ff'], animals: null, landmark: 'cauldron', rock: '#b8a8d0', path: 's' },
+    { id: 'istros', grass: ['#6cd668', '#84e07c', '#acec98'], tree: 'willow', grove: 'orchard', roofs: ['#3db8c9', '#c98b4f'], flowers: ['#7ec8ff', '#ffffff'], animals: ['sheep', 2], landmark: 'river', rock: '#b8c0b0', sand: '#ece4c0', path: 'coast' },
+    { id: 'aiaie', grass: ['#6fd67e', '#8be092', '#b5eca4'], tree: 'round', grove: 'ring', roofs: ['#c86fd6', '#ff8fb1'], flowers: ['#d68bff', '#ff8fc0'], animals: ['pig', 3], landmark: 'altar', rock: '#d8c2e8', path: 'loop' },
+    { id: 'orphee', grass: ['#7ddc6c', '#96e57e', '#c0f09a'], tree: 'palm', grove: 'ring', roofs: ['#3db8c9', '#f2c14e'], flowers: ['#ff8fc0', '#ffd23f'], animals: null, landmark: 'lyre', beach: 'palms', rock: '#c9c1d8', path: 's' },
+    { id: 'pheaciens', grass: ['#78d65c', '#90e06e', '#b8ec88'], tree: 'fruit', grove: 'orchard', roofs: ['#f2c14e', '#3d8ee8'], flowers: ['#ffd23f', '#ff5d8f', '#ffffff'], animals: ['dog', 1], landmark: 'wedding', rock: '#f0d79a', path: 'zigzag' },
+    { id: 'libye', grass: ['#e6cc78', '#eed88e', '#f6e6b0'], tree: 'palm', grove: 'ring', roofs: ['#e8a050', '#3db8c9'], flowers: ['#ff9f3d', '#ffd23f'], animals: null, landmark: 'desert', beach: 'palms', rock: '#e8b878', sand: '#fbe3a8', path: 'coast' },
+    { id: 'talos', grass: ['#8ad656', '#a0e068', '#c6ec86'], tree: 'olive', grove: 'orchard', roofs: ['#d9473d', '#3d8ee8'], flowers: ['#ff5d5d', '#ffd23f'], animals: null, landmark: 'talos', rock: '#e8c890', path: 'loop' },
+    { id: 'retour', grass: ['#80d251', '#97dd62', '#bfe97a'], tree: 'olive', grove: 'orchard', roofs: ['#ee7a4d', '#f4a259'], flowers: ['#ff5d8f', '#ffd23f', '#ffffff'], animals: ['sheep', 3], landmark: 'homecoming', rock: '#e2cfae', path: 's' }
   ];
+  // Les trois sagas du voyage, à la suite (puis tout recommence, avec un numéro de tour) :
+  // first = première île ; tint = léger glissement global (ciel, brume, mer, horizon) pour sentir
+  // qu'on a changé de monde ; k = force du glissement (atténuée la nuit).
+  const SAGAS = [
+    { id: 'odyssee', name: "L'Odyssée", first: 0, tint: null },
+    { id: 'travaux', name: 'Les Douze Travaux', first: 30, k: 0.5,
+      tint: { sky: ['#5aa8e6', '#ffd7a0', '#fff0d0'], fog: '#ffe8c4', sea: ['#1f8fc0', '#5ee0b0'], mtn: '#fff0d8', cloud: '#fff4e0' } },
+    { id: 'argonautes', name: 'Les Argonautes', first: 45, k: 0.5,
+      tint: { sky: ['#4f86e8', '#c4b4ff', '#ffe0f2'], fog: '#e8dcff', sea: ['#2456c8', '#36d6e6'], mtn: '#efe6ff', cloud: '#f4eeff' } }
+  ];
+  SAGAS.forEach((s, i) => { s.index = i; s.last = i + 1 < SAGAS.length ? SAGAS[i + 1].first - 1 : ISLES.length - 1; });
+  // saga d'une île c (la liste boucle après la dernière saga)
+  const sagaIdx = (c) => { const i = ((c % ISLES.length) + ISLES.length) % ISLES.length; let s = 0; while (s + 1 < SAGAS.length && i >= SAGAS[s + 1].first) s++; return s; };
   const isleOf = (c) => ISLES[c % ISLES.length];
   const SAND = '#ffe3a1', CLIFF = '#f4bf7f', WHITE = '#fffaf0', BLUE = '#3d7fe0', WOOD = '#b77a45', WOOD_D = '#8a5a30';
 
@@ -967,6 +1088,7 @@
       sphere: ni(new THREE.SphereGeometry(0.5, 12, 8)),
       dome: ni(new THREE.SphereGeometry(0.5, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2)),
       torus: ni(new THREE.TorusGeometry(0.5, 0.14, 6, 18)),
+      arc: ni(new THREE.TorusGeometry(0.5, 0.08, 6, 14, Math.PI)), // demi-anneau (arc, arche, sourire)
       prism: ni(prism),
       star: ni(starGeo)
     };
@@ -1041,6 +1163,23 @@
       k.add(G.cyl, '#d8d2c8', 0, 0.2, 0, 0.1, 0.4, 0.1);
       k.add(G.ball, '#9fd8b0', 0, 1.05, 0, 0.46, 1.75 * j(), 0.46);
       k.add(G.ball, '#c4ecd2', 0.06, 1.3, 0.06, 0.28, 0.9, 0.28);
+      return;
+    }
+    if (type === 'snowpine') { // sapin enneigé (Érymanthe) : étages verts coiffés de neige
+      k.add(G.cyl, WOOD, 0, 0.18, 0, 0.13, 0.36, 0.13);
+      [[0.62, 0.95, 0.75], [1.0, 0.74, 0.65], [1.33, 0.5, 0.55]].forEach(([y, w, h], i) => {
+        k.add(G.cone, i % 2 ? '#2f9e66' : '#27925c', 0, y, 0, w * j(), h, w);
+        k.add(G.cone, '#ffffff', 0, y + h * 0.28, 0, w * 0.62, h * 0.46, w * 0.62);
+      });
+      return;
+    }
+    if (type === 'willow') { // saule pleureur (marais, rivières) : dôme et rameaux qui retombent
+      k.add(G.cyl, '#9c7352', 0, 0.3, 0, 0.16, 0.6, 0.16);
+      k.add(G.ball, '#7cc85a', 0, 0.95, 0, 1.0 * j(), 0.6, 1.0);
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4 + rng() * 0.3;
+        k.add(G.cone, i % 2 ? '#8ed46a' : '#6cbf4e', Math.cos(a) * 0.42, 0.62, Math.sin(a) * 0.42, 0.22, 0.7, 0.22, 0, Math.PI);
+      }
       return;
     }
     if (type === 'fig' || type === 'fruit') { // figuier / arbre fruitier : feuillage rond et fruits
@@ -1167,6 +1306,86 @@
     k.add(G.prism, roof, 0, 1.07, 0, 2.0, 0.42, 1.24);
     k.add(G.sphere, '#ffd23f', 0, 1.5, 0, 0.14);
   }
+
+  // --- Héraclès et les Argonautes : petites aides pour les créatures de dessin animé ---
+  // deux yeux ronds (blanc + pupille) d'une tête tournée vers +x ; d = diamètre, gap = écart en z
+  function drawEyes(k, x, y, z, d, gap) {
+    const G = geoLib();
+    [-1, 1].forEach((sd) => {
+      k.add(G.sphere, '#ffffff', x, y, z + sd * gap, d);
+      k.add(G.sphere, '#2b2b3a', x + d * 0.28, y + d * 0.04, z + sd * (gap + d * 0.2), d * 0.55);
+    });
+  }
+  // quadrupède de profil, tête vers +x (lion, biche, sanglier, taureau, juments, chien…)
+  // o = { body, leg, hoof, belly, snout, tail, len, legH, w, neck, head } ; renvoie la position de la tête
+  function drawBeast(k, o) {
+    const G = geoLib();
+    const B = o.body, len = o.len || 1, H = o.legH || 0.4, w = o.w || 1;
+    [[-0.3, -0.12], [0.3, -0.12], [-0.3, 0.12], [0.3, 0.12]].forEach(([x, z]) => {
+      k.add(G.cyl, o.leg || B, x * len, H / 2, z * w, 0.12, H, 0.12);
+      if (o.hoof) k.add(G.cyl, o.hoof, x * len, 0.04, z * w, 0.14, 0.08, 0.14);
+    });
+    k.add(G.ball, B, 0, H + 0.15, 0, 0.95 * len, 0.48, 0.46 * w);
+    if (o.belly) k.add(G.ball, o.belly, 0.05, H + 0.05, 0, 0.66 * len, 0.22, 0.38 * w);
+    const nk = o.neck || 0, hs = o.head || 0.32;
+    const hx = 0.48 * len + nk * 0.35, hy = H + 0.3 + nk;
+    if (nk) k.add(G.cyl, B, 0.4 * len + nk * 0.2, H + 0.25 + nk * 0.5, 0, 0.2, nk + 0.3, 0.18, 0, 0, -0.55);
+    k.add(G.ball, B, hx, hy, 0, hs);
+    k.add(G.ball, o.snout || B, hx + hs * 0.45, hy - hs * 0.18, 0, hs * 0.62, hs * 0.5, hs * 0.58);
+    drawEyes(k, hx + hs * 0.25, hy + hs * 0.2, 0, hs * 0.26, hs * 0.3);
+    k.add(G.cyl, o.tail || B, -0.5 * len, H + 0.24, 0, 0.05, 0.38, 0.05, 0, 0, 0.8);
+    return { hx, hy, hs, H };
+  }
+  // oiseau de dessin animé (tête vers +x), ailes ouvertes ; spikes : plumes de bronze en pointes
+  function drawBird(k, col, acc, spread, spikes) {
+    const G = geoLib(), sp = spread == null ? 0.5 : spread;
+    k.add(G.ball, col, 0, 0, 0, 0.5, 0.36, 0.34);
+    k.add(G.ball, col, 0.26, 0.14, 0, 0.26);
+    k.add(G.cone, acc, 0.44, 0.12, 0, 0.08, 0.2, 0.08, 0, 0, -Math.PI / 2);
+    drawEyes(k, 0.32, 0.2, 0, 0.08, 0.07);
+    [-1, 1].forEach((sd) => k.add(G.ball, col, -0.02, 0.08 + sp * 0.1, sd * 0.3, 0.36, 0.06, 0.5, 0, sd * sp));
+    k.add(G.cone, col, -0.32, 0.04, 0, 0.16, 0.28, 0.08, 0, 0, Math.PI / 2 + 0.3);
+    if (spikes) [-0.12, 0, 0.12].forEach((x) => k.add(G.cone, acc, x, 0.2, 0, 0.07, 0.16, 0.07, 0, 0, 0.4));
+  }
+  // touffe de roseaux à massettes (marais, berges)
+  function drawReeds(k, x, z) {
+    const G = geoLib();
+    for (let i = 0; i < 3; i++) { k.add(G.cyl6, '#3aa846', x + i * 0.06, 0.25, z, 0.03, 0.5, 0.03); k.add(G.sphere, '#9c6a3a', x + i * 0.06, 0.5, z, 0.05, 0.14, 0.05); }
+  }
+  // amphore de terre cuite
+  function drawAmphora(k, col) {
+    const G = geoLib();
+    k.add(G.sphere, col, 0, 0.2, 0, 0.32, 0.38, 0.32);
+    k.add(G.cyl, col, 0, 0.42, 0, 0.12, 0.14, 0.12);
+    [-1, 1].forEach((sd) => k.add(G.torus, col, sd * 0.1, 0.38, 0, 0.12, 0.16, 0.12));
+  }
+  // la massue d'Héraclès : un gros gourdin noueux, debout
+  function drawClub(k) {
+    const G = geoLib();
+    k.add(G.cone, '#b77a45', 0, 0.5, 0, 0.34, 1.0, 0.34, 0, Math.PI, 0);
+    k.add(G.sphere, '#b77a45', 0, 1.0, 0, 0.34);
+    [[0.12, 0.8, 0.05], [-0.1, 0.62, -0.06], [0.06, 0.45, 0.1]].forEach(([x, y, z]) => k.add(G.sphere, '#8a5a30', x, y, z, 0.1));
+  }
+  // l'Argo : longue galère (étrave vers +x), boucliers le long du bord, œil peint à la proue
+  function drawArgo(k, sail, sailCol) {
+    const G = geoLib();
+    k.add(G.cyl, '#b5844a', 0, 0.3, 0, 0.62, 2.4, 0.5, 0, 0, Math.PI / 2);
+    k.add(G.box, '#3d8ee8', 0, 0.38, 0, 2.36, 0.08, 0.52);
+    k.add(G.box, '#d39553', 0, 0.47, 0, 2.3, 0.06, 0.46);
+    k.add(G.cone, '#b5844a', 1.3, 0.56, 0, 0.3, 0.7, 0.26, 0, 0, -1.0);
+    k.add(G.cone, '#b5844a', -1.28, 0.62, 0, 0.26, 0.6, 0.24, 0, 0, 0.75);
+    [-1, 1].forEach((sd) => { k.add(G.sphere, '#ffffff', 1.12, 0.36, sd * 0.2, 0.16, 0.12, 0.06); k.add(G.sphere, '#2b2b3a', 1.15, 0.36, sd * 0.22, 0.08, 0.08, 0.04); });
+    for (let i = 0; i < 5; i++) [-1, 1].forEach((sd) => k.add(G.cyl, i % 2 ? '#ff5d5d' : '#ffd23f', -0.8 + i * 0.4, 0.5, sd * 0.25, 0.24, 0.04, 0.24, 0, sd * Math.PI / 2));
+    for (let i = 0; i < 4; i++) [-1, 1].forEach((sd) => k.add(G.cyl6, WOOD_D, -0.6 + i * 0.4, 0.3, sd * 0.42, 0.03, 0.55, 0.03, 0, sd * 1.1));
+    k.add(G.cyl6, WOOD_D, 0, 1.15, 0, 0.06, 1.4, 0.06);
+    if (sail) {
+      k.add(G.box, WOOD_D, 0, 1.72, 0, 0.05, 0.05, 1.2);
+      k.add(G.box, sailCol || '#ffffff', 0.02, 1.32, 0, 0.03, 0.74, 1.1);
+      k.add(G.box, '#ff5d5d', 0.03, 1.32, 0, 0.03, 0.16, 1.1);
+    }
+  }
+  // couleurs de l'arc-en-ciel (pont-portail entre deux sagas, Olympe)
+  const RAINBOW = ['#ff6b6b', '#ffa53d', '#ffd23f', '#6fd64a', '#3fb6e8', '#8a7fe0'];
 
   // --- monuments : un par île, liés à l'épisode de l'Odyssée (face vers le sentier) ---
   const LANDMARKS = {
@@ -1545,6 +1764,604 @@
         [[-0.1, 0.06], [0.1, 0.06], [-0.1, -0.06], [0.1, -0.06]].forEach(([x, z]) => k.add(G.cyl6, '#c98b4f', x, 0.07, z, 0.05, 0.14, 0.05));
         k.add(G.cyl6, '#c98b4f', -0.2, 0.26, 0, 0.04, 0.18, 0.04, 0, 0, 0.8);
       });
+    },
+
+    // ================= Saga 2 : les Douze Travaux d'Héraclès =================
+    // Thèbes : le berceau du petit Héraclès, deux serpents tout penauds, la massue sur son socle
+    cradle(k) {
+      const G = geoLib();
+      k.add(G.cyl, '#f3ead8', 0, 0.05, 0, 2.3, 0.1, 1.7);
+      k.at(-0.3, 0.1, 0.05, 0, 1, () => {
+        [-0.36, 0.36].forEach((x) => k.add(G.arc, '#8a5a30', x, 0.02, 0, 0.7, 0.5, 0.7, Math.PI / 2, 0, Math.PI));
+        k.add(G.box, '#c98b4f', 0, 0.34, 0, 0.95, 0.32, 0.58);
+        k.add(G.box, '#ffffff', 0, 0.51, 0, 0.86, 0.06, 0.5);
+        k.add(G.ball, '#7ec8ff', -0.12, 0.58, 0, 0.56, 0.2, 0.46);
+        k.add(G.sphere, '#f2c49b', 0.24, 0.66, 0, 0.3);
+        k.add(G.sphere, '#8a5a30', 0.2, 0.77, 0, 0.26, 0.14, 0.28);
+        k.at(0.24, 0.66, 0, -Math.PI / 2, 1, () => drawEyes(k, 0.1, 0.02, 0, 0.07, 0.06));
+        // les deux serpents, étouffés pour de rire
+        [[-0.05, 0.36, 0.3], [0.05, -0.36, -0.3]].forEach(([x, z, ry]) => k.at(x, 0.56, z, ry, 1, () => {
+          for (let s = 0; s < 6; s++) k.add(G.sphere, s % 2 ? '#6fd04f' : '#4cbf3a', -0.3 + s * 0.11, Math.sin(s * 1.4) * 0.05, Math.cos(s * 1.4) * 0.05, 0.12);
+          k.add(G.sphere, '#6fd04f', 0.38, 0.05, 0, 0.17);
+          drawEyes(k, 0.42, 0.1, 0, 0.06, 0.04);
+        }));
+      });
+      k.at(0.85, 0.1, -0.3, 0, 1, () => { k.add(G.box, '#fff3e0', 0, 0.16, 0, 0.5, 0.32, 0.5); k.at(0, 0.32, 0, 0.3, 0.9, () => drawClub(k)); });
+      [-1.05, 1.05].forEach((x) => k.add(G.sphere, '#ffd23f', x, 0.18, 0.65, 0.16));
+    },
+    // Delphes : le temple d'Apollon, l'omphalos dans son filet, le trépied d'or et ses vapeurs
+    oracle(k, ctx) {
+      const G = geoLib();
+      k.add(G.box, '#f3ead8', 0, 0.06, -0.15, 2.5, 0.12, 1.7);
+      [-0.95, -0.57, -0.19, 0.19, 0.57, 0.95].forEach((x) => k.at(x, 0.12, -0.6, 0, 1, () => drawColumn(k, 1.0)));
+      k.add(G.box, '#fff3e0', 0, 1.34, -0.6, 2.3, 0.14, 0.45);
+      k.add(G.prism, '#ffffff', 0, 1.41, -0.6, 2.3, 0.4, 0.5);
+      k.add(G.box, '#3d8ee8', 0, 1.3, -0.37, 2.2, 0.06, 0.02);
+      k.add(G.sphere, '#ffd23f', 0, 1.6, -0.34, 0.14);
+      k.add(G.sphere, '#e6dcc8', -0.7, 0.42, 0.4, 0.5, 0.62, 0.5);
+      k.add(G.torus, '#c8b89a', -0.7, 0.44, 0.4, 0.5, 0.5, 0.3, 0, Math.PI / 2);
+      k.add(G.torus, '#c8b89a', -0.7, 0.44, 0.4, 0.5, 0.62, 0.3);
+      k.at(0.6, 0.12, 0.35, 0, 1, () => {
+        [0, 2.1, 4.2].forEach((a) => k.add(G.cyl6, '#ffc531', Math.cos(a) * 0.16, 0.3, Math.sin(a) * 0.16, 0.04, 0.62, 0.04, 0, Math.sin(a) * 0.25, -Math.cos(a) * 0.25));
+        k.add(G.cyl, '#ffc531', 0, 0.62, 0, 0.5, 0.14, 0.5);
+        k.add(G.sphere, '#ffe680', 0, 0.68, 0, 0.36, 0.1, 0.36).lit(0.8);
+      });
+      ctx.mist.push(k.pt(0.6, 1.1, 0.35), k.pt(0.75, 1.5, 0.3));
+      k.at(1.15, 0, -0.1, 0, 0.7, () => drawTree(k, 'round', ctx.rng));
+    },
+    // Némée : le lion à la crinière rousse, statue dodue devant sa grotte à deux entrées
+    lion(k) {
+      const G = geoLib();
+      k.add(G.ball, '#e0b878', 0, 0.4, -0.75, 2.4, 1.3, 1.0);
+      k.add(G.ball, '#9cc84a', 0, 0.98, -0.8, 1.8, 0.3, 0.8);
+      [-0.6, 0.6].forEach((x) => k.add(G.cyl, '#5c3b2a', x, 0.32, -0.32, 0.45, 0.04, 0.55, 0, Math.PI / 2 - 0.2));
+      k.add(G.box, '#f3ead8', 0, 0.12, 0.25, 1.6, 0.24, 0.8);
+      k.at(-0.05, 0.24, 0.25, 0, 1, () => {
+        const b = drawBeast(k, { body: '#f0a840', belly: '#ffd27a', snout: '#ffe0b0', len: 1.05, legH: 0.36, head: 0.42 });
+        for (let i = 0; i < 11; i++) { const a = i / 11 * Math.PI * 2; k.add(G.ball, i % 2 ? '#c8642a' : '#dd7a30', b.hx - 0.08, b.hy + Math.sin(a) * 0.23, Math.cos(a) * 0.23, 0.22); }
+        [-1, 1].forEach((sd) => k.add(G.sphere, '#f0a840', b.hx - 0.02, b.hy + 0.2, sd * 0.13, 0.12));
+        k.add(G.ball, '#c8642a', -0.67, b.H + 0.38, 0, 0.16);
+      });
+      k.at(0.98, 0, 0.75, 0, 0.75, () => drawClub(k));
+    },
+    // Lerne : l'Hydre aux cinq têtes, dans son marais de roseaux
+    hydra(k) {
+      const G = geoLib();
+      k.add(G.cyl, '#e9e3b0', 0, 0.03, 0, 2.7, 0.06, 2.2);
+      k.add(G.cyl, '#5fc8b0', 0, 0.06, 0, 2.4, 0.05, 1.9);
+      k.add(G.ball, '#4cbf6a', 0, 0.22, -0.15, 1.3, 0.62, 0.95);
+      k.add(G.ball, '#8be0a0', 0, 0.14, 0.2, 0.9, 0.3, 0.5);
+      [[-0.6, 0.15], [-0.3, 0.45], [0, 0.6], [0.3, 0.45], [0.6, 0.15]].forEach(([dx, h], i) => {
+        for (let s = 1; s <= 6; s++) { const t = s / 6; k.add(G.sphere, i % 2 ? '#4cbf6a' : '#5ccf78', dx * t * 1.15, 0.35 + t * (0.8 + h), -0.15 + Math.sin(t * Math.PI) * 0.28, 0.24 - t * 0.05); }
+        k.at(dx * 1.15, 1.2 + h, -0.05, -Math.PI / 2 - dx * 0.5, 1, () => {
+          k.add(G.ball, '#5ccf78', 0, 0, 0, 0.32, 0.26, 0.3);
+          k.add(G.ball, '#8be0a0', 0.14, -0.05, 0, 0.22, 0.14, 0.22);
+          drawEyes(k, 0.06, 0.08, 0, 0.1, 0.08);
+          k.add(G.cone, '#ffd23f', -0.06, 0.15, 0, 0.06, 0.14, 0.06);
+        });
+      });
+      [[1.25, 0.55], [-1.25, 0.45], [1.0, -0.85], [-0.9, -0.9]].forEach(([x, z]) => drawReeds(k, x, z));
+    },
+    // Cérynie : la biche aux bois d'or et aux sabots de bronze, sur sa colline ; l'arc d'Artémis
+    hind(k) {
+      const G = geoLib();
+      k.add(G.dome, '#9fe07a', 0, 0, -0.1, 2.3, 0.5, 1.7);
+      k.at(0, 0.24, 0, 0.2, 1, () => {
+        const b = drawBeast(k, { body: '#d9a066', belly: '#fff0dc', snout: '#f2d2a8', hoof: '#e0a040', len: 0.9, legH: 0.55, w: 0.8, neck: 0.25, head: 0.3 });
+        [[-0.22, 0.12], [0.02, 0.16], [0.2, 0.1], [-0.06, 0.04]].forEach(([x, y]) => k.add(G.sphere, '#fff4e0', x, b.H + 0.15 + y, 0.2, 0.08));
+        [-1, 1].forEach((sd) => {
+          const ax = b.hx - 0.04, ay = b.hy + 0.12, az = sd * 0.09;
+          k.add(G.cyl6, '#ffc531', ax, ay + 0.2, az + sd * 0.06, 0.04, 0.42, 0.04, 0, sd * 0.35, 0);
+          k.add(G.cyl6, '#ffc531', ax + 0.09, ay + 0.26, az + sd * 0.08, 0.035, 0.22, 0.035, 0, 0, -0.7);
+          k.add(G.cyl6, '#ffc531', ax - 0.06, ay + 0.34, az + sd * 0.12, 0.03, 0.2, 0.03, 0, sd * 0.2, 0.6);
+          k.add(G.sphere, '#ffe680', ax, ay + 0.42, az + sd * 0.15, 0.07);
+          k.add(G.sphere, '#d9a066', b.hx - 0.12, b.hy + 0.12, sd * 0.14, 0.14, 0.08, 0.1);
+        });
+      });
+      k.at(-1.05, 0, 0.55, 0.4, 1, () => {
+        k.add(G.box, '#f3ead8', 0, 0.2, 0, 0.42, 0.4, 0.42);
+        k.add(G.arc, '#f0f0ff', 0, 0.42, 0, 0.9, 0.9, 0.6, 0, 0, -Math.PI / 2);
+        k.add(G.cyl6, '#ffffff', 0, 0.42, 0, 0.012, 0.44, 0.012);
+      });
+    },
+    // Érymanthe : le sanglier hirsute dans la neige profonde, sapins enneigés
+    boar(k, ctx) {
+      const G = geoLib();
+      k.add(G.dome, '#ffffff', 0, 0, -0.1, 2.5, 0.55, 1.9);
+      k.add(G.ball, '#eef6ff', 0.65, 0.35, -0.55, 0.9, 0.5, 0.7);
+      k.at(0, 0.28, 0.1, 0, 1, () => {
+        const b = drawBeast(k, { body: '#7a4a3a', belly: '#9a6a52', snout: '#e89a8a', len: 1.1, legH: 0.28, head: 0.44, w: 1.1 });
+        for (let i = 0; i < 6; i++) k.add(G.cone, '#5a3428', -0.35 + i * 0.13, b.H + 0.42, 0, 0.1, 0.2, 0.1, 0, 0, 0.3);
+        [-1, 1].forEach((sd) => {
+          k.add(G.cone, '#ffffff', b.hx + 0.24, b.hy - 0.02, sd * 0.12, 0.06, 0.22, 0.06, 0, 0, -0.5);
+          k.add(G.cone, '#7a4a3a', b.hx - 0.06, b.hy + 0.22, sd * 0.12, 0.1, 0.16, 0.06);
+        });
+        k.add(G.cyl, '#e89a8a', b.hx + 0.33, b.hy - 0.07, 0, 0.14, 0.06, 0.14, 0, 0, Math.PI / 2);
+      });
+      [[-1.15, -0.5], [1.15, -0.25]].forEach(([x, z]) => k.at(x, 0, z, 0, 0.9, () => drawTree(k, 'snowpine', ctx.rng)));
+      [[0.95, 0.75, 0.32], [1.15, 0.55, 0.22], [-1.0, 0.7, 0.26]].forEach(([x, z, r]) => k.add(G.sphere, '#ffffff', x, r * 0.42, z, r));
+    },
+    // Augias : la longue écurie et le fleuve détourné qui lave toute la cour
+    stables(k) {
+      const G = geoLib();
+      k.at(0, 0, -0.4, 0, 1, () => {
+        k.add(G.box, '#efe2cc', 0, 0.04, 0, 2.5, 0.08, 1.0);
+        k.add(G.box, '#d9a066', 0, 0.42, 0, 2.3, 0.7, 0.8);
+        k.add(G.prism, '#d9473d', 0, 0.77, 0, 2.5, 0.45, 1.0);
+        [-0.75, 0, 0.75].forEach((x) => { k.add(G.box, '#8a5a30', x, 0.3, 0.41, 0.42, 0.5, 0.04); k.add(G.box, '#ffd9a0', x, 0.58, 0.42, 0.46, 0.06, 0.04); });
+      });
+      k.add(G.box, '#3fd0ef', 0, 0.04, 0.4, 2.9, 0.05, 0.5, 0.05);
+      for (let i = 0; i < 7; i++) k.add(G.ball, '#ffffff', -1.2 + i * 0.4, 0.09, 0.4 + Math.sin(i * 2) * 0.13, 0.22, 0.08, 0.15);
+      k.add(G.ball, '#bdf2ff', 1.35, 0.2, 0.4, 0.3, 0.3, 0.5);
+      k.at(1.15, 0, 0.95, 0.3, 1, () => { k.add(G.cyl6, WOOD_D, 0, 0.42, 0, 0.04, 0.84, 0.04, 0, 0, 0.2); k.add(G.cone, '#f2d06a', -0.06, 0.05, 0, 0.28, 0.22, 0.1); });
+      [[-1.15, 0.95], [-0.82, 1.05]].forEach(([x, z]) => k.add(G.cyl, '#f2d06a', x, 0.15, z, 0.3, 0.32, 0.3, 0, Math.PI / 2));
+    },
+    // Stymphale : les oiseaux aux plumes de bronze sur l'arbre mort du marais, et les crotales
+    birds(k) {
+      const G = geoLib();
+      k.add(G.cyl, '#e2e0c0', 0, 0.03, 0, 2.5, 0.06, 1.9);
+      k.add(G.cyl, '#4fc4c0', 0, 0.06, 0, 2.2, 0.05, 1.6);
+      k.at(-0.3, 0, -0.3, 0, 1, () => {
+        k.add(G.cyl, '#8a7a6a', 0, 0.6, 0, 0.16, 1.2, 0.16);
+        k.add(G.cyl, '#8a7a6a', 0.22, 1.05, 0, 0.08, 0.6, 0.08, 0, 0, -0.9);
+        k.add(G.cyl, '#8a7a6a', -0.2, 1.15, 0, 0.07, 0.5, 0.07, 0, 0, 0.8);
+        k.at(0.45, 1.36, 0, -0.4, 0.75, () => drawBird(k, '#d8a24a', '#8a5a30', 0.3, true));
+        k.at(-0.38, 1.42, 0, Math.PI + 0.4, 0.65, () => drawBird(k, '#b9c4cc', '#7a8a98', 0.3, true));
+      });
+      k.at(0.75, 1.75, 0.25, -0.8, 0.85, () => drawBird(k, '#e0b050', '#8a5a30', 0.9, true));
+      k.at(0.95, 0, 0.7, 0, 1, () => {
+        k.add(G.box, '#f3ead8', 0, 0.15, 0, 0.36, 0.3, 0.36);
+        [-0.07, 0.07].forEach((x, i) => k.add(G.cyl, '#e0a040', x, 0.44, 0, 0.24, 0.04, 0.24, 0, 0, Math.PI / 2 + (i ? 0.3 : -0.3)));
+      });
+      [[1.2, -0.5], [-1.2, 0.5], [-0.9, 0.85]].forEach(([x, z]) => drawReeds(k, x, z));
+    },
+    // Crète : portique minoen (colonnes rouges, cornes de consécration) et le taureau blanc aux cornes d'or
+    bull(k) {
+      const G = geoLib();
+      k.add(G.box, '#f3ead8', 0, 0.06, -0.1, 2.6, 0.12, 1.8);
+      [-0.95, -0.32, 0.32, 0.95].forEach((x) => { k.add(G.taper, '#d9473d', x, 0.62, -0.72, 0.2, 1.0, 0.2, 0, Math.PI, 0); k.add(G.cyl, '#2b2b3a', x, 1.16, -0.72, 0.3, 0.1, 0.3); });
+      k.add(G.box, '#ffd9a0', 0, 1.27, -0.72, 2.3, 0.14, 0.36);
+      [-0.6, 0.6].forEach((x) => { k.add(G.box, '#ffffff', x, 1.38, -0.72, 0.36, 0.08, 0.12); [-1, 1].forEach((sd) => k.add(G.cone, '#ffffff', x + sd * 0.13, 1.52, -0.72, 0.1, 0.28, 0.1, 0, 0, -sd * 0.3)); });
+      k.at(0, 0.12, 0.3, 0, 1, () => {
+        const b = drawBeast(k, { body: '#ffffff', belly: '#f4ece0', snout: '#ffc8c0', hoof: '#8a7a6a', len: 1.15, legH: 0.38, head: 0.42, w: 1.1 });
+        [-1, 1].forEach((sd) => k.add(G.cone, '#ffc531', b.hx - 0.02, b.hy + 0.2, sd * 0.22, 0.09, 0.32, 0.09, 0, sd * 0.9, 0));
+        k.add(G.ball, '#5a4a6a', -0.15, b.H + 0.32, 0.17, 0.32, 0.24, 0.12);
+        k.add(G.torus, '#ffc531', b.hx + 0.24, b.hy - 0.16, 0, 0.12, 0.12, 0.12, Math.PI / 2);
+      });
+    },
+    // Diomède (Thrace) : la palissade, l'auge de bronze et les deux juments à crinière
+    mares(k) {
+      const G = geoLib();
+      for (let i = 0; i < 9; i++) { const x = -1.2 + i * 0.3; k.add(G.cyl6, '#8a5a30', x, 0.4, -0.85, 0.13, 0.8, 0.13); k.add(G.cone, '#8a5a30', x, 0.88, -0.85, 0.13, 0.16, 0.13); }
+      k.add(G.box, '#6e4a2a', 0, 0.5, -0.78, 2.6, 0.08, 0.06);
+      k.add(G.box, '#e0a040', 0.1, 0.16, -0.4, 1.0, 0.3, 0.3);
+      k.add(G.box, '#f2d06a', 0.1, 0.32, -0.4, 0.9, 0.04, 0.22);
+      const mare = (x, z, ry, body, mane, snout) => k.at(x, 0, z, ry, 0.85, () => {
+        const b = drawBeast(k, { body, snout, tail: mane, hoof: '#3a3030', len: 1.1, legH: 0.62, w: 0.8, neck: 0.32, head: 0.3 });
+        for (let i = 0; i < 5; i++) k.add(G.ball, mane, b.hx - 0.2 - i * 0.07, b.hy - 0.02 - i * 0.09, 0, 0.12, 0.17, 0.1);
+        k.add(G.cone, body, b.hx - 0.06, b.hy + 0.2, 0.06, 0.07, 0.14, 0.07);
+      });
+      mare(-0.55, 0.3, 0.25, '#5a4a5e', '#2b2330', '#8a7a8e');
+      mare(0.62, 0.45, -0.2, '#f4ece4', '#ffffff', '#e8d8cc');
+    },
+    // Les Amazones : le kiosque rond d'Hippolyte et sa ceinture d'or ; boucliers en croissant, lances
+    belt(k) {
+      const G = geoLib();
+      k.add(G.cyl, '#f3ead8', 0, 0.06, 0, 1.9, 0.12, 1.9);
+      for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2 + Math.PI / 6; k.at(Math.cos(a) * 0.72, 0.12, Math.sin(a) * 0.72, 0, 1, () => drawColumn(k, 0.95, '#fff6f0')); }
+      k.add(G.cyl, '#ffe0ea', 0, 1.24, 0, 1.75, 0.12, 1.75);
+      k.add(G.dome, '#e85d8a', 0, 1.3, 0, 1.6, 0.7, 1.6);
+      k.add(G.sphere, '#ffd23f', 0, 1.72, 0, 0.18);
+      k.add(G.cyl, '#fff3dc', 0, 0.3, 0, 0.42, 0.36, 0.42);
+      k.add(G.box, '#e85d8a', 0, 0.51, 0, 0.4, 0.06, 0.4);
+      k.add(G.torus, '#ffc531', 0, 0.6, 0, 0.44, 0.44, 0.7, 0, Math.PI / 2).lit(0.5);
+      k.add(G.sphere, '#7ec8ff', 0, 0.6, 0.12, 0.1).lit(0.6);
+      [-1, 1].forEach((sd) => k.at(sd * 1.18, 0, 0.55, -sd * 0.5, 1, () => {
+        [-0.1, 0.1].forEach((x, i) => { k.add(G.cyl6, WOOD_D, x, 0.5, 0, 0.035, 1.0, 0.035, 0, 0, i ? 0.25 : -0.25); k.add(G.cone, '#b9c4cc', x * 3.3, 1.0, 0, 0.07, 0.16, 0.07, 0, 0, i ? 0.25 : -0.25); });
+        k.add(G.cyl, '#e85d8a', 0, 0.45, 0.07, 0.56, 0.05, 0.5, 0, Math.PI / 2);
+        k.add(G.cyl, '#ffd23f', 0, 0.6, 0.1, 0.3, 0.04, 0.18, 0, Math.PI / 2);
+      }));
+    },
+    // Géryon : les bœufs rouges au bout du monde, entre les colonnes d'Héraclès, soleil couchant
+    cattle(k) {
+      const G = geoLib();
+      [-0.82, 0.82].forEach((x) => { k.add(G.box, '#f3ead8', x, 0.08, -0.85, 0.5, 0.16, 0.5); k.add(G.cyl, '#fff6ea', x, 1.0, -0.85, 0.34, 1.7, 0.34); k.add(G.box, '#f3ead8', x, 1.9, -0.85, 0.5, 0.12, 0.5); });
+      k.add(G.cyl, '#ff9f3d', 0, 0.95, -0.98, 1.0, 0.05, 1.0, 0, Math.PI / 2).lit(0.6);
+      k.add(G.cyl, '#ffd23f', 0, 0.95, -0.95, 0.66, 0.05, 0.66, 0, Math.PI / 2).lit(0.8);
+      const cow = (x, z, ry, s) => k.at(x, 0, z, ry, s, () => {
+        const b = drawBeast(k, { body: '#d8553d', belly: '#ff9a7a', snout: '#ffe0d0', hoof: '#5a3428', len: 1.0, legH: 0.36, head: 0.36 });
+        [-1, 1].forEach((sd) => k.add(G.cone, '#fff4e0', b.hx - 0.04, b.hy + 0.18, sd * 0.18, 0.07, 0.24, 0.07, 0, sd * 1.0, 0));
+        k.add(G.ball, '#ffffff', b.hx + 0.04, b.hy + 0.1, 0, 0.16, 0.12, 0.2);
+      });
+      cow(-0.5, 0.2, 0.3, 0.9);
+      cow(0.6, 0.55, -0.4, 0.78);
+      for (let i = 0; i < 4; i++) k.add(G.cyl6, '#c98b4f', -1.3 + i * 0.16, 0.18, 0.95 - i * 0.12, 0.06, 0.36, 0.06);
+    },
+    // Les Hespérides : le pommier aux pommes d'or, et Ladon le dragon enroulé autour du tronc
+    apples(k) {
+      const G = geoLib();
+      k.add(G.cyl, '#fff0c8', 0, 0.04, 0, 2.1, 0.08, 2.0);
+      k.add(G.cyl, '#9c7352', 0, 0.55, -0.1, 0.32, 1.1, 0.32);
+      k.add(G.ball, '#3fbf45', 0, 1.45, -0.1, 1.9, 1.2, 1.6);
+      k.add(G.ball, '#55d455', 0.35, 1.7, 0.1, 1.0, 0.8, 0.9);
+      k.add(G.ball, '#34b23c', -0.45, 1.6, -0.2, 1.0, 0.8, 0.9);
+      for (let i = 0; i < 9; i++) { const a = i * 0.7; k.add(G.sphere, '#ffc531', Math.cos(a) * 0.82, 1.25 + (i % 3) * 0.22, -0.1 + Math.sin(a) * 0.64, 0.2).lit(0.4); }
+      for (let i = 0; i < 14; i++) { const a = i * 0.75; k.add(G.sphere, i % 2 ? '#3db86a' : '#5ccf78', Math.cos(a) * 0.26, 0.1 + i * 0.05, -0.1 + Math.sin(a) * 0.26, 0.2); }
+      k.at(0.38, 0.8, 0.18, -Math.PI / 2 + 0.5, 1, () => {
+        k.add(G.ball, '#5ccf78', 0, 0, 0, 0.32, 0.26, 0.28);
+        k.add(G.ball, '#8be0a0', 0.15, -0.05, 0, 0.22, 0.14, 0.2);
+        drawEyes(k, 0.06, 0.08, 0, 0.11, 0.08);
+        [-1, 1].forEach((sd) => k.add(G.cone, '#ffd23f', -0.08, 0.16, sd * 0.07, 0.05, 0.14, 0.05, 0, 0, 0.4));
+      });
+      [[0.95, 0.7], [-0.85, 0.8], [0.3, 1.0]].forEach(([x, z]) => k.add(G.sphere, '#ffc531', x, 0.13, z, 0.2));
+    },
+    // Cerbère : la porte des Enfers (mauve et douce, lanternes) et le gros chien à trois têtes
+    cerberus(k, ctx) {
+      const G = geoLib();
+      k.add(G.cyl, '#efe6ff', 0, 0.03, 0, 2.5, 0.06, 1.9);
+      [-0.8, 0.8].forEach((x) => {
+        k.add(G.box, '#9a8ae0', x, 0.75, -0.65, 0.36, 1.5, 0.36);
+        k.add(G.ball, '#fff2a8', x, 1.62, -0.65, 0.24).lit(1.4);
+        if (k.lanterns) k.lanterns.push(k.pt(x, 1.62, -0.65));
+      });
+      k.add(G.box, '#4a3f7a', 0, 0.7, -0.7, 1.24, 1.4, 0.08);
+      k.add(G.arc, '#b3a3ee', 0, 1.4, -0.65, 1.7, 1.7, 2.4);
+      k.at(-0.05, 0, 0.35, 0, 1, () => {
+        const b = drawBeast(k, { body: '#5a4a6a', belly: '#7a6a8a', snout: '#9a8aaa', len: 1.1, legH: 0.36, head: 0.34, w: 1.2 });
+        [-1, 1].forEach((sd) => k.at(b.hx - 0.14, b.hy + 0.02, sd * 0.3, -sd * 0.5, 0.95, () => {
+          k.add(G.ball, '#5a4a6a', 0, 0, 0, 0.34);
+          k.add(G.ball, '#9a8aaa', 0.15, -0.06, 0, 0.21, 0.17, 0.2);
+          drawEyes(k, 0.08, 0.07, 0, 0.09, 0.1);
+          k.add(G.sphere, '#ff8fb1', 0.2, -0.14, 0, 0.1, 0.04, 0.08);
+        }));
+        [-1, 1].forEach((sd) => k.add(G.cone, '#5a4a6a', b.hx - 0.06, b.hy + 0.2, sd * 0.1, 0.1, 0.16, 0.07));
+        k.add(G.torus, '#ff5d5d', b.hx - 0.22, b.hy - 0.16, 0, 0.42, 0.5, 0.7, 0, 0, Math.PI / 2 + 0.5);
+        k.add(G.sphere, '#ff8fb1', b.hx + 0.22, b.hy - 0.2, 0, 0.12, 0.04, 0.09);
+      });
+      ctx.mist.push(k.pt(-1.2, 0.4, 0.2), k.pt(1.2, 0.45, 0.1));
+    },
+    // L'Olympe : la montagne des dieux dans les nuages, le temple d'or, l'éclair de Zeus
+    olympus(k) {
+      const G = geoLib();
+      k.add(G.dome, '#e8e4f4', 0, 0, -0.2, 2.4, 1.0, 1.8);
+      k.at(0, 0.42, -0.25, 0, 0.7, () => drawPalace(k, WHITE, '#ffc531', '#ffe8a8'));
+      [[-1.0, 0.25, 0.35], [1.0, 0.3, 0.25], [-0.45, 0.3, 0.7], [0.45, 0.28, 0.72], [0.05, 0.4, -0.95], [-1.0, 0.45, -0.6], [1.0, 0.4, -0.55]].forEach(([x, y, z]) => k.add(G.ball, '#ffffff', x, y, z, 0.9, 0.55, 0.7));
+      [[1.15, 1.85, -0.2, -0.4], [1.05, 1.5, -0.2, 0.5], [1.15, 1.15, -0.2, -0.4]].forEach(([x, y, z, rz]) => k.add(G.box, '#ffd23f', x, y, z, 0.12, 0.42, 0.06, 0, 0, rz).lit(1.2));
+      RAINBOW.forEach((col, i) => k.add(G.arc, col, -0.15, 0.3, -1.05, 3.4 - i * 0.24, 3.4 - i * 0.24, 1.4));
+    },
+
+    // ================= Saga 3 : les Argonautes (Jason et la Toison d'or) =================
+    // Iolcos : l'Argo sur son chantier (cales, échafaudage, planches) et la chouette d'Athéna
+    argo(k) {
+      const G = geoLib();
+      k.add(G.box, '#e8d4b0', 0, 0.03, 0, 2.8, 0.06, 1.4);
+      [-0.7, 0, 0.7].forEach((x) => k.add(G.box, '#8a5a30', x, 0.12, 0, 0.18, 0.24, 0.8));
+      k.at(0, 0.22, 0, 0, 0.9, () => drawArgo(k, false));
+      [[-1.3, 0.35], [-1.3, -0.35]].forEach(([x, z]) => k.add(G.cyl6, '#c98b4f', x, 0.6, z, 0.05, 1.2, 0.05));
+      k.add(G.box, '#c98b4f', -1.3, 0.92, 0, 0.1, 0.05, 0.8);
+      for (let i = 0; i < 3; i++) k.add(G.box, i % 2 ? '#d39553' : '#c98b4f', 0.85 - i * 0.05, 0.08 + i * 0.07, 0.8, 0.9, 0.06, 0.2, 0.1 * i);
+      k.at(1.2, 0, -0.55, -Math.PI / 2, 1, () => {
+        k.add(G.cyl, '#f3ead8', 0, 0.3, 0, 0.26, 0.6, 0.26);
+        k.add(G.ball, '#b9a07a', 0, 0.78, 0, 0.34, 0.38, 0.32);
+        drawEyes(k, 0.1, 0.85, 0, 0.12, 0.07);
+        k.add(G.cone, '#ffb43d', 0.17, 0.78, 0, 0.05, 0.08, 0.05, 0, 0, Math.PI);
+        [-1, 1].forEach((sd) => k.add(G.cone, '#9a8462', 0, 1.0, sd * 0.1, 0.06, 0.1, 0.06));
+      });
+    },
+    // Lemnos : le petit volcan de la forge d'Héphaïstos, l'enclume, les guirlandes de la fête
+    forge(k, ctx) {
+      const G = geoLib();
+      k.add(G.cone, '#b07a6a', -0.35, 0.6, -0.4, 1.9, 1.2, 1.6);
+      k.add(G.cyl, '#ff7a3d', -0.35, 1.18, -0.4, 0.5, 0.08, 0.45).lit(1.2);
+      k.add(G.ball, '#ffb43d', -0.35, 1.22, -0.4, 0.36, 0.14, 0.3).lit(1.4);
+      [[-0.15, 0.85, -0.05, 0.3], [-0.6, 0.75, -0.1, -0.4]].forEach(([x, y, z, rz]) => k.add(G.box, '#ff7a3d', x, y, z, 0.1, 0.5, 0.04, 0, -0.5, rz).lit(0.8));
+      k.at(0.78, 0, 0.3, -0.3, 1, () => {
+        k.add(G.box, '#8a7a6a', 0, 0.15, 0, 0.3, 0.3, 0.3);
+        k.add(G.box, '#5a5a6a', 0, 0.38, 0, 0.62, 0.16, 0.26);
+        k.add(G.cone, '#5a5a6a', 0.38, 0.4, 0, 0.14, 0.24, 0.12, 0, 0, -Math.PI / 2);
+        k.add(G.cyl6, WOOD, 0.05, 0.62, 0.12, 0.04, 0.45, 0.04, 0, 0, 1.2);
+        k.add(G.box, '#7a7a8a', -0.13, 0.53, 0.12, 0.16, 0.12, 0.12);
+      });
+      const fl = ctx.isle.flowers;
+      [[-1.25, 0.7], [-0.25, 0.95]].forEach(([x, z]) => { k.add(G.cyl6, '#ffffff', x, 0.45, z, 0.05, 0.9, 0.05); k.add(G.sphere, fl[0], x, 0.92, z, 0.14); });
+      for (let i = 1; i < 8; i++) { const t = i / 8; k.add(G.sphere, fl[i % fl.length], -1.25 + t, 0.85 - Math.sin(t * Math.PI) * 0.22, 0.7 + t * 0.25, 0.13); }
+      ctx.mist.push(k.pt(-0.35, 1.7, -0.4), k.pt(-0.2, 2.1, -0.5));
+    },
+    // Cyzique : le géant aux six bras (sourire de pierre) sur sa colline, l'autel de Rhéa
+    giant(k) {
+      const G = geoLib(), S = '#bcb4a8';
+      k.add(G.dome, '#9fd88a', 0, 0, -0.2, 2.3, 0.5, 1.6);
+      k.at(0, 0.2, -0.2, 0, 1, () => {
+        [-0.25, 0.25].forEach((x) => k.add(G.cyl, S, x, 0.25, 0, 0.28, 0.5, 0.28));
+        k.add(G.ball, S, 0, 0.85, 0, 1.0, 1.1, 0.8);
+        k.add(G.ball, '#cfc8bc', 0, 1.55, 0.04, 0.62, 0.58, 0.56);
+        k.at(0, 1.58, 0.05, -Math.PI / 2, 1, () => drawEyes(k, 0.2, 0.04, 0, 0.14, 0.11));
+        k.add(G.arc, '#6a5a50', 0, 1.47, 0.3, 0.24, 0.2, 0.3, 0, 0, Math.PI);
+        [0.6, 1.2, 1.9].forEach((phi, i) => [-1, 1].forEach((sd) => {
+          const sx = sd * 0.4, sy = 1.15 - i * 0.18, dx = sd * Math.sin(phi), dy = Math.cos(phi);
+          k.add(G.cyl, S, sx + dx * 0.3, sy + dy * 0.3, 0, 0.16, 0.6, 0.16, 0, 0, -sd * phi);
+          k.add(G.sphere, '#cfc8bc', sx + dx * 0.62, sy + dy * 0.62, 0, 0.2);
+        }));
+      });
+      k.at(1.0, 0, 0.6, 0, 1, () => { k.add(G.cyl, '#fff3dc', 0, 0.18, 0, 0.5, 0.36, 0.5); k.add(G.ball, '#ff8fc0', 0, 0.42, 0, 0.3, 0.14, 0.3); });
+    },
+    // Mysie : la source des nymphes où Hylas a laissé sa cruche ; cascade, nénuphars, roseaux
+    spring(k) {
+      const G = geoLib();
+      k.add(G.ball, '#b8d0c8', 0, 0.55, -0.72, 1.7, 1.3, 0.9);
+      k.add(G.ball, '#6fd04f', 0, 1.15, -0.74, 1.1, 0.25, 0.6);
+      k.add(G.box, '#7fdcf0', 0, 0.55, -0.3, 0.26, 0.9, 0.06).lit(0.3);
+      k.add(G.cyl, '#fff0c8', 0, 0.03, 0.25, 2.0, 0.06, 1.3);
+      k.add(G.cyl, '#3fd0ef', 0, 0.06, 0.25, 1.75, 0.05, 1.1);
+      k.add(G.torus, '#ffffff', 0, 0.09, -0.05, 0.6, 0.6, 0.15, 0, Math.PI / 2);
+      [[-0.5, 0.4], [0.45, 0.5], [0.1, 0.65]].forEach(([x, z], i) => { k.add(G.cyl6, '#45c552', x, 0.1, z, 0.3, 0.02, 0.3, i); if (i !== 1) k.add(G.sphere, '#ff9cc8', x, 0.15, z, 0.14); });
+      k.at(1.05, 0, 0.6, 0, 1, () => k.at(0, 0.16, 0, 0.4, 1, () => k.at(0, 0, 0, 0, 1, () => { k.add(G.sphere, '#e0884d', 0, 0, 0, 0.32, 0.38, 0.32, 0, 0, 1.3); k.add(G.cyl, '#e0884d', 0.2, 0.05, 0, 0.12, 0.16, 0.12, 0, 0, 1.3); })));
+      [[-1.2, 0.3], [1.2, -0.3], [-0.95, -0.6]].forEach(([x, z]) => drawReeds(k, x, z));
+    },
+    // Bébrycie : le ring de pugilat d'Amycos, ses cordes, les cestes de cuir et la couronne
+    boxing(k) {
+      const G = geoLib();
+      k.add(G.box, '#f2dcae', 0, 0.1, 0, 2.0, 0.2, 1.7);
+      [[-0.9, -0.75], [0.9, -0.75], [-0.9, 0.75], [0.9, 0.75]].forEach(([x, z], i) => { k.add(G.cyl6, i % 3 ? '#3d8ee8' : '#ff5d5d', x, 0.55, z, 0.09, 0.7, 0.09); k.add(G.sphere, '#ffffff', x, 0.92, z, 0.14); });
+      [0.5, 0.75].forEach((y) => {
+        [-0.75, 0.75].forEach((z) => k.add(G.box, '#ffffff', 0, y, z, 1.8, 0.03, 0.03));
+        [-0.9, 0.9].forEach((x) => k.add(G.box, '#ffffff', x, y, 0, 0.03, 0.03, 1.5));
+      });
+      [-0.32, 0.32].forEach((x, i) => { k.add(G.ball, i ? '#c8553d' : '#8a5a30', x, 0.36, -0.1, 0.32, 0.28, 0.26); k.add(G.cyl, '#f4f1ea', x, 0.26, -0.1, 0.2, 0.08, 0.2); });
+      k.add(G.torus, '#4cbf3a', 0, 0.24, 0.35, 0.5, 0.5, 0.45, 0, Math.PI / 2);
+    },
+    // Phinée : la table du vieux roi, son festin, et les Harpies violettes qui tournoient
+    harpies(k) {
+      const G = geoLib();
+      k.add(G.box, '#c98b4f', 0, 0.45, 0, 1.6, 0.08, 0.7);
+      [[-0.7, -0.28], [0.7, -0.28], [-0.7, 0.28], [0.7, 0.28]].forEach(([x, z]) => k.add(G.cyl6, '#8a5a30', x, 0.22, z, 0.06, 0.44, 0.06));
+      [-0.5, 0, 0.5].forEach((x, i) => { k.add(G.cyl, '#ffffff', x, 0.5, 0, 0.36, 0.03, 0.36); k.add(G.sphere, ['#ffa53d', '#ff5d5d', '#8bd34a'][i], x, 0.56, 0, 0.18); });
+      k.at(-1.15, 0, 0, 0, 1, () => { k.add(G.box, '#8a5a30', 0, 0.25, 0, 0.42, 0.06, 0.42); [-0.17, 0.17].forEach((z) => k.add(G.cyl6, '#8a5a30', 0, 0.12, z, 0.05, 0.24, 0.05)); k.add(G.box, '#8a5a30', -0.19, 0.55, 0, 0.05, 0.6, 0.42); });
+      k.at(0.95, 0, -0.4, 0, 0.8, () => drawAmphora(k, '#e0884d'));
+      [[-0.5, 1.45, 0.15, 0.4], [0.55, 1.75, -0.2, -0.9], [0.05, 2.1, 0.25, 2.6]].forEach(([x, y, z, ry]) => k.at(x, y, z, ry, 0.85, () => {
+        drawBird(k, '#8a5aa8', '#ffc531', 0.9);
+        k.add(G.sphere, '#f2c49b', 0.3, 0.12, 0, 0.16);
+      }));
+    },
+    // Symplégades : les deux rochers bleus qui s'entrechoquent, et la colombe qui passe
+    doves(k) {
+      const G = geoLib();
+      k.add(G.cyl, '#3fb6e8', 0, 0.03, 0.1, 2.7, 0.05, 1.7);
+      k.add(G.rock, '#98aee0', -0.78, 0.95, 0, 1.1, 2.1, 1.2, 0.3, 0, 0.25);
+      k.add(G.rock, '#aabde8', 0.78, 0.95, 0, 1.1, 2.1, 1.2, 1.1, 0, -0.25);
+      [[-0.25, 0.4], [0.28, 0.3], [0, 0.65]].forEach(([x, z]) => k.add(G.ball, '#ffffff', x, 0.12, z, 0.5, 0.16, 0.4));
+      k.at(0, 1.55, 0.55, -Math.PI / 2, 1, () => {
+        drawBird(k, '#ffffff', '#ff9f3d', 0.9);
+        k.add(G.ball, '#6fd04f', 0.55, 0.1, 0, 0.14, 0.08, 0.08);
+      });
+      k.add(G.box, '#ffffff', 0.1, 1.95, -0.05, 0.05, 0.02, 0.22, 0.4);
+      k.at(0.95, 0.06, 0.75, 0.4, 0.3, () => drawArgo(k, true));
+    },
+    // Mariandyniens : le tertre d'Idmon sous l'olivier sauvage, la rame de Tiphys, la grotte de l'Achéron
+    tumulus(k, ctx) {
+      const G = geoLib();
+      k.add(G.dome, '#9fd88a', -0.25, 0, -0.15, 1.8, 0.85, 1.6);
+      k.add(G.cyl, '#e8e0d0', -0.25, 0.06, 0.6, 0.9, 0.12, 0.3);
+      k.at(-0.25, 0.32, -0.25, 0.2, 1.25, () => drawTree(k, 'olive', ctx.rng));
+      k.add(G.cyl6, WOOD, 0.8, 0.75, 0.3, 0.07, 1.5, 0.07);
+      k.add(G.box, '#c98b4f', 0.8, 1.35, 0.3, 0.26, 0.5, 0.05);
+      k.add(G.ball, '#d8c4a0', 0.95, 0.45, -0.75, 1.0, 0.9, 0.8);
+      k.add(G.cyl, '#4a3f5a', 0.95, 0.3, -0.38, 0.5, 0.04, 0.5, 0, Math.PI / 2 - 0.2);
+      [[-0.85, 0.5], [0.3, 0.75], [-0.9, -0.6]].forEach(([x, z]) => k.add(G.sphere, '#ff8fc0', x, 0.3, z, 0.16));
+    },
+    // Île d'Arès : le rempart de boucliers ronds, le casque à cimier, les oiseaux de bronze
+    shields(k) {
+      const G = geoLib(), cols = ['#ff5d5d', '#ffd23f', '#3d8ee8'];
+      for (let i = 0; i < 7; i++) {
+        const a = Math.PI * (0.12 + i * 0.76 / 6), x = -Math.cos(a) * 1.2, z = -Math.sin(a) * 0.95 + 0.15;
+        k.at(x, 0, z, Math.atan2(-x, -z + 0.15), 1, () => {
+          k.add(G.cyl6, WOOD_D, 0, 0.35, -0.06, 0.05, 0.7, 0.05);
+          k.add(G.cyl, cols[i % 3], 0, 0.62, 0, 0.62, 0.06, 0.62, 0, Math.PI / 2);
+          k.add(G.cyl, '#ffffff', 0, 0.62, 0.04, 0.24, 0.05, 0.24, 0, Math.PI / 2);
+        });
+      }
+      k.at(0, 0, 0.15, 0, 1, () => {
+        k.add(G.box, '#c8a888', 0, 0.2, 0, 0.5, 0.4, 0.5);
+        k.add(G.dome, '#e0a040', 0, 0.4, 0, 0.52, 0.5, 0.52);
+        k.add(G.box, '#2b2b3a', 0, 0.5, 0.2, 0.3, 0.06, 0.1);
+        k.add(G.ball, '#ff5d5d', 0, 0.74, 0, 0.12, 0.26, 0.6);
+      });
+      [[-0.45, 1.6, -0.2, 0.3], [0.55, 1.9, 0.05, 2.8]].forEach(([x, y, z, ry]) => k.at(x, y, z, ry, 0.8, () => drawBird(k, '#d8a24a', '#8a5a30', 0.8, true)));
+      [[0.7, 0.75], [-0.6, 0.8], [0.95, 0.4]].forEach(([x, z], i) => k.add(G.cone, '#e0a040', x, 0.1, z, 0.06, 0.22, 0.06, 0, 0.3 * i, 0.4));
+    },
+    // Colchide : le palais d'Aiétès, le soleil d'or d'Hélios, la fontaine aux quatre sources
+    aietes(k) {
+      const G = geoLib();
+      k.at(0, 0, -0.4, 0, 1.0, () => drawPalace(k, '#fff0d8', '#c86fd6', '#ffd23f'));
+      k.at(0, 1.62, -0.12, 0, 1, () => {
+        k.add(G.cyl, '#ffc531', 0, 0, 0, 0.5, 0.08, 0.5, 0, Math.PI / 2).lit(0.6);
+        for (let i = 0; i < 10; i++) { const a = i * Math.PI / 5; k.add(G.cone, '#ffa21f', Math.cos(a) * 0.36, Math.sin(a) * 0.36, 0, 0.1, 0.18, 0.05, 0, 0, a - Math.PI / 2); }
+      });
+      k.at(0, 0, 0.9, 0, 0.6, () => {
+        drawFountain(k);
+        ['#ffffff', '#a0306a', '#ffd23f', '#47cfee'].forEach((c, i) => { const a = i * Math.PI / 2 + Math.PI / 4; k.add(G.sphere, c, Math.cos(a) * 0.36, 0.3, Math.sin(a) * 0.36, 0.2); });
+      });
+    },
+    // Les taureaux d'airain : sous le joug, ils soufflent le feu ; la charrue et les sillons
+    bronzebulls(k) {
+      const G = geoLib();
+      k.add(G.box, '#a8744a', 0, 0.03, -0.45, 2.7, 0.06, 0.9);
+      for (let i = 0; i < 4; i++) k.add(G.box, '#8a5a3a', 0, 0.07, -0.8 + i * 0.24, 2.6, 0.04, 0.08);
+      [-0.3, 0.3].forEach((z) => k.at(0.05, 0, z + 0.3, 0, 0.85, () => {
+        const b = drawBeast(k, { body: '#c98a3a', belly: '#e0a85a', snout: '#e0a85a', hoof: '#6a4a2a', len: 1.1, legH: 0.36, head: 0.38 });
+        [-1, 1].forEach((sd) => k.add(G.cone, '#fff0c0', b.hx - 0.02, b.hy + 0.18, sd * 0.2, 0.08, 0.26, 0.08, 0, sd * 0.9, 0));
+        k.add(G.cone, '#ff7a3d', b.hx + 0.5, b.hy - 0.08, 0, 0.26, 0.5, 0.26, 0, 0, -Math.PI / 2).lit(1.2);
+        k.add(G.cone, '#ffd23f', b.hx + 0.42, b.hy - 0.08, 0, 0.14, 0.32, 0.14, 0, 0, -Math.PI / 2).lit(1.5);
+        [-0.2, 0.1].forEach((x) => k.add(G.sphere, '#8a5a2a', x, b.H + 0.36, 0.12, 0.06));
+      }));
+      k.add(G.box, '#8a5a30', 0.4, 0.66, 0.3, 0.1, 0.08, 1.0);
+      k.at(-0.95, 0, 0.3, 0, 1, () => {
+        k.add(G.box, WOOD_D, 0.35, 0.3, 0, 0.9, 0.06, 0.06, 0, 0, 0.35);
+        k.add(G.cone, '#b9c4cc', -0.1, 0.1, 0, 0.12, 0.3, 0.1, 0, 0, Math.PI / 2 + 0.4);
+        k.add(G.cyl6, WOOD_D, -0.2, 0.35, 0, 0.04, 0.5, 0.04, 0, 0, 0.4);
+      });
+    },
+    // Les guerriers semés : des casques à cimier qui sortent des sillons (et regardent), la pierre de Jason
+    sown(k) {
+      const G = geoLib();
+      k.add(G.box, '#a8744a', 0, 0.03, 0, 2.7, 0.06, 1.9);
+      for (let i = 0; i < 6; i++) k.add(G.box, '#8a5a3a', 0, 0.07, -0.78 + i * 0.31, 2.6, 0.05, 0.09);
+      [[-0.95, -0.6], [-0.3, -0.3], [0.35, -0.65], [1.0, -0.25], [-0.75, 0.3], [0.15, 0.2], [0.85, 0.55], [-0.2, 0.75]].forEach(([x, z], i) => k.at(x, 0.05, z, 0, 0.8 + (i % 3) * 0.12, () => {
+        k.add(G.dome, '#e0a040', 0, 0, 0, 0.44, 0.44, 0.44);
+        k.add(G.ball, '#ff5d5d', 0, 0.28, 0, 0.1, 0.18, 0.42);
+        k.at(0, 0.08, 0.17, -Math.PI / 2, 1, () => drawEyes(k, 0, 0, 0, 0.07, 0.06));
+        if (i % 2) k.add(G.cone, '#b9c4cc', 0.24, 0.3, 0, 0.06, 0.2, 0.06);
+      }));
+      k.add(G.rock, '#c8b8a0', 0.62, 0.22, -0.05, 0.6, 0.5, 0.55, 0.7);
+    },
+    // La Toison d'or : suspendue au chêne sacré, gardée par le dragon qui ne dort jamais
+    fleece(k) {
+      const G = geoLib();
+      k.add(G.cyl, '#8a6a4a', 0, 0.7, -0.3, 0.42, 1.4, 0.42);
+      // (la branche porte la Toison bien hors du feuillage : on la voit d'en haut)
+      k.add(G.cyl, '#8a6a4a', 0.55, 1.3, -0.3, 0.16, 1.2, 0.16, 0, 0, -1.15);
+      k.add(G.ball, '#2fae55', -0.15, 2.05, -0.4, 1.6, 1.0, 1.3);
+      k.add(G.ball, '#45c46a', 0.2, 2.25, -0.25, 0.9, 0.7, 0.8);
+      k.add(G.ball, '#269e4a', -0.6, 2.1, -0.5, 0.9, 0.7, 0.8);
+      k.add(G.cyl6, '#c9a35a', 1.05, 1.42, -0.25, 0.02, 0.24, 0.02);
+      k.at(1.05, 1.1, -0.25, 0, 1, () => {
+        k.add(G.ball, '#ffc531', 0, 0, 0, 0.72, 0.56, 0.44).lit(0.7);
+        [[-0.14, 0.12, 0.18], [0.12, 0.14, 0.18], [0, -0.06, 0.2], [-0.16, -0.12, 0.15], [0.16, -0.1, 0.15], [0, 0.24, 0], [0.22, 0.2, -0.1], [-0.22, 0.2, -0.1]].forEach(([x, y, z]) => k.add(G.sphere, '#ffe066', x, y, z, 0.16).lit(0.5));
+        [[-0.2, -0.24], [0.2, -0.24]].forEach(([x, y]) => k.add(G.cyl6, '#ffc531', x, y, 0, 0.05, 0.16, 0.05));
+      });
+      for (let i = 0; i < 12; i++) {
+        const a = Math.PI * 0.95 + i * 0.32, s = 0.34 - i * 0.012;
+        const x = Math.cos(a) * 0.7, z = -0.3 + Math.sin(a) * 0.6;
+        k.add(G.sphere, i % 2 ? '#3db86a' : '#5ccf78', x, 0.17, z, s);
+        if (i % 2 === 0) k.add(G.cone, '#ffd23f', x, 0.36, z, 0.07, 0.14, 0.07);
+      }
+      k.at(-0.75, 0.42, 0.35, -Math.PI / 2 + 0.6, 1.1, () => {
+        k.add(G.sphere, '#5ccf78', -0.15, -0.15, 0, 0.3);
+        k.add(G.ball, '#5ccf78', 0, 0, 0, 0.36, 0.3, 0.32);
+        k.add(G.ball, '#8be0a0', 0.17, -0.06, 0, 0.24, 0.16, 0.22);
+        drawEyes(k, 0.08, 0.1, 0, 0.11, 0.09);
+        [-1, 1].forEach((sd) => k.add(G.cone, '#ffd23f', -0.08, 0.2, sd * 0.08, 0.05, 0.14, 0.05, 0, 0, 0.4));
+      });
+    },
+    // Médée : le chaudron de bronze sur le feu, la potion verte qui bouillonne, les torches d'Hécate
+    cauldron(k, ctx) {
+      const G = geoLib();
+      k.add(G.cyl, '#e8e0d0', 0, 0.04, 0, 2.1, 0.08, 1.7);
+      [0, 2.1, 4.2].forEach((a) => k.add(G.cyl6, '#5a4a40', Math.cos(a) * 0.3, 0.18, Math.sin(a) * 0.3, 0.05, 0.36, 0.05));
+      k.add(G.cone, '#ff7a3d', 0, 0.15, 0, 0.4, 0.3, 0.4).lit(1.2);
+      k.add(G.sphere, '#c98a3a', 0, 0.6, 0, 1.0, 0.8, 1.0);
+      k.add(G.torus, '#a06a2a', 0, 0.86, 0, 0.92, 0.92, 0.6, 0, Math.PI / 2);
+      k.add(G.cyl, '#6fe08a', 0, 0.9, 0, 0.82, 0.04, 0.82).lit(0.8);
+      [[0.15, 0.1], [-0.12, -0.1], [-0.05, 0.18]].forEach(([x, z], i) => k.add(G.sphere, '#b8f5c4', x, 0.96, z, 0.1 + i * 0.03).lit(0.6));
+      [-1.1, 1.1].forEach((x) => {
+        k.add(G.cyl6, WOOD_D, x, 0.5, -0.3, 0.06, 1.0, 0.06);
+        k.add(G.cone, '#ffb43d', x, 1.1, -0.3, 0.2, 0.3, 0.2).lit(1.4);
+        if (k.lanterns) k.lanterns.push(k.pt(x, 1.1, -0.3));
+      });
+      [[-0.7, 0.6], [0.7, 0.6]].forEach(([x, z], i) => k.at(x, 0, z, 0, 0.6, () => { k.add(G.cyl, '#e0884d', 0, 0.15, 0, 0.36, 0.3, 0.36); drawBush(k, ctx.rng, i ? '#9a6ae0' : '#4cd65a'); }));
+      ctx.mist.push(k.pt(0, 1.3, 0), k.pt(0.2, 1.7, -0.1));
+    },
+    // L'Istros : le grand fleuve (berges, roseaux), le pont de bois en dos d'âne, une barque
+    river(k, ctx) {
+      const G = geoLib();
+      k.at(0, 0, 0, 0.25, 1, () => {
+        k.add(G.box, '#ece4c0', 0, 0.03, 0, 2.9, 0.05, 1.1);
+        k.add(G.box, '#3fb6e8', 0, 0.06, 0, 2.9, 0.04, 0.8);
+        for (let i = 0; i < 7; i++) { const z = -0.6 + i * 0.2; k.add(G.box, i % 2 ? '#c98b4f' : '#d39553', -0.3, 0.16 + Math.sin(Math.PI * i / 6) * 0.25, z, 0.5, 0.05, 0.18); }
+        [-0.52, -0.08].forEach((x) => { [-0.62, 0, 0.62].forEach((z) => k.add(G.cyl6, WOOD_D, x, 0.3 + (z ? 0 : 0.22), z, 0.04, 0.4, 0.04)); });
+        k.at(0.75, 0.08, 0.05, 0, 0.6, () => { k.add(G.cyl, '#c98b4f', 0, 0.12, 0, 0.5, 1.2, 0.4, 0, 0, Math.PI / 2); k.add(G.cyl6, WOOD_D, 0, 0.55, 0, 0.04, 0.8, 0.04); k.add(G.box, '#ffffff', 0.02, 0.62, 0, 0.03, 0.42, 0.5); });
+        [[1.25, 0.55], [-1.2, -0.55], [0.5, -0.55]].forEach(([x, z]) => drawReeds(k, x, z));
+      });
+      k.at(-1.05, 0, -0.95, 0, 0.8, () => drawTree(k, 'willow', ctx.rng));
+    },
+    // Chez Circé : l'autel de la purification, sa flamme, le petit palais rose derrière
+    altar(k) {
+      const G = geoLib();
+      k.add(G.cyl, '#efe6ff', 0, 0.04, 0, 2.1, 0.08, 1.8);
+      k.at(0, 0, -0.9, 0, 0.55, () => drawPalace(k, '#ffe0ef', '#d96bd6', '#ffd6ea'));
+      k.add(G.box, '#e8dcf4', 0, 0.3, 0, 0.8, 0.6, 0.6);
+      k.add(G.box, '#d8c2e8', 0, 0.63, 0, 0.9, 0.08, 0.7);
+      k.add(G.cone, '#ff9f3d', 0, 0.85, 0, 0.4, 0.4, 0.4).lit(1.3);
+      k.add(G.cone, '#ffe066', 0, 0.82, 0, 0.22, 0.26, 0.22).lit(1.5);
+      if (k.lanterns) k.lanterns.push(k.pt(0, 0.9, 0));
+      [-0.95, 0.95].forEach((x) => { k.add(G.cyl6, '#c86fd6', x, 0.45, 0.4, 0.05, 0.9, 0.05); k.add(G.ball, '#fff2a8', x, 0.95, 0.4, 0.16).lit(1.3); });
+      [[-0.55, 0.7], [0.55, 0.7]].forEach(([x, z]) => k.add(G.sphere, '#d68bff', x, 0.1, z, 0.22));
+    },
+    // Orphée : la grande lyre d'or sur le rocher, les notes qui couvrent le chant des Sirènes
+    lyre(k) {
+      const G = geoLib();
+      drawRock(k, '#c9c1d8', 1.8, 0.9, 1.3, 0.3);
+      k.at(0, 0.5, -0.1, 0, 1, () => {
+        k.add(G.ball, '#c98b4f', 0, 0.25, 0, 0.72, 0.45, 0.3);
+        [-1, 1].forEach((sd) => { k.add(G.cyl, '#ffc531', sd * 0.32, 0.85, 0, 0.1, 1.1, 0.1, 0, 0, -sd * 0.25); k.add(G.sphere, '#ffc531', sd * 0.6, 1.4, 0, 0.16); });
+        k.add(G.cyl, '#ffc531', 0, 1.34, 0, 0.08, 1.0, 0.08, 0, 0, Math.PI / 2);
+        for (let i = 0; i < 5; i++) k.add(G.cyl6, '#ffffff', -0.2 + i * 0.1, 0.85, 0.04, 0.012, 1.0, 0.012).lit(0.3);
+      });
+      [[0.95, 1.6, 0.3], [1.15, 2.05, 0.1], [-0.95, 1.8, 0.2]].forEach(([x, y, z]) => {
+        k.add(G.sphere, '#3d8ee8', x, y, z, 0.18, 0.13, 0.1);
+        k.add(G.cyl6, '#3d8ee8', x + 0.08, y + 0.16, z, 0.025, 0.32, 0.025);
+        k.add(G.box, '#3d8ee8', x + 0.14, y + 0.3, z, 0.12, 0.05, 0.025, 0, 0, -0.3);
+      });
+    },
+    // Les Phéaciens : le dais nuptial fleuri de Jason et Médée, le lit couvert de la Toison d'or
+    wedding(k, ctx) {
+      const G = geoLib(), fl = ctx.isle.flowers;
+      k.add(G.box, '#fff3e0', 0, 0.05, 0, 2.2, 0.1, 1.6);
+      [[-0.8, -0.6], [0.8, -0.6], [-0.8, 0.5], [0.8, 0.5]].forEach(([x, z]) => { k.add(G.cyl6, '#ffffff', x, 0.78, z, 0.07, 1.4, 0.07); k.add(G.sphere, '#ff8fc0', x, 1.5, z, 0.14); });
+      k.add(G.box, '#ffb3c9', 0, 1.48, -0.05, 1.8, 0.06, 1.3);
+      k.add(G.prism, '#ff8fb1', 0, 1.51, -0.05, 1.9, 0.3, 1.4);
+      for (let i = 1; i < 8; i++) { const t = i / 8; k.add(G.sphere, fl[i % fl.length], -0.8 + t * 1.6, 1.38 - Math.sin(t * Math.PI) * 0.22, 0.5, 0.14); }
+      k.add(G.box, '#c98b4f', 0, 0.26, -0.15, 1.2, 0.3, 0.75);
+      k.add(G.box, '#ffc531', 0, 0.44, -0.12, 1.12, 0.08, 0.7).lit(0.5);
+      [-0.3, 0.3].forEach((x) => k.add(G.ball, '#ffffff', x, 0.52, -0.4, 0.34, 0.14, 0.2));
+      [-1.05, 1.05].forEach((x) => { k.add(G.cyl6, WOOD_D, x, 0.45, 0.75, 0.05, 0.9, 0.05); k.add(G.cone, '#ffb43d', x, 0.98, 0.75, 0.16, 0.24, 0.16).lit(1.4); });
+    },
+    // Libye : les dunes, l'Argo portée sur des rondins à travers le désert, l'oasis et son palmier
+    desert(k, ctx) {
+      const G = geoLib();
+      k.add(G.dome, '#f6d890', -0.6, 0, -0.7, 1.7, 0.55, 1.0);
+      k.add(G.dome, '#efcc7a', 0.75, 0, -0.8, 1.4, 0.42, 0.9);
+      k.at(0, 0, 0.05, 0.15, 0.7, () => {
+        [-0.8, 0, 0.8].forEach((x) => k.add(G.cyl6, '#c98b4f', x, 0.08, 0, 0.16, 0.9, 0.16, 0, Math.PI / 2));
+        k.at(0, 0.1, 0, 0, 1, () => drawArgo(k, false));
+      });
+      k.add(G.cyl, '#fff0c8', -1.0, 0.03, 0.75, 0.95, 0.05, 0.7);
+      k.add(G.cyl, '#3fd0ef', -1.0, 0.05, 0.75, 0.8, 0.05, 0.56);
+      k.at(-1.3, 0, 0.45, 0, 0.9, () => drawTree(k, 'palm', ctx.rng));
+      [[0.7, 0.75], [1.0, 0.55], [1.25, 0.8]].forEach(([x, z]) => k.add(G.sphere, '#e8b878', x, 0.04, z, 0.12, 0.04, 0.18));
+    },
+    // Crète : Talos, le géant de bronze, un rocher au poing ; le clou rouge à sa cheville
+    talos(k) {
+      const G = geoLib(), B = '#d39a4a', D = '#b0773a';
+      k.add(G.cyl, '#e8c890', 0, 0.08, 0, 1.4, 0.16, 1.1);
+      k.at(0, 0.16, -0.1, 0, 1, () => {
+        [-0.22, 0.22].forEach((x) => { k.add(G.cyl, B, x, 0.4, 0, 0.26, 0.8, 0.26); k.add(G.box, D, x, 0.06, 0.06, 0.3, 0.12, 0.4); });
+        k.add(G.cyl, '#ff5d5d', 0.22, 0.14, 0.15, 0.07, 0.12, 0.07, 0, Math.PI / 2).lit(0.6);
+        k.add(G.ball, B, 0, 1.15, 0, 0.92, 0.95, 0.66);
+        k.add(G.box, D, 0, 0.82, 0, 0.8, 0.1, 0.56);
+        [[-0.2, 1.3], [0.2, 1.3], [0, 1.05]].forEach(([x, y]) => k.add(G.sphere, D, x, y, 0.31, 0.08));
+        k.add(G.ball, B, 0, 1.85, 0, 0.5);
+        k.add(G.dome, D, 0, 1.92, 0, 0.56, 0.4, 0.56);
+        k.add(G.ball, '#ff5d5d', 0, 2.2, -0.02, 0.1, 0.22, 0.5);
+        k.at(0, 1.84, 0.1, -Math.PI / 2, 1, () => drawEyes(k, 0.06, 0, 0, 0.12, 0.09));
+        k.add(G.cyl, B, -0.55, 1.5, 0, 0.18, 0.65, 0.18, 0, 0, 0.5);
+        k.add(G.rock, '#9a9aa8', -0.78, 1.9, 0, 0.5, 0.45, 0.45, 0.5);
+        k.add(G.cyl, B, 0.52, 0.95, 0, 0.18, 0.6, 0.18, 0, 0, 0.35);
+        k.add(G.sphere, D, 0.62, 0.66, 0, 0.2);
+      });
+      [[0.9, 0.6, 0.35], [-1.0, 0.55, 0.28]].forEach(([x, z, s]) => k.add(G.rock, '#9a9aa8', x, s * 0.36, z, s, s * 0.85, s, x));
+    },
+    // Retour à Iolcos : l'Argo à quai, voile hissée ; l'arche de victoire, son laurier et la Toison
+    homecoming(k) {
+      const G = geoLib();
+      k.add(G.box, '#e8d4b0', 0, 0.06, -0.35, 2.8, 0.12, 0.8);
+      [-0.7, 0, 0.7].forEach((x) => k.add(G.box, '#8a5a30', x, 0.2, -0.4, 0.16, 0.2, 0.6));
+      k.at(0, 0.22, -0.4, 0, 0.85, () => drawArgo(k, true, '#ffffff'));
+      [-0.75, 0.75].forEach((x) => k.at(x, 0, 0.62, 0, 1, () => drawColumn(k, 1.2)));
+      k.add(G.box, '#fff3e0', 0, 1.46, 0.62, 1.8, 0.16, 0.3);
+      k.add(G.torus, '#4cbf3a', 0, 1.46, 0.8, 0.5, 0.5, 0.5);
+      k.add(G.ball, '#ffc531', 0, 1.05, 0.66, 0.5, 0.42, 0.14).lit(0.6);
+      k.add(G.cyl6, '#c9a35a', 0, 1.3, 0.66, 0.02, 0.2, 0.02);
     }
   };
 
@@ -2459,17 +3276,31 @@
     const ctrl = from.clone().lerp(to, 0.5).addScaledVector(sidev, bend);
     const count = Math.max(4, Math.round(span / 0.64));
     const bez = (t) => new THREE.Vector3().copy(from).multiplyScalar((1 - t) * (1 - t)).addScaledVector(ctrl, 2 * t * (1 - t)).addScaledVector(to, t * t);
+    // fin de saga : au lieu du ponton, un pont-arc-en-ciel en dos d'âne sous une grande arche
+    // et une constellation (on change de monde) ; il sort de l'eau comme le ponton
+    const portal = sagaIdx(c) !== sagaIdx(c + 1);
     for (let k = 1; k <= count; k++) {
       const t = k / (count + 1);
       const p = bez(t), q = bez(Math.min(1, t + 0.01));
-      const s = pierSegment();
-      const deck = 0.31 + 0.3 * Math.pow(1 - Math.sin(Math.PI * t), 1.6);
+      const s = portal ? portalSegment(k) : pierSegment();
+      const deck = portal ? 0.34 + 0.5 * Math.sin(Math.PI * t) : 0.31 + 0.3 * Math.pow(1 - Math.sin(Math.PI * t), 1.6);
       s.position.set(p.x, deck, p.z);
       s.rotation.y = Math.atan2(q.x - p.x, q.z - p.z);
       s.userData = { phase: k + c, dip: 0, raise: 0, base: deck, pier: true };
       s.visible = false;
       scene.add(s);
       ch.stones.push(s);
+    }
+    if (portal) {
+      const mid = bez(0.5);
+      const arch = new THREE.Mesh(portalArchGeo(), portalArchMat());
+      arch.position.set(mid.x, -0.05, mid.z);
+      arch.rotation.y = Math.atan2(dirv.x, dirv.z);
+      arch.scale.setScalar(0.001);
+      arch.visible = false;
+      arch.castShadow = true;
+      scene.add(arch);
+      ch.portal = arch;
     }
 
     // ondes autour de l'île
@@ -3443,7 +4274,7 @@
       const hop = !pier && !!(a.stone || b.stone); // (anciennes pierres de gué : on sautait)
       hero.crossing = pier;
       const dist = Math.hypot(pb.x - pa.x, pb.z - pa.z);
-      const dur = hop ? 0.32 + dist * 0.05 : Math.max(0.1, dist / 2.4);
+      const dur = (hop ? 0.32 + dist * 0.05 : Math.max(0.1, dist / 2.4)) / (hero.rush || 1); // (toucher : il court plus vite)
       hero.segT += dt / dur;
       const k = Math.min(1, hero.segT);
       g.position.lerpVectors(pa, pb, k);
@@ -3465,6 +4296,7 @@
         if (hero.seg >= hero.route.length - 1) {
           const end = hero.route[hero.route.length - 1];
           hero.route = null;
+          hero.rush = 1;
           if (end.level != null) {
             hero.free = null;
             selected = end.level;
@@ -3551,6 +4383,7 @@
     simTime = t;
     const focus = hero.group.position;
     stepLight(dt);
+    stepSaga();
     skyStars.material.uniforms.uTime.value = t;
     // la nuit : Ulysse porte une petite lueur chaude ; lanternes et phare s'allument
     if (heroLamp) heroLamp.position.set(focus.x + 0.6, focus.y + 1.6, focus.z + 0.6);
@@ -3608,6 +4441,12 @@
         s.position.y = (u.base || 0) - (1 - ease) * 1.5 - Math.sin(u.dip * Math.PI) * 0.03;
         s.visible = u.raise > 0;
       });
+      // l'arche du portail de saga grandit quand le portique s'ouvre
+      if (ch.portal) {
+        const e = ch.opened ? 1 - Math.pow(1 - ch.open, 3) : 0;
+        ch.portal.visible = e > 0.01;
+        ch.portal.scale.setScalar(Math.max(0.001, e));
+      }
       ch.ripples.forEach((ring) => {
         const k = ((t * 0.22 + ring.userData.offset) % 2.5) / 2.5;
         const s = ring.userData.base + k * 2;
@@ -4478,6 +5317,16 @@
     setMarker();
   };
   World.select = function (L) { travelTo(Math.min(L, done)); };
+  // trajet en cours : il court (×3,5) ; ou on l'arrête net sur la pierre visée
+  World.walking = () => !!(hero && hero.route);
+  World.hurry = function () { if (hero && hero.route) hero.rush = 3.5; };
+  World.skipWalk = function () {
+    if (!hero || !hero.route) return;
+    const end = hero.route[hero.route.length - 1];
+    hero.route = null; hero.rush = 1; hero.wait = 0;
+    if (end.level != null) { hero.free = null; selected = end.level; setMarker(); if (opts.onSelect) opts.onSelect(selected); }
+    else { hero.free = { c: end.c, at: end.at }; if (opts.onSelect) opts.onSelect(null); }
+  };
   // point d'ancrage à l'écran juste au-dessus de la tête d'Ulysse (pierre choisie) : pour la bulle du niveau de l'appli
   World.anchorScreen = function () {
     if (!World.ok || !camera || !host) return null;
@@ -4546,8 +5395,27 @@
   const ISLAND_NAMES = ['Troie', 'Ismaros', 'Cap Malée', 'Les Lotus', 'Les Chèvres', 'Le Cyclope', 'Éolie', 'Ithaque en vue',
     'Lestrygons', 'Circé', 'Les Ombres', 'Elpénor', 'Les Sirènes', 'Roches Errantes', 'Charybde', 'Thrinacie', 'Le Naufrage',
     'Ogygie', 'Le Radeau', 'La Tempête', 'Nausicaa', 'Alcinoos', 'Les Jeux', 'Le Navire', 'Phorkys', 'Eumée', 'Le Palais',
-    "L'Arc", "Le Lit d'olivier", 'Laërte'];
+    "L'Arc", "Le Lit d'olivier", 'Laërte',
+    // saga 2 : les Douze Travaux d'Héraclès
+    'Thèbes', 'Delphes', 'Lion de Némée', 'Hydre de Lerne', 'Biche de Cérynie', 'Le Sanglier', "Écuries d'Augias",
+    'Le Stymphale', 'Taureau de Crète', 'Juments de Diomède', 'Les Amazones', 'Bœufs de Géryon', 'Les Hespérides',
+    'Cerbère', "L'Olympe",
+    // saga 3 : les Argonautes
+    'Iolcos', 'Lemnos', 'Cyzique', 'Mysie', 'Bébrycie', 'Phinée', 'Symplégades', 'Mariandyniens', "Île d'Arès",
+    'Colchide', "Taureaux d'airain", 'Guerriers semés', "Toison d'or", 'Médée', "L'Istros", 'Chez Circé', 'Orphée',
+    'Phéaciens', 'Libye', 'Talos', 'Retour à Iolcos'];
+  if (ISLAND_NAMES.length !== ISLES.length) console.warn('[world] ISLAND_NAMES et ISLES ne sont pas alignés', ISLAND_NAMES.length, ISLES.length);
   const islandName = (i) => ISLAND_NAMES[i % ISLAND_NAMES.length] + (i >= ISLAND_NAMES.length ? ' ' + (Math.floor(i / ISLAND_NAMES.length) + 1) : '');
+  World.islandName = islandName;
+  // nombre d'îles d'un tour complet (les trois sagas) ; au-delà, la liste recommence
+  World.islandCount = () => ISLES.length;
+  // saga de l'île c : { index, id, name, first, last } (first / last en numéros d'île absolus, tour compris)
+  World.sagaOf = (c) => {
+    c = Math.max(0, c | 0);
+    const S = SAGAS[sagaIdx(c)], base = c - (c % ISLES.length);
+    return { index: S.index, id: S.id, name: S.name, first: base + S.first, last: base + S.last, lap: Math.floor(c / ISLES.length) };
+  };
+  World.sagas = () => SAGAS.map((s) => ({ index: s.index, id: s.id, name: s.name, first: s.first, last: s.last }));
   World.islands = () => {
     const here = hero.free ? hero.free.c : chapterOf(selected);
     const out = [];
