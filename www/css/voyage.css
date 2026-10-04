@@ -8,7 +8,7 @@
 .vy-isle { width: 100%; }
 .vy-isle h3 { margin: 0 0 10px; font: 700 18px/1.1 var(--k-font, 'Fredoka', sans-serif); color: var(--k-ink, #3a3550); }
 .vy-isle:not(.cur) h3 { color: var(--k-ink-soft, #8a83a3); }
-.vy-row { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.vy-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px 6px; } /* 14 pierres par île : deux rangées de 7 */
 
 .vy-stone { position: relative; width: 100%; aspect-ratio: 1; max-width: 100%; border-radius: 50%; border: 0; padding: 0;
   display: grid; place-items: center; font: 700 15px/1 var(--k-font, 'Fredoka', sans-serif);
@@ -577,3 +577,6 @@
 /* thème clair : cases des grilles nettement plus foncées que le fond ivoire, avec un liseré */
 :root:not([data-theme="dark"]) { --tile: #e9dcbd !important; --tile-hi: #f1e6cc !important; --tile-edge: #cdb98d !important; --given: #dcc9a0 !important; --grid-line: #d8c8a3 !important; }
 :root:not([data-theme="dark"]) .cell-grid > .cell:not(.on):not(.sun):not(.moon), :root:not([data-theme="dark"]) .nono > .nono-cell:not(.on) { outline: 1.5px solid rgba(160, 130, 80, .35); outline-offset: -1.5px; }
+
+/* bouton de test « autosolve » : caché hors mode développeur (?dev) */
+#play .autosolve[hidden] { display: none !important; }

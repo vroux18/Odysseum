@@ -8,10 +8,11 @@
   'use strict';
   const C = window.Carnet;
 
-  const PER = 6;           // niveaux par île (le dernier est le boss)
+  const PER = 14;          // niveaux par île (le dernier est le boss) — même valeur que PER dans app.js
   const FOG = '#c4ecfb';   // brume bleu ciel de l'horizon
   const TOP = 0.63;        // hauteur du sol au bord des îles
-  const SPACING = 15;      // distance entre deux îles
+  const ISLE_K = 1.4;      // agrandissement des îles (14 pierres par île : le sentier s'allonge sans les serrer)
+  const SPACING = 15 * ISLE_K; // distance entre deux îles
 
   const World = { ok: false, PER };
   let THREE, renderer, scene, camera, host, sun, raf = 0, running = false, last = 0, simTime = 0;
@@ -642,9 +643,9 @@
   // ------------------------------------------------------------------
   // Géographie : la chaîne d'îles et leur relief
   // ------------------------------------------------------------------
-  function centerOf(c) { return new THREE.Vector3(c * SPACING, 0, Math.sin(c * 1.15) * 7); }
+  function centerOf(c) { return new THREE.Vector3(c * SPACING, 0, Math.sin(c * 1.15) * 7 * ISLE_K); }
   // les îles grandissent un peu au fil du voyage (sentiment de progrès)
-  function radiusOf(c) { return 5.4 + C.makeRng('rayon:' + c)() * 0.4 + Math.min(0.9, c * 0.035); }
+  function radiusOf(c) { return (5.4 + C.makeRng('rayon:' + c)() * 0.4 + Math.min(0.9, c * 0.035)) * ISLE_K; }
   function flat(v) { v.y = 0; return v.normalize(); }
   function edgeToward(c, other, k) {
     const ctr = centerOf(c);
@@ -722,9 +723,12 @@
   // portique de sortie, puis traverse la mer sur un ponton de bois jusqu'à l'île suivante.
   // Les niveaux sont posés à intervalles réguliers le long de cette ligne (ordre = ordre des niveaux).
   // ------------------------------------------------------------------
-  const LV0 = 0.08, LV1 = 0.84, GATE_F = 0.9, PATH_W = 0.34;
+  const LV0 = 0.04, LV1 = 0.85, GATE_F = 0.9, PATH_W = 0.34;
   const PATH_STYLES = ['s', 'coast', 'zigzag', 'loop', 's', 'spiral'];
   const levelF = (k) => LV0 + (LV1 - LV0) * k / (PER - 1);
+  // 14 pierres par île : le sentier fait ~25 à 35 unités (contre ~12 à 6 pierres), pour garder
+  // ~1,5 à 2 unités entre deux pierres ; il ondule sur une grande part de l'île (agrandie), en
+  // laissant de larges zones libres pour le monument, le village, le bosquet…
   function layoutPath(ch, entry, exit) {
     const R = ch.r, rng = ch.rng;
     const a = entry.clone().setLength(R * 0.98), b = exit.clone().setLength(R * 0.98);
@@ -732,46 +736,60 @@
     const len = dir.length();
     dir.normalize();
     const side = new THREE.Vector3(-dir.z, 0, dir.x);
-    // une seule grande courbe en S : elle laisse deux larges zones, une de chaque côté
-    const waves = 1, amp = R * (0.26 + rng() * 0.08), ph = rng() < 0.5 ? 0 : Math.PI;
+    const ampJ = 1 + rng() * 0.08, ph = rng() < 0.5 ? 0 : Math.PI;
     const pts = [a];
     // Tracé propre à chaque île (choisi par son thème, sinon par son numéro) :
-    // s = grand S ; zigzag = lacets serrés ; coast = longe la côte ; loop = fait le tour de la butte
-    // centrale ; spiral = s'enroule vers le cœur de l'île puis ressort
+    // s = double S ; zigzag = lacets ; coast = longe la côte en festons ; loop = fait le tour de la butte
+    // centrale en ondulant ; spiral = s'enroule vers le cœur de l'île puis ressort
     const style = ch.isle.path || PATH_STYLES[ch.c % PATH_STYLES.length];
     ch.pathStyle = style;
     const aA = Math.atan2(a.z, a.x), aB = Math.atan2(b.z, b.x);
     let dA = Math.atan2(Math.sin(aB - aA), Math.cos(aB - aA));
-    if (Math.abs(Math.abs(dA) - Math.PI) < 0.35) dA = Math.abs(dA) * (ph ? 1 : -1); // (îles opposées : le côté suit la phase)
-    const n = style === 'zigzag' ? 13 : style === 's' ? 9 : 11;
+    const longA = dA - Math.sign(dA || 1) * Math.PI * 2; // (le même trajet, par l'autre côté de l'île)
+    if (Math.abs(Math.abs(dA) - Math.PI) < 0.35 && ph) dA = longA; // (îles opposées : le côté suit la phase)
+    const Rc = R * 0.8; // le sentier reste sur l'herbe, loin de la plage
+    // place libre de part et d'autre de la corde a→b (jusqu'au cercle Rc), du côté sg
+    const room = (q, sg) => {
+      const qs = (q.x * side.x + q.z * side.z) * sg, disc = qs * qs - (q.x * q.x + q.z * q.z) + Rc * Rc;
+      return disc > 0 ? Math.max(0, Math.sqrt(disc) - qs) : 0;
+    };
+    const n = 41;
     for (let i = 1; i <= n; i++) {
       const t = i / (n + 1);
+      const ramp = smooth(0, 0.08, Math.min(t, 1 - t)); // départ et arrivée sur la plage
       let p;
-      if (style === 'zigzag') {
-        p = a.clone().addScaledVector(dir, len * t).addScaledVector(side, Math.sin(Math.PI * 4 * t + ph) * R * 0.2 * Math.sin(Math.PI * t));
-      } else if (style === 'coast' || style === 'loop' || style === 'spiral') {
-        const rr = style === 'coast' ? R * 0.68 : style === 'loop' ? R * (0.98 - 0.52 * Math.sin(Math.PI * Math.min(1, t * 1.6)) * Math.sin(Math.PI * Math.min(1, (1 - t) * 1.6)))
-          : R * (0.98 - 0.66 * Math.sin(Math.PI * t));
-        const ang = aA + dA * t + (style === 'spiral' ? Math.sign(dA || 1) * 1.1 * Math.sin(Math.PI * t) : 0);
-        const blend = style === 'coast' ? smooth(0, 0.18, Math.min(t, 1 - t)) : 1;
+      if (style === 's' || style === 'zigzag') {
+        // ondulations le long de la corde, à la mesure de la place libre : double S (4 boucles),
+        // ou 3 grands lacets d'un bord à l'autre de l'île
+        const W = style === 's' ? 2 : 1.5, F = style === 's' ? 0.66 : 0.85;
+        const q = a.clone().addScaledVector(dir, len * t);
+        const w = Math.sin(Math.PI * 2 * W * t + ph);
+        p = q.addScaledVector(side, w * room(q, Math.sign(w) || 1) * F * ampJ * Math.pow(Math.sin(Math.PI * t), 0.7));
+      } else if (style === 'coast' || style === 'loop') {
+        const coast = style === 'coast';
+        const sweep = coast || Math.abs(longA) < 1.6 * Math.PI ? longA : dA;
+        const rr = R * (coast ? 0.68 + 0.13 * Math.sin(Math.PI * 7 * t) : 0.58 + 0.17 * Math.sin(Math.PI * 4 * t));
+        const ang = aA + sweep * t;
         p = new THREE.Vector3(Math.cos(ang) * rr, 0, Math.sin(ang) * rr);
-        if (blend < 1) p.lerp(a.clone().lerp(b, t), 1 - blend);
+        if (ramp < 1) p.lerp(new THREE.Vector3(Math.cos(ang) * R * 0.98, 0, Math.sin(ang) * R * 0.98), 1 - ramp);
       } else {
-        p = a.clone().addScaledVector(dir, len * t).addScaledVector(side, Math.sin(Math.PI * 2 * waves * t + ph) * amp * Math.sin(Math.PI * t));
+        const rr = R * (0.98 - 0.7 * Math.sin(Math.PI * t));
+        const ang = aA + dA * t + Math.sign(dA || 1) * 2.2 * Math.sin(Math.PI * t);
+        p = new THREE.Vector3(Math.cos(ang) * rr, 0, Math.sin(ang) * rr);
       }
-      const r = Math.hypot(p.x, p.z);
-      if (r > R * 0.72) p.multiplyScalar(R * 0.72 / r);
+      const lim = Rc + (R * 0.98 - Rc) * (1 - ramp), r = Math.hypot(p.x, p.z);
+      if (r > lim) p.multiplyScalar(lim / r);
       pts.push(p);
     }
     pts.push(b);
     const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal');
-    const M = 260;
+    const M = 420;
     const samp = curve.getSpacedPoints(M);
     samp.forEach((p) => { p.y = 0; });
     const cum = [0];
     for (let i = 1; i < samp.length; i++) cum.push(cum[i - 1] + samp[i].distanceTo(samp[i - 1]));
     ch.path = { samp, cum, len: cum[cum.length - 1] };
-    ch.pathPts = samp.filter((p, i) => i % 3 === 0 || i === samp.length - 1);
+    ch.pathPts = samp.filter((p, i) => i % 4 === 0 || i === samp.length - 1);
   }
   // point du sentier à la fraction f (0 → plage d'arrivée, 1 → plage de départ), repère de l'île
   function pathAt(ch, f) {
@@ -2570,7 +2588,8 @@
   function planIsland(ch) {
     const R = ch.r, rng = C.makeRng('plan:' + ch.c);
     const cand = [];
-    for (let x = -R; x <= R; x += 0.3) for (let z = -R; z <= R; z += 0.3) {
+    const step = 0.3 * ISLE_K; // (îles agrandies : autant de points candidats qu'avant)
+    for (let x = -R; x <= R; x += step) for (let z = -R; z <= R; z += step) {
       const r = Math.hypot(x, z);
       if (r > R * 0.8) continue;
       const ps = pathSide(ch, x, z);
@@ -2606,11 +2625,12 @@
     plan.grove = pick(1.05, 0, 0.6);
     plan.pasture = pick(0.9, 0, 0.7);
     plan.flowers = [];
-    for (let i = 0; i < 4; i++) { const f = pick(0.36, 0, 0.75); if (f) plan.flowers.push(f); }
+    // (îles agrandies : un peu plus de massifs et d'arbres pour ne pas les laisser vides)
+    for (let i = 0; i < 6; i++) { const f = pick(0.36, 0, 0.75); if (f) plan.flowers.push(f); }
     plan.bushes = [];
-    for (let i = 0; i < 3; i++) { const b = pick(0.42, 0, 0.8); if (b) plan.bushes.push(b); }
+    for (let i = 0; i < 5; i++) { const b = pick(0.42, 0, 0.8); if (b) plan.bushes.push(b); }
     plan.lone = [];
-    for (let i = 0; i < 3; i++) { const t = pick(0.5, 0, 1.0); if (t) plan.lone.push(t); }
+    for (let i = 0; i < 5; i++) { const t = pick(0.5, 0, 1.0); if (t) plan.lone.push(t); }
     // l'événement spécial de l'île : un petit totem à l'écart du sentier, choisi en dernier
     // (le décor existant ne bouge pas). Jamais au premier plan de la caméra de suivi : on le
     // pose de l'autre côté du sentier (vu depuis la caméra), bien à l'écart, vers le fond de l'île.
@@ -4541,10 +4561,10 @@
     });
     // le voilier longe l'archipel, au large
     const bx = focus.x + Math.sin(t * 0.045) * 16;
-    const bz = Math.sin((bx / SPACING) * 1.15) * 7 + 9.5;
+    const bz = (Math.sin((bx / SPACING) * 1.15) * 7 + 9.5) * ISLE_K;
     const nbx = focus.x + Math.sin((t + 0.5) * 0.045) * 16;
     boat.position.set(bx, Math.sin(t * 1.2) * 0.05, bz);
-    boat.rotation.y = Math.atan2(nbx - bx, (Math.sin((nbx / SPACING) * 1.15) * 7 + 9.5) - bz) - Math.PI / 2;
+    boat.rotation.y = Math.atan2(nbx - bx, (Math.sin((nbx / SPACING) * 1.15) * 7 + 9.5) * ISLE_K - bz) - Math.PI / 2;
     boat.rotation.z = Math.sin(t * 1.1) * 0.06;
     seaLife(dt, t, focus);
     motes.position.set(focus.x, Math.sin(t * 0.2) * 0.3, focus.z);
@@ -5431,7 +5451,7 @@
     cine = null; lvlCam = null;
     World.setCameraMode('free');
     freeTarget.x = ch.group.position.x; freeTarget.z = ch.group.position.z;
-    goal.radius = 15; goal.elev = 0.82;
+    goal.radius = 15 * ISLE_K; goal.elev = 0.82;
     return islandName(c);
   };
   World.viewHero = () => World.setCameraMode('follow');

@@ -113,7 +113,9 @@
   // - Le dernier niveau de chaque île est un boss : 4, puis 5 grilles d'affilée, plus
   //   difficiles, mêlant les capacités, de plus en plus souvent en variante.
   // ------------------------------------------------------------------
-  const PER = 6;
+  // 14 niveaux par île (66 îles : 924 niveaux par tour) ; même valeur que PER dans world.js.
+  // (avant : 6 par île — les sauvegardes sont converties une fois, voir « Conversion des sauvegardes »)
+  const PER = 14;
   const VARIANTS_ON = false; // variantes mises de côté pour l'instant (le code reste prêt)
   // ordre d'apparition des mini-jeux dans la quête (un jeu absent est ignoré)
   const ORDER = ['flux', 'reines', 'tuyaux', 'astres', 'paves', 'pixels', 'serpent', 'lumieres', 'coffre',
@@ -139,18 +141,21 @@
     return Object.assign({ index: s, first: base + SAGA_LIST[s].first, last: base + next - 1 }, SAGA_LIST[s]);
   }
   // Difficulté de la quête (niveau de générateur 1–40 : basique 1–12, difficile 12–25, expert 25–40).
-  // Courbe douce, linéaire par morceaux et toujours croissante sur tout le voyage :
-  //   l'Odyssée      (niveaux 0–179)   : de 1 à 24
-  //   les Travaux    (niveaux 180–269) : de 24 à 32
-  //   les Argonautes (niveaux 270–395) : de 32 à 40 (puis 40 au-delà)
-  // L'épreuve (boss) d'une île a 2 crans de plus ; plafond 40.
-  const CURVE = [[0, 1], [30 * PER - 1, 24], [45 * PER - 1, 32], [SAGA_ISLES * PER - 1, 40]];
+  // Courbe très douce, linéaire par morceaux et toujours croissante sur les 924 niveaux du tour
+  // (un cran tous les ~20 à 30 niveaux, soit moins d'un cran par île) :
+  //   îles 0–5   (niveaux 0–83)    : de 1 à 5   (premières îles très faciles)
+  //   îles 6–14  (niveaux 84–209)  : de 5 à 12
+  //   îles 15–29 (niveaux 210–419) : de 12 à 22 (fin de l'Odyssée)
+  //   les Travaux    (niveaux 420–629) : de 22 à 31
+  //   les Argonautes (niveaux 630–923) : de 31 à 40 (puis 40 au-delà)
+  // L'épreuve (boss) d'une île a 1 cran de plus ; plafond 40.
+  const CURVE = [[0, 1], [6 * PER, 5], [15 * PER, 12], [30 * PER, 22], [45 * PER, 31], [SAGA_ISLES * PER - 1, 40]];
   function questLevel(L, boss) {
     let i = 0;
     while (i < CURVE.length - 2 && L > CURVE[i + 1][0]) i++;
     const [a, va] = CURVE[i], [b, vb] = CURVE[i + 1];
     const t = Math.max(0, Math.min(1, (L - a) / (b - a)));
-    return Math.min(40, Math.round(va + (vb - va) * t) + (boss ? 2 : 0));
+    return Math.min(40, Math.round(va + (vb - va) * t) + (boss ? 1 : 0));
   }
 
   function levelInfo(L) {
@@ -176,7 +181,7 @@
       shuffled.forEach((id) => { if (ids.length < count && !ids.includes(id)) ids.push(id); });
       while (ids.length < count) ids.push(rng.pick(pool));
     } else {
-      const count = c === 0 && k < 3 ? 2 : 3;
+      const count = c === 0 && k < 6 ? 2 : 3;
       ids = [];
       // les premiers niveaux d'un monde présentent ses nouveaux jeux
       if (k * 2 < fresh.length) ids.push(fresh[k * 2]);
@@ -192,35 +197,36 @@
   }
 
   // ------------------------------------------------------------------
-  // MÉGA : pour chaque jeu à grande grille, une catégorie à part entière de 150 niveaux, au-dessus
-  // de l'Expert. Le niveau 1 dépasse à peine l'Expert maxi ; les tailles se succèdent à parts égales
-  // sur les 150 niveaux (jamais plus d'une rangée d'un coup) ; t (0 → 1 du niveau 1 au 150) fait
-  // monter en continu les autres réglages, sans jamais redescendre au changement de taille.
+  // MÉGA : pour chaque jeu à grande grille, une catégorie à part entière de 150 niveaux, après
+  // l'Expert. Le niveau 1 dépasse à peine un niveau moyen de la quête (≈ niveau 20) ; les tailles se
+  // succèdent à parts égales sur les 150 niveaux (jamais plus d'une rangée d'un coup) ; t (0 → 1 du
+  // niveau 1 au 150) fait monter en continu les autres réglages, sans jamais redescendre au changement
+  // de taille. Les réglages de base suivent le niveau 20 → 40 du jeu.
   // Tailles bornées pour des cases ≥ 24 px sur un téléphone de 375 px (plateau ≈ 335 px) sans zoom,
   // et une génération < 1,5 s sur téléphone (≈ 0,4 s au pire sur PC).
-  //   jeu       Expert maxi        niveau 1          niveau 150        réglages qui montent avec t
-  //   tuyaux    9×9                10×10             13×13             — (la taille seule ; canvas sans écart : 25,8 px)
-  //   flux      8×8 · 3 ponts      9×9 · 3 ponts     13×13 · 4 ponts   ponts 3→4 (dès t = ½) ; couleurs 0,8·n → 0,65·n : cases par couleur 11,6 → 21 (tuyaux plus longs)
-  //   reines    9×9                10×10             11×11             — (12×12 : génération trop lente ; 11 teintes)
-  //   paves     10×10 · aire ≤ 12  11×11 · aire ≤ 12 13×13 · aire ≤ 20 aire maxi 12→20 ; chiffres cachés « ? » 0→3 (dès t = 0,6)
-  //   pixels    10×10              11×11             12×12             densité 0,58→0,48 (indices plus morcelés) ; au-delà : cases < 24 px
-  //   demineur  9×9 · 20 %         10×10 · 20 %      12×12 · 23 %      écueils 20→23 % ; déductions fines exigées 2→5
+  //   jeu       niveau 20 (quête)  niveau 1          niveau 150        réglages qui montent avec t
+  //   tuyaux    8×8                8×8               13×13             — (la taille seule, une rangée tous les 25 niveaux)
+  //   flux      6×6 · 1 pont       7×7 · 2 ponts     13×13 · 4 ponts   ponts 2→4 ; couleurs 0,8·n → 0,65·n (tuyaux plus longs)
+  //   reines    8×8                8×8               11×11             — (12×12 : génération trop lente ; 11 teintes)
+  //   paves     7×7 · aire ≤ 9     8×8 · aire ≤ 9    13×13 · aire ≤ 20 aire maxi 9→20 ; chiffres cachés « ? » 0→3 (dès t = 0,6)
+  //   pixels    8×8                9×9               12×12             densité 0,6→0,48 (indices plus morcelés) ; au-delà : cases < 24 px
+  //   demineur  7×7 · 18 %         8×8 · 17 %        12×12 · 23 %      écueils 17→23 % ; déductions fines exigées 2→5
   // ------------------------------------------------------------------
   const MEGA_SIZE = 150;
   const MEGA_TRACK = {
-    tuyaux: { sizes: [10, 11, 12, 13] },
-    flux: { sizes: [9, 10, 11, 12, 13], tune: (p, t, n) => {
-      p.bridges = t < 0.5 ? 3 : 4;
+    tuyaux: { sizes: [8, 9, 10, 11, 12, 13] },
+    flux: { sizes: [7, 8, 9, 10, 11, 12, 13], tune: (p, t, n) => {
+      p.bridges = 2 + Math.floor(2.99 * t);
       p.colors = Math.max(5, Math.min(12, Math.round(n * (0.8 - 0.15 * t))));
     } },
-    reines: { sizes: [10, 11] },
-    paves: { sizes: [11, 12, 13], tune: (p, t) => {
-      p.maxArea = Math.round(12 + 8 * t);
+    reines: { sizes: [8, 9, 10, 11] },
+    paves: { sizes: [8, 9, 10, 11, 12, 13], tune: (p, t) => {
+      p.maxArea = Math.round(9 + 11 * t);
       p.mystery = t < 0.6 ? 0 : Math.min(3, 1 + Math.floor((t - 0.6) * 6));
     } },
-    pixels: { sizes: [11, 12], tune: (p, t) => { p.density = +(0.58 - 0.1 * t).toFixed(3); p.maxGroups = 4; } },
-    demineur: { sizes: [10, 11, 12], tune: (p, t, n) => {
-      p.mines = Math.floor(n * n * (0.2 + 0.03 * t)); // (arrondi bas : la densité ne recule pas d'une taille à l'autre)
+    pixels: { sizes: [9, 10, 11, 12], tune: (p, t) => { p.density = +(0.6 - 0.12 * t).toFixed(3); p.maxGroups = 4; } },
+    demineur: { sizes: [8, 9, 10, 11, 12], tune: (p, t, n) => {
+      p.mines = Math.floor(n * n * (0.17 + 0.06 * t)); // (arrondi bas : la densité ne recule pas d'une taille à l'autre)
       p.subtle = 2 + Math.floor(3.99 * t);
     } }
   };
@@ -229,27 +235,33 @@
   const megaT = (k) => (Math.max(1, Math.min(MEGA_SIZE, k)) - 1) / (MEGA_SIZE - 1);
   const megaN = (id, k) => { const s = MEGA_TRACK[id].sizes; return s[Math.min(s.length - 1, Math.floor((Math.max(1, k) - 1) * s.length / MEGA_SIZE))]; };
   function megaParams(id, k) {
-    const tr = MEGA_TRACK[id], n = megaN(id, k);
-    const p = Object.assign(game(id).params(40, 'classic'), { n, mega: true });
-    if (tr.tune) tr.tune(p, megaT(k), n);
+    const tr = MEGA_TRACK[id], n = megaN(id, k), t = megaT(k);
+    const p = Object.assign(game(id).params(Math.round(20 + 20 * t), 'classic'), { n, mega: true });
+    delete p.easy;
+    if (tr.tune) tr.tune(p, t, n);
     return p;
   }
 
   // ------------------------------------------------------------------
-  // Événements spéciaux : une grille « méga » par île, facultative. Le jeu tourne parmi ceux déjà
-  // découverts sur l'île ; la grille reprend un niveau de la catégorie Méga, de plus en plus loin
-  // d'île en île. Hors quête : pas de progression du sentier ; XP doublée ; une coupe dorée sur la carte.
+  // Événements spéciaux : une grande grille par île, facultative. Le jeu tourne parmi ceux déjà
+  // découverts sur l'île. Jusqu'à l'île 19, la grille vaut le niveau de l'île + 6 (un peu plus que la
+  // quête) ; à partir de l'île 20, elle reprend la catégorie Méga, du niveau 1 (île 20) au 150 (île 65).
+  // Hors quête : pas de progression du sentier ; XP doublée ; une coupe dorée sur la carte.
   // ------------------------------------------------------------------
   const MEGA = MEGA_IDS.map((id) => ({ id }));
   const EV = (C.store.events = C.store.events || {});
+  const EVENT_MEGA_FROM = 20;
   function eventInfo(c) {
     const cands = MEGA.filter((m) => poolOf(c).includes(m.id));
     const m = (cands.length ? cands : MEGA)[c % (cands.length || MEGA.length)];
-    const params = megaParams(m.id, Math.min(MEGA_SIZE, 1 + c * 15));
+    const i = Math.min(c, SAGA_ISLES - 1); // (aux tours suivants : Méga 150)
+    const level = i < EVENT_MEGA_FROM ? Math.min(40, questLevel(i * PER + PER - 1, false) + 6) : 40;
+    const params = i < EVENT_MEGA_FROM ? game(m.id).params(level, 'classic')
+      : megaParams(m.id, Math.min(MEGA_SIZE, 1 + Math.round((i - EVENT_MEGA_FROM) * (MEGA_SIZE - 1) / (SAGA_ISLES - 1 - EVENT_MEGA_FROM))));
     const n = params.n;
     const seed = 'event:' + c;
     return { L: -1, c, free: true, event: c, id: m.id, n, accent: ACCENT[m.id], seed,
-      steps: [{ id: m.id, variant: 'classic', level: 20 + c * 3, params, seed }] };
+      steps: [{ id: m.id, variant: 'classic', level, params, seed }] };
   }
   const eventOpen = (c) => J.done >= c * PER;
   // les événements des îles atteintes, et celui de l'île suivante (grisé)
@@ -271,7 +283,29 @@
     playStep(info, 0);
   }
 
-  const J = (C.store.journey = C.store.journey || { done: 0, selected: 0 });
+  const J = (C.store.journey = C.store.journey || { done: 0, selected: 0, per: PER });
+  // Conversion des sauvegardes (une seule fois) : les îles avaient 6 niveaux, elles en ont 14.
+  // Le joueur reste sur la même île, au même point de l'île : île c finie → c·14 niveaux faits ;
+  // k niveaux faits sur 6 → ⌈k·13/5⌉ sur 14 (l'épreuve reste la dernière pierre). Chaque nouveau
+  // niveau déjà franchi reprend les étoiles de l'ancien niveau qu'il remplace (même place sur l'île).
+  if (J.per !== PER) {
+    const P0 = J.per || 6;
+    const at = (L, round) => { const c = Math.floor(L / P0), k = L % P0; return c * PER + round(k * (PER - 1) / (P0 - 1)); };
+    const oldStars = J.stars || {}, oldBest = J.best;
+    const done = at(J.done || 0, Math.ceil);
+    if (J.stars) {
+      J.stars = {};
+      for (let L = 0; L < done; L++) {
+        const c = Math.floor(L / PER), from = c * P0 + Math.floor((L % PER) * (P0 - 1) / (PER - 1));
+        if (oldStars[from]) J.stars[L] = oldStars[from];
+      }
+    }
+    if (oldBest) { J.best = {}; Object.keys(oldBest).forEach((L) => { J.best[at(+L, Math.round)] = oldBest[L]; }); }
+    J.selected = Math.min(done, at(J.selected || 0, Math.round));
+    J.done = done;
+    J.per = PER;
+    C.save();
+  }
   let selected = J.done; // Ulysse se tient toujours sur le niveau en cours
   let standing = true; // le voyageur est sur une pierre (sinon il se promène)
   let worldReady = false;
@@ -323,41 +357,6 @@
       card = document.createElement('button');
       card.id = 'lvcard'; card.className = 'lvcard';
       card.setAttribute('aria-label', 'Voyage : tous les niveaux');
-      card.addEventListener('click', (e) => {
-        if (swiped) { swiped = false; return; } // c'était un glissé, pas un toucher
-        // petites flèches ‹ › de chaque côté : niveau précédent / suivant ; ailleurs : le voyage
-        const nav = e.target.closest('.lc-nav');
-        if (nav) { e.stopPropagation(); stepLevel(+nav.dataset.d); return; }
-        openVoyage();
-      });
-      $('#home').appendChild(card);
-    }
-    const won = (J.stars && J.stars[selected]) || 0, past = selected < J.done;
-    card.hidden = b.hidden || !!walking;
-    card.classList.toggle('boss', info.boss);
-    card.classList.remove('pop'); void card.offsetWidth; card.classList.add('pop');
-    let isle = ''; // nom de l'île (la liste est définie plus bas : pas encore prête au tout premier affichage)
-    try { isle = voyageName(Math.floor(selected / PER)); } catch (e) { /* premier rendu */ }
-    // petit emblème de la saga devant le nom de l'île (titre de la saga au survol)
-    if (isle) { const sg = sagaOf(Math.floor(selected / PER)); isle = '<i class="lc-saga" title="' + sg.name.replace(/"/g, '') + '">' + sagaEmblem(sg.emblem) + '</i>' + isle; }
-    card.innerHTML = '<span class="lc-isle">' + isle + '</span><span class="lc-play-slot"></span>' +
-      '<span class="lc-title"><i class="lc-nav" data-d="-1"' + (selected <= 0 ? ' hidden' : '') + '>‹</i>' +
-      (info.boss ? 'Épreuve ' : 'Niveau ') + (selected + 1) +
-      '<i class="lc-nav" data-d="1"' + (selected >= J.done ? ' hidden' : '') + '>›</i></span>' +
-      '<span class="lc-stars' + (past ? '' : ' todo') + '">' + starRow(past ? won : 0, 'lc-st') + '</span>' +
-      '<span class="lc-games">' + ids.map((id) => '<span class="lc-chip" style="--c:' + ACCENT[id] + '"><i><svg viewBox="0 0 24 24">' + (ICON[id] || '') + '</svg></i>' + game(id).name + '</span>').join('') + '</span>';
-  }
-
-  // ----------------------------- Partie -----------------------------
-  let session = null;
-
-  function startLevel(L) {
-    const info = levelInfo(L);
-    info.xpStart = Object.assign({}, C.store.xp); // pour le récapitulatif de fin de niveau
-    info.t0 = performance.now();                   // chrono du mode compet (toute la série)
-    info.penalty = 0;
-    playStep(info, 0);
-  }
       // glisser la carte vers la gauche / la droite : niveau suivant / précédent (elle suit le doigt)
       let sw = null, swiped = false;
       card.addEventListener('pointerdown', (e) => { sw = { x: e.clientX, y: e.clientY, dx: 0 }; swiped = false; });
@@ -391,6 +390,49 @@
       };
       card.addEventListener('pointerup', release);
       card.addEventListener('pointercancel', release);
+      card.addEventListener('click', (e) => {
+        if (swiped) { swiped = false; return; } // c'était un glissé, pas un toucher
+        // petites flèches ‹ › de chaque côté : niveau précédent / suivant ; ailleurs : le voyage
+        const nav = e.target.closest('.lc-nav');
+        if (nav) { e.stopPropagation(); stepLevel(+nav.dataset.d); return; }
+        openVoyage();
+      });
+      $('#home').appendChild(card);
+    }
+    const won = (J.stars && J.stars[selected]) || 0, past = selected < J.done;
+    card.hidden = b.hidden || !!walking;
+    card.classList.toggle('boss', info.boss);
+    // cartes voisines qui dépassent sur les côtés : on comprend qu'on peut faire défiler
+    card.classList.toggle('has-prev', selected > 0);
+    card.classList.toggle('has-next', selected < J.done);
+    card.classList.remove('pop'); void card.offsetWidth; card.classList.add('pop');
+    // première apparition : un petit balancement pour montrer qu'elle se glisse
+    if (!card.hidden && !renderPlay.nudged && (selected > 0 || selected < J.done)) {
+      renderPlay.nudged = true;
+      setTimeout(() => { card.classList.add('nudge'); setTimeout(() => card.classList.remove('nudge'), 1300); }, 900);
+    }
+    let isle = ''; // nom de l'île (la liste est définie plus bas : pas encore prête au tout premier affichage)
+    try { isle = voyageName(Math.floor(selected / PER)); } catch (e) { /* premier rendu */ }
+    // petit emblème de la saga devant le nom de l'île (titre de la saga au survol)
+    if (isle) { const sg = sagaOf(Math.floor(selected / PER)); isle = '<i class="lc-saga" title="' + sg.name.replace(/"/g, '') + '">' + sagaEmblem(sg.emblem) + '</i>' + isle; }
+    card.innerHTML = '<span class="lc-isle">' + isle + '</span><span class="lc-play-slot"></span>' +
+      '<span class="lc-title"><i class="lc-nav" data-d="-1"' + (selected <= 0 ? ' hidden' : '') + '>‹</i>' +
+      (info.boss ? 'Épreuve ' : 'Niveau ') + (selected + 1) +
+      '<i class="lc-nav" data-d="1"' + (selected >= J.done ? ' hidden' : '') + '>›</i></span>' +
+      '<span class="lc-stars' + (past ? '' : ' todo') + '">' + starRow(past ? won : 0, 'lc-st') + '</span>' +
+      '<span class="lc-games">' + ids.map((id) => '<span class="lc-chip" style="--c:' + ACCENT[id] + '"><i><svg viewBox="0 0 24 24">' + (ICON[id] || '') + '</svg></i>' + game(id).name + '</span>').join('') + '</span>';
+  }
+
+  // ----------------------------- Partie -----------------------------
+  let session = null;
+
+  function startLevel(L) {
+    const info = levelInfo(L);
+    info.xpStart = Object.assign({}, C.store.xp); // pour le récapitulatif de fin de niveau
+    info.t0 = performance.now();                   // chrono du mode compet (toute la série)
+    info.penalty = 0;
+    playStep(info, 0);
+  }
 
   // 3 astuces par grille ; le petit chiffre sur l'ampoule les décompte
   const MAX_HINTS = 3;
@@ -402,15 +444,7 @@
 
   // bulle d'explication d'une astuce. L'astuce d'un jeu est soit un texte, soit
   // { text, where: [éléments du coup joué], why: [éléments qui le justifient], clear() } :
-    // cartes voisines qui dépassent sur les côtés : on comprend qu'on peut faire défiler
-    card.classList.toggle('has-prev', selected > 0);
-    card.classList.toggle('has-next', selected < J.done);
   // « where » reçoit un anneau doré qui pulse, « why » un surlignage doux ; tout s'efface
-    // première apparition : un petit balancement pour montrer qu'elle se glisse
-    if (!card.hidden && !renderPlay.nudged && (selected > 0 || selected < J.done)) {
-      renderPlay.nudged = true;
-      setTimeout(() => { card.classList.add('nudge'); setTimeout(() => card.classList.remove('nudge'), 1300); }, 900);
-    }
   // au prochain geste sur la grille (ou après quelques secondes).
   function clearHintFx() {
     const fx = clearHintFx.cur;
@@ -2237,6 +2271,8 @@
   $('#btn-hint').addEventListener('click', () => session && session.hint(false));
   $('#btn-explain').addEventListener('click', () => session && session.hint(true));
   $('#btn-autosolve').addEventListener('click', () => session && session.solve());
+  // bouton de test « autosolve » : seulement en mode développeur (?dev dans l'adresse)
+  $('#btn-autosolve').hidden = !/[?&]dev\b/.test(location.search);
   $('#hint-tip').addEventListener('click', hideTip);
   $('#btn-rules').addEventListener('click', () => session && openTutorial(session.g, session.variant, false));
   $('#rules-close').addEventListener('click', nextTuto);

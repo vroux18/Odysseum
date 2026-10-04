@@ -41,10 +41,9 @@
 
   // ------------------------------------------------------------------
   // Difficulté (niveaux 1 → 40)
-  // 1–5 : 3 catégories × 3 (dieux, objets, lieux), cartes = et ≠
-  // 6–11 : 3 × 4 avec le rang (cartes ↔ et ··›)
-  // 12–31 : 4 × 4 (dieux, objets, lieux, rang), moins de cartes « = » au fil des niveaux
-  // 32–40 : 3 × 5 avec le rang, cartes surtout indirectes
+  // 1–6 : 2 catégories (3 puis 4) ; 7–9 : 3 catégories × 3, cartes = et ≠
+  // 10–13 : 3 × 4 avec le rang (cartes ↔ et ··›) ; 14–19 : 4 catégories × 3
+  // 20–26 : 3 × 5 avec le rang ; 27–40 : 4 × 4 (dieux, objets, lieux, rang), moins de « = » à la fin
   // ------------------------------------------------------------------
   function params(level, variant) {
     level = Math.max(1, level || 1);
@@ -54,9 +53,11 @@
     else if (level <= 6) { cats = ['god', 'obj']; n = 4; mix = { eq: 2.5, neq: 1.5, next: 0, left: 0 }; }
     else if (level <= 9) { cats = ['god', 'obj', 'place']; n = 3; mix = { eq: 3, neq: 2, next: 0, left: 0 }; }
     else if (level <= 13) { cats = ['god', 'obj', 'order']; n = 4; mix = { eq: 2, neq: 2, next: 1, left: 1 }; }
-    else if (level <= 20) { cats = ['god', 'obj', 'place', 'order']; n = 4; mix = { eq: 1.5, neq: 2, next: 1.2, left: 1.2 }; }
-    else if (level <= 31) { cats = ['god', 'obj', 'place', 'order']; n = 4; mix = { eq: 0.8, neq: 2, next: 1.5, left: 1.5 }; }
-    else { cats = ['god', 'obj', 'order']; n = 5; mix = { eq: 0.6, neq: 2, next: 1.6, left: 1.6 }; }
+    // (paliers intermédiaires : 3×4 = 48 cases → 4×3 = 54 → 3×5 = 75 → 4×4 = 96, sans doubler d'un coup)
+    else if (level <= 19) { cats = ['god', 'obj', 'place', 'order']; n = 3; mix = { eq: 1.5, neq: 2, next: 1.2, left: 1.2 }; }
+    else if (level <= 26) { cats = ['god', 'obj', 'order']; n = 5; mix = { eq: 1.2, neq: 2, next: 1.4, left: 1.4 }; }
+    else if (level <= 33) { cats = ['god', 'obj', 'place', 'order']; n = 4; mix = { eq: 1.5, neq: 2, next: 1.2, left: 1.2 }; }
+    else { cats = ['god', 'obj', 'place', 'order']; n = 4; mix = { eq: 0.8, neq: 2, next: 1.5, left: 1.5 }; }
     return {
       variant: variant || 'classic', cats, k: cats.length, n, mix,
       trim: level < 7 ? 0 : level < 12 ? 0.5 : 1 // part des cartes superflues retirées (plus = plus dur)

@@ -52,10 +52,11 @@
   // ------------------------------------------------------------------
   // Difficulté (niveaux 1 → 40) : grille de 3×4 à 6×6, motifs cousins, aperçu au début.
   // ------------------------------------------------------------------
-  const SIZES = [[2, 3], [3, 4], [4, 4], [4, 5], [4, 6], [5, 6], [6, 6]]; // colonnes × rangées (toujours pair) ; on débute avec 3 paires
+  // colonnes × rangées (toujours pair) ; on débute avec 3 paires, puis 4 (pas de saut de 3 à 6 paires)
+  const SIZES = [[2, 3], [2, 4], [3, 4], [4, 4], [4, 5], [4, 6], [5, 6], [6, 6]];
   function params(level, variant) {
     level = Math.max(1, level || 1);
-    const k = level < 3 ? 0 : level < 7 ? 1 : level < 13 ? 2 : level < 20 ? 3 : level < 27 ? 4 : level < 34 ? 5 : 6;
+    const k = level < 3 ? 0 : level < 5 ? 1 : level < 8 ? 2 : level < 13 ? 3 : level < 20 ? 4 : level < 27 ? 5 : level < 34 ? 6 : 7;
     const [cols, rows] = SIZES[k];
     const pairs = cols * rows / 2;
     // motifs cousins : obligatoires au-delà de 12 paires (12 dessins), puis de plus en plus nombreux
