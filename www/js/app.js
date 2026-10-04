@@ -2261,10 +2261,14 @@
     applyTheme();
   }));
   $('#go').addEventListener('click', () => {
-    if ($('#go').classList.contains('ff')) { C.world.skipWalk(); return; } // ⏩ : arrivée immédiate
+    if ($('#go').classList.contains('ff')) return; // ⏩ : on le maintient pour courir (voir plus bas)
     if (worldReady && C.world.walking && C.world.walking()) C.world.skipWalk(); // pas besoin d'attendre qu'il arrive
     startLevel(selected);
   });
+  // ⏩ maintenu : Ulysse court ; relâché : il reprend son pas
+  $('#go').addEventListener('pointerdown', () => { if ($('#go').classList.contains('ff')) C.world.hurry(true); });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => $('#go').addEventListener(t, () => { if (worldReady && C.world.hurry) C.world.hurry(false); }));
+  $('#go').addEventListener('contextmenu', (e) => e.preventDefault()); // appui long : pas de menu
   $('#back').addEventListener('click', stopPlay);
   $('#btn-undo').addEventListener('click', () => session && session.inst.undo());
   $('#btn-reset').addEventListener('click', () => session && session.inst.reset());

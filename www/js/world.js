@@ -5339,7 +5339,7 @@
   World.select = function (L) { travelTo(Math.min(L, done)); };
   // trajet en cours : il court (×3,5) ; ou on l'arrête net sur la pierre visée
   World.walking = () => !!(hero && hero.route);
-  World.hurry = function () { if (hero && hero.route) hero.rush = 3.5; };
+  World.hurry = function (on) { if (hero && hero.route) hero.rush = on === false ? 1 : 3.5; };
   World.skipWalk = function () {
     if (!hero || !hero.route) return;
     const end = hero.route[hero.route.length - 1];
