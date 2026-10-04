@@ -90,7 +90,7 @@
   function starsFor(time, target, hints) {
     const [a, b] = starMarks(target);
     const s = time <= a ? 3 : time <= b ? 2 : 1;
-    return Math.max(1, s - (hints || 0));
+    return Math.max(1, s - (hints ? 1 : 0)); // indices illimités : en prendre coûte une étoile, pas plus
   }
   // petite rangée de 3 étoiles (dessin vectoriel), les manquantes en gris
   const STAR_D = 'M12 2.6l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z';
@@ -1047,7 +1047,9 @@
       const [m3, m2] = starMarks(run.target); // les mêmes repères que ceux qui donnent les étoiles
       const span = Math.max(m2 * 1.3, run.time * 1.05), pos = (v) => Math.min(100, (v / span) * 100).toFixed(1) + '%';
       const tick = (v, n) => '<i class="ck-tick" style="left:' + pos(v) + '">' + starRow(n, 'ck-stars') + '<em>' + C.formatTime(Math.round(v)) + '</em></i>';
-      clock.innerHTML = '<div class="ck-time"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9.5 2.5h5M12 2.5V5"/></svg><b>' + C.formatTime(Math.round(run.time)) + '</b></div>' +
+      clock.innerHTML = '<div class="ck-time"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9.5 2.5h5M12 2.5V5"/></svg><b>' + C.formatTime(Math.round(run.time)) + '</b>' +
+        // indices pris : l'ampoule montre pourquoi il manque une étoile
+        (run.hints ? '<span class="ck-hint" aria-label="Indices : ' + run.hints + ' (une étoile en moins)"><svg class="ic" viewBox="0 0 256 256"><use href="assets/ui/icons.svg#i-lightbulb"/></svg>−1<svg viewBox="0 0 24 24" class="ck-hstar"><path d="' + STAR_D + '"/></svg></span>' : '') + '</div>' +
         '<div class="ck-track"><span class="ck-fill" style="--w:' + pos(run.time) + '"></span>' + tick(m3, 3) + tick(m2, 2) + '</div>';
     }
     // moins de 3 étoiles : proposer de rejouer à côté de « suivant » ; case « ne plus afficher »

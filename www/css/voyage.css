@@ -523,6 +523,12 @@
 #lv-tabs button.on .lv-tab-bar { background: rgba(255, 255, 255, .35); }
 #lv-tabs button.on .lv-tab-bar > i { background: #fff; }
 
+/* fin de niveau : ampoule « −1 ★ » à côté du chrono quand on a pris des indices */
+.ck-hint { display: inline-flex; align-items: center; gap: 2px; margin-left: 12px; padding: 3px 9px 3px 6px; border-radius: 999px;
+  background: rgba(255, 201, 61, .16); color: #ffc93d; font: 700 15px/1 var(--k-font, 'Fredoka', sans-serif); vertical-align: middle; }
+.ck-hint svg.ic { width: 18px; height: 18px; }
+.ck-hint .ck-hstar { width: 14px; height: 14px; fill: #ffc93d; margin-left: 1px; }
+
 /* grille centrée verticalement : la marge basse « auto » était portée par le bouton de test, désormais caché */
 #play > .actions { margin-bottom: auto !important; }
 
