@@ -158,15 +158,12 @@
     return Object.assign({ index: s, first: base + SAGA_LIST[s].first, last: base + next - 1 }, SAGA_LIST[s]);
   }
   // Difficulté de la quête (niveau de générateur 1–40 : basique 1–12, difficile 12–25, expert 25–40).
-  // Courbe très douce, linéaire par morceaux et toujours croissante sur les 924 niveaux du tour
-  // (un cran tous les ~20 à 30 niveaux, soit moins d'un cran par île) :
-  //   îles 0–5   (niveaux 0–83)    : de 1 à 5   (premières îles très faciles)
-  //   îles 6–14  (niveaux 84–209)  : de 5 à 12
-  //   îles 15–29 (niveaux 210–419) : de 12 à 22 (fin de l'Odyssée)
-  //   les Travaux    (niveaux 420–629) : de 22 à 31
-  //   les Argonautes (niveaux 630–923) : de 31 à 40 (puis 40 au-delà)
-  // L'épreuve (boss) d'une île a 1 cran de plus ; plafond 40.
-  const CURVE = [[0, 1], [6 * PER, 5], [15 * PER, 12], [30 * PER, 22], [45 * PER, 31], [SAGA_ISLES * PER - 1, 40]];
+  // Courbe linéaire par morceaux et toujours croissante sur les 924 niveaux du tour (voir CURVE) :
+  //   île 0 (tutoriel) : de 2 à 4 ; îles 1–5 : jusqu'à 10 ; îles 6–14 : jusqu'à 17 ; îles 15–29 : jusqu'à 26 (fin de l'Odyssée)
+  //   les Travaux : jusqu'à 33 ; les Argonautes : jusqu'à 40 (puis 40 au-delà)
+  // L'épreuve (boss) d'une île a 1 cran de plus ; plafond 40. (Resserrée après les retours de
+  // nouveaux joueurs : le début était trop facile.)
+  const CURVE = [[0, 2], [PER, 4], [6 * PER, 10], [15 * PER, 17], [30 * PER, 26], [45 * PER, 33], [SAGA_ISLES * PER - 1, 40]];
   // Rythme (réglage, et question au premier lancement) : « doux » suit la courbe telle quelle ;
   // « rapide » (joueur habitué) garde l'île 1 comme tutoriel puis avance deux fois plus vite sur la courbe
   const fastPace = () => C.store.settings && C.store.settings.pace === 'rapide';
