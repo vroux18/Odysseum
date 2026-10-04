@@ -405,3 +405,13 @@
 #home.bubble .lvcard { width: 230px !important; padding-right: 74px !important; }
 #home.bubble .lvcard .lc-stars { margin-right: 0 !important; }
 #home.bubble #go { left: calc(var(--bx) + 115px - 64px) !important; }
+
+/* bulle v2 : tout centré (numéro puis mini-jeux), étoiles en bas à gauche, flèches ‹ › en bas au centre ; Play rond à droite */
+#home.bubble .lvcard { height: 94px !important; grid-template-rows: auto auto 22px !important; justify-items: center !important; padding: 8px 72px 6px 14px !important; }
+#home.bubble .lvcard .lc-title { justify-self: center !important; grid-row: 1 !important; }
+#home.bubble .lvcard .lc-games { justify-self: center !important; grid-row: 2 !important; }
+#home.bubble .lvcard .lc-stars { grid-row: 3 !important; justify-self: start !important; align-self: center; }
+#home.bubble .lvcard .lc-nav { position: absolute; bottom: 5px; margin: 0; }
+#home.bubble .lvcard .lc-nav[data-d="-1"] { left: calc((100% - 58px) / 2 - 26px); }
+#home.bubble .lvcard .lc-nav[data-d="1"] { left: calc((100% - 58px) / 2 + 4px); }
+#home.bubble #go { top: calc(var(--by) - 14px - 94px / 2 - 28px) !important; }
