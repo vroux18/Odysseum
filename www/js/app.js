@@ -3298,12 +3298,12 @@
   $('#opt-mix').value = C.store.settings.mix;
 
   // ------------------------------ Premier lancement ------------------------------
-  // Une seule fois (C.store.onboarded) : carte « Bienvenue » (nom du joueur), atelier du héros en mode
+  // Une seule fois (C.store.onboarded) : carte « Bienvenue » (nom du joueur), le principe du jeu en 4 cartes, atelier du héros en mode
   // accueil, puis une courte visite guidée à projecteur (voile + découpe arrondie qui suit les vrais boutons).
   // Les joueurs déjà avancés (journey.done > 0) n'y ont pas droit, sauf via « Revoir le tutoriel » (réglages).
   // Tout le DOM est créé ici et retiré en entier à la fin : rien ne reste pour gêner les touchers.
   // Styles : css/onboarding.css.
-  const OB = { on: false, creator: false, tour: null, doneTxt: '' };
+  const OB = { on: false, intro: null, creator: false, tour: null, doneTxt: '' };
   const obReduced = () => document.documentElement.classList.contains('a11y-motion') ||
     !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
   const obNeeded = () => !C.store.onboarded && !((J.done || 0) > 0);
@@ -3346,7 +3346,7 @@
       // les casse-têtes, tu connais ? → rythme de la quête (modifiable ensuite dans les réglages)
       '<div class="ob-field ob-pace"><span>Les casse-têtes, tu connais ?</span><div class="switch-mode ob-pace-sw" role="radiogroup">' +
       '<button type="button" data-pace="doux" class="on">je découvre</button><button type="button" data-pace="rapide">j\'ai l\'habitude</button></div></div>' +
-      '<button class="ob-go" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 12.5l4.2 4.2 8.8-9.4"/></svg>Créer mon héros</button></form>';
+      '<button class="ob-go" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 12.5l4.2 4.2 8.8-9.4"/></svg>Continuer</button></form>';
     document.body.appendChild(ov);
     const inp = ov.querySelector('#ob-name'), go = ov.querySelector('.ob-go');
     const clean = () => inp.value.replace(/[<>]/g, '').trim().slice(0, 16);
@@ -3367,9 +3367,149 @@
       inp.blur();
       C.sfx.tap();
       ov.classList.add('out');
-      setTimeout(() => { ov.remove(); obCreator(); }, obReduced() ? 0 : 240);
+      setTimeout(() => { ov.remove(); obIntro(); }, obReduced() ? 0 : 240);
     });
   }
+  // 1 bis. le principe du jeu en 4 cartes illustrées (glisser ou « Suivant », points, « Passer ») ;
+  // une image, un titre, une phrase. Échap / retour = Passer. Ensuite : l'atelier.
+  const OB_INK = '#3a3550';
+  // pastille de mini-jeu (même recette que les pastilles de la carte de niveau : disque de couleur, icône blanche)
+  const obChip = (id, x, y, r) => '<g transform="translate(' + x + ' ' + y + ')"><circle r="' + r + '" fill="' + (ACCENT[id] || '#3d8ee8') +
+    '" stroke="' + OB_INK + '" stroke-width="2.6"/><svg x="' + (-r * 0.62) + '" y="' + (-r * 0.62) + '" width="' + (r * 1.24) + '" height="' + (r * 1.24) +
+    '" viewBox="0 0 24 24"><g fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" color="#fff">' + (ICON[id] || '') + '</g></svg></g>';
+  // le navire de la carte d'accueil, sans son disque de lagon, posé où l'on veut
+  const obShipAt = (x, y, s) => OB_SHIP.replace(/<circle[^>]*opacity="\.28"\/>/, '').replace('<svg ', '<svg x="' + x + '" y="' + y + '" width="' + s + '" height="' + s + '" ');
+  // une île : plage de sable + colline (verte, ou sèche et pâle tant qu'elle n'a pas refleuri)
+  const obIsle = (x, y, s, lush) => '<g transform="translate(' + x + ' ' + y + ') scale(' + s + ')" stroke="' + OB_INK + '" stroke-width="2.6" stroke-linejoin="round">' +
+    '<path d="M-34 6q4-13 34-14 30 1 34 14z" fill="#ffe3a1"/>' +
+    '<path d="M-22-4q5-21 22-22 17 1 22 22" fill="' + (lush ? '#5cc93b' : '#c9b583') + '"/></g>';
+  const obPalm = (x, y) => '<g transform="translate(' + x + ' ' + y + ')" stroke="' + OB_INK + '" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M0 0q-2-14 3-26" fill="none" stroke-width="4"/><path d="M0 0q-2-14 3-26" fill="none" stroke="#c0643a" stroke-width="1.6"/>' +
+    '<path d="M3-26q-12-6-20 3 10-3 20-3zM3-26q12-7 20 2-10-3-20-2zM3-26q-4-10 6-14-2 7-6 14zM3-26q-10 2-12 12 4-8 12-12z" fill="#3fbf3a"/></g>';
+  const obDeadTree = (x, y) => '<g transform="translate(' + x + ' ' + y + ')" fill="none" stroke="#8b6b4a" stroke-width="3" stroke-linecap="round">' +
+    '<path d="M0 0v-24M0-14l-7-7M0-18l6-6M-7-21l-2-5M6-24l4-2"/></g>';
+  const obSpark = (x, y, r) => '<path transform="translate(' + x + ' ' + y + ') scale(' + r + ')" d="M0-1q.2.8 1 1-.8.2-1 1-.2-.8-1-1 .8-.2 1-1z" fill="#ffc93d"/>';
+  const obStar = (x, y, s) => '<path transform="translate(' + x + ' ' + y + ') scale(' + s + ') translate(-12 -12)" d="' + STAR_D +
+    '" fill="#ffc93d" stroke="#c97c00" stroke-width="1.5" stroke-linejoin="round"/>';
+  const OB_CHAT = '<path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4 3v-3H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/><path d="M8 10h8M8 13h5"/>';
+  const OB_BULB_IC = '<svg class="ic" viewBox="0 0 256 256" aria-hidden="true"><use href="assets/ui/icons.svg#i-lightbulb"/></svg>';
+  const OB_CHAT_IC = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' + OB_CHAT + '</svg>';
+  const obArt = (inner) => '<svg class="ob-art" viewBox="0 0 240 140" aria-hidden="true">' +
+    '<ellipse cx="120" cy="80" rx="116" ry="56" fill="var(--k-lagoon)" opacity=".26"/>' + inner + '</svg>';
+  const OB_SLIDES = [
+    { // 1. le voyage : le navire suit un chemin d'îles jusqu'à Ithaque (la maison)
+      t: 'Cap sur Ithaque', p: 'Tu es Ulysse : vogue d\'île en île pour rentrer chez toi.',
+      art: () => obArt(
+        '<path d="M64 104C96 122 108 70 140 84S186 66 200 56" fill="none" stroke="var(--k-ink)" stroke-width="3" stroke-linecap="round" stroke-dasharray=".1 8" opacity=".55"/>' +
+        '<path d="M150 118q6-4 12 0t12 0M24 40q6-4 12 0t12 0M92 30q5-3 10 0t10 0" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".8"/>' +
+        obIsle(140, 92, 0.62, true) + obPalm(142, 80) +
+        obIsle(200, 62, 0.8, true) +
+        '<g transform="translate(200 44)" stroke="' + OB_INK + '" stroke-width="2.4" stroke-linejoin="round"><path d="M-9 0h18v-12H-9z" fill="#fffaf0"/>' +
+        '<path d="M-12-11L0-21l12 10z" fill="#ee7a4d"/><path d="M-2.5 0v-6h5v6" fill="#c0643a"/></g>' +
+        obSpark(222, 26, 5) + obSpark(178, 26, 3.5) +
+        obShipAt(10, 58, 72)) },
+    { // 2. les niveaux : des pierres, chacune avec ses mini-jeux ; la dernière, plus grosse, porte le drapeau de l'épreuve
+      t: 'Des mini-jeux', p: 'Chaque pierre cache 1 à 3 <span class="ob-nw">casse-têtes</span> ; la dernière est une épreuve.',
+      art: () => obArt(
+        '<path d="M36 110L90 104L144 110L200 102" fill="none" stroke="var(--k-ink)" stroke-width="3" stroke-linecap="round" stroke-dasharray=".1 8" opacity=".45"/>' +
+        [[36, 110], [90, 104], [144, 110]].map(([x, y]) => '<ellipse cx="' + x + '" cy="' + y + '" rx="17" ry="8" fill="#ece3d1" stroke="' + OB_INK + '" stroke-width="2.6"/>').join('') +
+        '<path d="M36 94v-8M90 88v-8M144 94v-8" stroke="var(--k-ink)" stroke-width="2.4" stroke-linecap="round" opacity=".4"/>' +
+        obChip('flux', 36, 66, 17) + obChip('tuyaux', 90, 60, 17) + obChip('amphores', 144, 66, 17) +
+        '<ellipse cx="200" cy="104" rx="25" ry="11" fill="#ece3d1" stroke="' + OB_INK + '" stroke-width="2.8"/>' +
+        '<path d="M200 100V40" stroke="' + OB_INK + '" stroke-width="3.2" stroke-linecap="round"/>' +
+        '<path d="M201 41q12-5 24 0v20q-12-5-24 0z" fill="#e5483a" stroke="' + OB_INK + '" stroke-width="2.6" stroke-linejoin="round"/>' +
+        obStar(213, 51, 0.42) + obSpark(178, 48, 4) + obSpark(232, 82, 3)) },
+    { // 3. l'île refleurit : sèche → verte, et l'épreuve gagnée fait jaillir un nouveau mini-jeu
+      t: 'L\'île refleurit', p: 'Tes niveaux la font reverdir ; l\'épreuve gagnée t\'offre un nouveau jeu.',
+      art: () => obArt(
+        obIsle(58, 100, 0.95, false) + obDeadTree(60, 80) +
+        '<path d="M104 92h26m-8-8 8 8-8 8" fill="none" stroke="var(--k-ink)" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" opacity=".7"/>' +
+        obIsle(180, 100, 0.95, true) + obPalm(166, 80) +
+        '<g stroke="' + OB_INK + '" stroke-width="1.6"><circle cx="192" cy="84" r="3.4" fill="#ff7eb0"/><circle cx="200" cy="89" r="3" fill="#ffc93d"/><circle cx="158" cy="90" r="3" fill="#ff7eb0"/></g>' +
+        '<path d="M214 60v6M196 52l-6 3M232 52l6 3" stroke="#ffc93d" stroke-width="3" stroke-linecap="round"/>' +
+        obChip('lumieres', 214, 36, 17) + obSpark(236, 14, 5) + obSpark(194, 18, 3.5)) },
+    { // 4. les coups de pouce : 3 étoiles pour la vitesse, l'ampoule (un coup) et la bulle (la méthode)
+      t: 'Coups de pouce', p: 'Va vite pour 3 étoiles ; bloqué ? ' + OB_BULB_IC + ' montre un coup, ' + OB_CHAT_IC + ' la méthode.',
+      art: () => obArt(
+        obStar(78, 48, 1.25) + obStar(120, 38, 1.6) + obStar(162, 48, 1.25) +
+        obSpark(46, 30, 4) + obSpark(196, 28, 5) +
+        '<g transform="translate(92 104)"><circle r="22" fill="#ffc93d" stroke="' + OB_INK + '" stroke-width="2.6"/>' +
+        '<svg class="ic" x="-14" y="-14" width="28" height="28" viewBox="0 0 256 256" color="' + OB_INK + '"><use href="assets/ui/icons.svg#i-lightbulb"/></svg></g>' +
+        '<g transform="translate(148 104)"><circle r="22" fill="#1d9be0" stroke="' + OB_INK + '" stroke-width="2.6"/>' +
+        '<svg x="-13" y="-13" width="26" height="26" viewBox="0 0 24 24"><g fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' + OB_CHAT + '</g></svg></g>') }
+  ];
+  function obIntro() {
+    const n = OB_SLIDES.length;
+    const ov = document.createElement('div');
+    ov.className = 'ob-welcome ob-intro';
+    ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'Le principe du jeu');
+    ov.innerHTML = '<div class="ob-card ob-ic"><div class="ob-vp" aria-live="polite"><div class="ob-track">' +
+      OB_SLIDES.map((s, k) => '<section class="ob-slide" aria-roledescription="carte" aria-label="' + (k + 1) + ' sur ' + n + '">' + s.art() +
+        '<h2 class="ob-st">' + s.t + '</h2><p class="ob-sp">' + s.p + '</p></section>').join('') +
+      '</div></div><div class="ob-foot"><span class="ob-dots" aria-hidden="true">' + OB_SLIDES.map(() => '<i></i>').join('') + '</span>' +
+      '<button type="button" class="ob-skip">Passer</button><button type="button" class="ob-next">Suivant</button></div></div>';
+    document.body.appendChild(ov);
+    const vp = ov.querySelector('.ob-vp'), track = ov.querySelector('.ob-track'), next = ov.querySelector('.ob-next');
+    const slides = ov.querySelectorAll('.ob-slide'), dots = ov.querySelectorAll('.ob-dots i');
+    const I = OB.intro = { i: 0, done: false };
+    const show = (i) => {
+      I.i = obClamp(i, 0, n - 1);
+      track.style.transform = 'translateX(' + (-100 * I.i) + '%)';
+      slides.forEach((s, k) => { s.setAttribute('aria-hidden', k === I.i ? 'false' : 'true'); s.inert = k !== I.i; });
+      dots.forEach((d, k) => d.classList.toggle('on', k === I.i));
+      next.textContent = I.i === n - 1 ? 'Créer mon héros' : 'Suivant';
+      next.classList.toggle('last', I.i === n - 1);
+    };
+    // fin (dernière carte, « Passer », Échap, retour) : la carte s'efface, l'atelier s'ouvre
+    const finish = () => {
+      if (I.done) return;
+      I.done = true; OB.intro = null;
+      C.sfx.tap();
+      ov.classList.add('out');
+      setTimeout(() => { ov.remove(); obCreator(); }, obReduced() ? 0 : 240);
+    };
+    I.next = () => { if (I.done) return; if (I.i < n - 1) { C.sfx.tap(); show(I.i + 1); } else finish(); };
+    I.prev = () => { if (!I.done && I.i > 0) { C.sfx.tap(); show(I.i - 1); } };
+    I.skip = finish;
+    next.addEventListener('click', I.next);
+    ov.querySelector('.ob-skip').addEventListener('click', finish);
+    // glisser du doigt : la piste suit, puis on change de carte au-delà d'un petit seuil
+    let x0 = null, y0 = 0, dx = 0, t0 = 0, horiz = false;
+    vp.addEventListener('pointerdown', (e) => {
+      if (I.done || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      x0 = e.clientX; y0 = e.clientY; dx = 0; t0 = performance.now(); horiz = false;
+    });
+    vp.addEventListener('pointermove', (e) => {
+      if (x0 == null) return;
+      dx = e.clientX - x0;
+      if (!horiz && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(e.clientY - y0)) { horiz = true; track.classList.add('drag'); try { vp.setPointerCapture(e.pointerId); } catch (err) { /* rien */ } }
+      if (!horiz) return;
+      const edge = (I.i === 0 && dx > 0) || (I.i === n - 1 && dx < 0); // résistance aux deux bouts
+      track.style.transform = 'translateX(calc(' + (-100 * I.i) + '% + ' + (edge ? dx / 3 : dx).toFixed(1) + 'px))';
+    });
+    const release = () => {
+      if (x0 == null) return;
+      x0 = null;
+      if (!horiz) return;
+      track.classList.remove('drag');
+      const fast = Math.abs(dx) / Math.max(1, performance.now() - t0) > 0.45;
+      if ((dx < -50 || (fast && dx < -20)) && I.i < n - 1) I.next();
+      else if ((dx > 50 || (fast && dx > 20)) && I.i > 0) I.prev();
+      else show(I.i);
+    };
+    vp.addEventListener('pointerup', release);
+    vp.addEventListener('pointercancel', release);
+    show(0);
+    try { next.focus({ preventScroll: true }); } catch (e) { /* rien */ }
+  }
+  document.addEventListener('keydown', (e) => {
+    const I = OB.intro;
+    if (!I) return;
+    if (e.key === 'Escape') { e.stopImmediatePropagation(); I.skip(); }
+    else if (e.key === 'ArrowRight') I.next();
+    else if (e.key === 'ArrowLeft') I.prev();
+  });
+  document.addEventListener('backbutton', () => { if (OB.intro) OB.intro.skip(); });
   // 2. l'atelier du personnage, en mode accueil : titre « Ton héros », dé mis en avant, « C'est parti ! »
   function obCreator() {
     const wd = $('#wardrobe'), done = $('#wd-done'), gap = wd.querySelector('.cr-top .cr-gap');

@@ -58,6 +58,23 @@
 .ob-go:active { transform: translateY(3px); box-shadow: 0 2px 0 #3a9a26, var(--k-shine); }
 .ob-go:disabled { opacity: .5; cursor: default; transform: none; }
 
+/* ---------- 1 bis. Le principe du jeu : 4 cartes à faire glisser ---------- */
+.ob-ic { gap: 12px; padding: 16px 16px 14px; overflow: hidden; }
+.ob-vp { width: 100%; overflow: hidden; touch-action: pan-y; cursor: grab; user-select: none; -webkit-user-select: none; }
+.ob-track { display: flex; transition: transform .38s var(--k-ease); will-change: transform; }
+.ob-track.drag { transition: none; cursor: grabbing; }
+.ob-slide { flex: 0 0 100%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 0 4px; text-align: center; }
+/* (la règle générale « svg » met un trait partout : ici chaque forme porte ses propres couleurs) */
+.ob-art, .ob-art svg { fill: none; stroke: none; }
+.ob-art { width: 100%; max-width: 290px; aspect-ratio: 240 / 140; display: block; overflow: visible; pointer-events: none; }
+.ob-st { margin: 4px 0 0; font: 700 23px/1.15 var(--k-font); color: var(--k-ink); }
+.ob-sp { margin: 0; min-height: 2.6em; font: 600 16.5px/1.32 var(--k-font); color: var(--k-ink-soft); text-wrap: balance; }
+/* les petites icônes 💡 et 💬 des boutons de jeu, dans la phrase */
+.ob-sp .ic { display: inline-block; width: 1.2em; height: 1.2em; vertical-align: -.25em; color: var(--k-ink); }
+.ob-ic .ob-foot { width: 100%; }
+.ob-ic .ob-next.last { background: var(--k-grass); box-shadow: 0 4px 0 #3a9a26, var(--k-shine); }
+.ob-ic .ob-next.last:active { box-shadow: 0 1px 0 #3a9a26, var(--k-shine); }
+
 /* ---------- 2. Atelier du personnage en mode accueil ---------- */
 .creator.ob-mode .cr-gap { display: flex; justify-content: center; min-width: 0; }
 /* (la pose de joie laisse sa place au titre sur les écrans étroits) */
@@ -170,12 +187,12 @@
 /* animations réduites (réglage du jeu ou du téléphone) : tout apparaît sans bouger */
 @media (prefers-reduced-motion: reduce) {
   .ob-welcome, .ob-tour, .ob-card, .ob-cr-title, .ob-tip-in, .ob-bye-in, .ob-welcome.out, .ob-tour.out { animation: none; }
-  .ob-hole, .ob-tip { transition: none; }
+  .ob-hole, .ob-tip, .ob-track { transition: none; }
   .ob-hole::after, .ob-confetti { animation: none; display: none; }
   .creator.ob-mode #cr-random::after { animation: none; } /* (l'anneau reste, immobile) */
 }
 html.a11y-motion .ob-welcome, html.a11y-motion .ob-tour, html.a11y-motion .ob-card, html.a11y-motion .ob-cr-title,
 html.a11y-motion .ob-tip-in, html.a11y-motion .ob-bye-in, html.a11y-motion .ob-welcome.out, html.a11y-motion .ob-tour.out { animation: none; }
-html.a11y-motion .ob-hole, html.a11y-motion .ob-tip { transition: none; }
+html.a11y-motion .ob-hole, html.a11y-motion .ob-tip, html.a11y-motion .ob-track { transition: none; }
 html.a11y-motion .ob-hole::after, html.a11y-motion .ob-confetti { display: none; }
 html.a11y-motion .creator.ob-mode #cr-random::after { animation: none; }
