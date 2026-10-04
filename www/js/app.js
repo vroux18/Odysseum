@@ -1756,27 +1756,47 @@
     return s + '</g><circle cx="50" cy="50" r="48.5" fill="none" stroke="#3a3550" stroke-width="3"/></svg>';
   }
   // pentagone des capacités : une branche par capacité, son emblème au bout
+  // Échelle fixe : un anneau = un niveau, de sorte que deux capacités au même niveau tombent sur le même anneau.
+  const RD = { w: 240, h: 240, cx: 120, cy: 128, R: 70 };
   function radarSvg() {
-    const cx = 110, cy = 108, R = 66, n = SKILLS.length;
+    const { cx, cy, R } = RD, n = SKILLS.length, f1 = (v) => v.toFixed(1);
     const pt = (i, r) => { const a = -Math.PI / 2 + i * 2 * Math.PI / n; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; };
-    const poly = (f) => SKILLS.map((_, i) => pt(i, f(i)).map((v) => v.toFixed(1)).join(',')).join(' ');
-    const vals = SKILLS.map((sk) => { const st = skillStats(sk); return st.level - 1 + st.frac; });
-    const max = Math.max(4, Math.ceil(Math.max.apply(null, vals) * 1.15));
-    let s = '';
-    [1, 2 / 3, 1 / 3].forEach((k, j) => { s += '<polygon class="pc-rd-ring' + (j ? '' : ' out') + '" points="' + poly(() => R * k) + '"/>'; });
-    SKILLS.forEach((_, i) => { const p = pt(i, R); s += '<line class="pc-rd-axis" x1="' + cx + '" y1="' + cy + '" x2="' + p[0].toFixed(1) + '" y2="' + p[1].toFixed(1) + '"/>'; });
-    s += '<polygon class="pc-rd-val" points="' + poly((i) => R * (0.14 + 0.86 * Math.min(1, vals[i] / max))) + '"/>';
+    const poly = (f) => SKILLS.map((_, i) => pt(i, f(i)).map(f1).join(',')).join(' ');
+    const stats = SKILLS.map(skillStats);
+    const top = Math.max.apply(null, stats.map((st) => st.level));
+    // au moins 5 anneaux ; au-delà de 8 niveaux, un anneau tous les « step » niveaux
+    const step = top > 8 ? Math.ceil(top / 6) : 1;
+    const max = Math.max(5, Math.ceil(top / step) * step);
+    const rad = (lv) => R * Math.min(lv, max) / max;
+    let s = '<defs>';
+    // dégradé d'un sommet à l'autre : le remplissage prend les couleurs des capacités
     SKILLS.forEach((sk, i) => {
-      const p = pt(i, R * (0.14 + 0.86 * Math.min(1, vals[i] / max)));
-      s += '<circle class="pc-rd-dot" cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="4" style="--c:var(--sk-' + sk.id + ')"/>';
+      const a = pt(i, R), b = pt((i + 1) % n, R);
+      s += '<linearGradient id="pc-rd-g' + i + '" gradientUnits="userSpaceOnUse" x1="' + f1(a[0]) + '" y1="' + f1(a[1]) + '" x2="' + f1(b[0]) + '" y2="' + f1(b[1]) + '">' +
+        '<stop offset="0" style="stop-color:var(--sk-' + sk.id + ')"/><stop offset="1" style="stop-color:var(--sk-' + SKILLS[(i + 1) % n].id + ')"/></linearGradient>';
     });
+    s += '</defs><g class="pc-rd-grid">';
+    // bandes alternées, de l'extérieur vers le centre
+    for (let k = max, j = 0; k > 0; k -= step, j++) s += '<polygon class="pc-rd-band' + (j % 2 ? ' alt' : '') + (j ? '' : ' out') + '" points="' + poly(() => rad(k)) + '"/>';
+    SKILLS.forEach((_, i) => { const p = pt(i, R); s += '<line class="pc-rd-axis" x1="' + cx + '" y1="' + cy + '" x2="' + f1(p[0]) + '" y2="' + f1(p[1]) + '"/>'; });
+    s += '</g><g class="pc-rd-shape" style="transform-origin:' + cx + 'px ' + cy + 'px">';
+    // polygone en quartiers, chacun teinté du dégradé entre ses deux sommets
+    const vp = stats.map((st, i) => pt(i, rad(st.level)));
+    SKILLS.forEach((_, i) => {
+      const a = vp[i], b = vp[(i + 1) % n];
+      s += '<polygon class="pc-rd-wedge" style="--g:url(#pc-rd-g' + i + ')" points="' + cx + ',' + cy + ' ' + f1(a[0]) + ',' + f1(a[1]) + ' ' + f1(b[0]) + ',' + f1(b[1]) + '"/>';
+    });
+    s += '<polygon class="pc-rd-val" points="' + vp.map((p) => p.map(f1).join(',')).join(' ') + '"/>';
+    SKILLS.forEach((sk, i) => { s += '<circle class="pc-rd-dot" cx="' + f1(vp[i][0]) + '" cy="' + f1(vp[i][1]) + '" r="6" style="--c:var(--sk-' + sk.id + ')"/>'; });
+    s += '</g>';
+    // emblème au bout de chaque branche, son niveau dans une pastille juste dessous
     SKILLS.forEach((sk, i) => {
-      const [x, y] = pt(i, R + 22), st = skillStats(sk);
-      s += '<g class="pc-rd-sk" data-skill="' + sk.id + '" style="--c:var(--sk-' + sk.id + ')" role="button" aria-label="' + sk.name + '">' +
-        '<circle class="pc-rd-disc" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="15"/>' +
-        '<g transform="translate(' + (x - 9).toFixed(1) + ' ' + (y - 9).toFixed(1) + ') scale(.75)" class="pc-rd-ic">' + SKILL_ICON[sk.id] + '</g>' +
-        '<circle class="pc-rd-badge" cx="' + (x + 12).toFixed(1) + '" cy="' + (y - 11).toFixed(1) + '" r="8.5"/>' +
-        '<text class="pc-rd-num" x="' + (x + 12).toFixed(1) + '" y="' + (y - 7.2).toFixed(1) + '" text-anchor="middle">' + st.level + '</text></g>';
+      const [x, y] = pt(i, R + (i ? 22 : 38)), lv = String(stats[i].level), pw = 14 + lv.length * 7;
+      s += '<g class="pc-rd-sk" data-skill="' + sk.id + '" style="--c:var(--sk-' + sk.id + ')" role="button" aria-label="' + sk.name + ' ' + lv + '">' +
+        '<circle class="pc-rd-disc" cx="' + f1(x) + '" cy="' + f1(y) + '" r="15"/>' +
+        '<g transform="translate(' + f1(x - 9) + ' ' + f1(y - 9) + ') scale(.75)" class="pc-rd-ic">' + SKILL_ICON[sk.id] + '</g>' +
+        '<rect class="pc-rd-pill" x="' + f1(x - pw / 2) + '" y="' + f1(y + 17.5) + '" width="' + pw + '" height="15" rx="7.5"/>' +
+        '<text class="pc-rd-num" x="' + f1(x) + '" y="' + f1(y + 29) + '" text-anchor="middle">' + lv + '</text></g>';
     });
     return s;
   }
@@ -1811,6 +1831,7 @@
     if (T.time >= 60) tiles.push(['time', fmtTime(T.time), 'de jeu', 'var(--k-sky)']);
     $('#pc-stats').innerHTML = tiles.map((t, k) => '<div class="pc-tile' + (k > 5 ? ' wide' : '') + '" style="--c:' + t[3] + ';--k:' + k + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + PC_IC[t[0]] + '</svg>' +
       '<b>' + t[1] + '</b><small>' + t[2] + '</small></div>').join('');
+    $('#pc-radar').setAttribute('viewBox', '0 0 ' + RD.w + ' ' + RD.h);
     $('#pc-radar').innerHTML = radarSvg();
     $('#pc-skill-list').innerHTML = SKILLS.map((sk) => {
       const st = skillStats(sk);
