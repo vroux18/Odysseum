@@ -233,6 +233,9 @@
 
     return {
       tools: [{ id: 'fill', label: 'Remplir' }, { id: 'cross', label: 'Croix' }],
+      // 💬 la méthode : les grands nombres d'abord (chevauchement), puis croiser lignes et colonnes
+      method: 'Commence par les lignes faciles : un 0 est toute vide, et un grand nombre couvre toujours le milieu de sa ligne. Marque d\'une croix les cases vides, puis croise lignes et colonnes.' +
+        (mirror ? ' Ici, chaque case se recopie en miroir.' : ''),
       status() {
         const done = rowEls.filter((e) => e.classList.contains('ok')).length;
         return 'Lignes justes ' + done + '/' + n;
@@ -245,11 +248,11 @@
         const lineCells = (axis, k) => [...Array(n)].map((_, j) => (axis === 'row' ? k * n + j : j * n + k));
         const lineName = (axis, k) => 'la ' + ord(k + 1) + (axis === 'row' ? ' ligne' : ' colonne');
         const clueEl = (axis, k) => (axis === 'row' ? rowEls[k] : colEls[k]);
-        const apply = (list) => {
+        const apply = (list) => C.act(() => {
           history.push(state.slice());
           list.forEach(([i, v]) => { state[i] = v ? 1 : 2; if (mirror) state[twin(i)] = state[i]; });
           render(); api.onChange(); check();
-        };
+        });
         // 1. une case fausse (pleine au lieu de vide, ou croix sur une case pleine) : on la corrige
         for (let i = 0; i < n * n; i++) {
           const want = puzzle.solution[i];

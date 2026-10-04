@@ -588,6 +588,8 @@
     resize();
 
     return {
+      // 💬 la méthode : partir des points coincés et suivre les passages forcés
+      method: 'Pars des points coincés : contre un bord, dans un coin ou entre deux tuyaux, ils n\'ont souvent qu\'une sortie. Suis les passages forcés, et n\'enferme jamais une case vide.',
       status,
       undo() {
         if (!history.length) return;
@@ -615,14 +617,14 @@
           const c = g.cellOf(node), m = round ? cell * 0.12 : cell * 0.04;
           return { x: (c % n) * cell + m, y: Math.floor(c / n) * cell + m, w: cell - 2 * m, h: cell - 2 * m, kind, round };
         };
-        const apply = (k, list) => {
+        const apply = (k, list) => C.act(() => {
           history.push(paths.map((p) => p.slice()));
           drag = { color: k, snapshot: paths.map((p) => p.slice()) };
           paths[k] = list.slice();
           applyCuts();
           drag = null;
           draw(); api.onChange(); checkWin();
-        };
+        });
         // (pas de nom de couleur : certaines teintes se ressemblent ; les points cités sont entourés d'or)
         // 1. deux points voisins : on les relie directement
         for (const k of todo) {
@@ -672,8 +674,8 @@
           const why = (blockers || []).map((v) => cellBox(v, 'why'));
           const corner = fresh && g.adj[head].length < 4 && !wrap;
           const who = fresh ? 'Le point entouré d\'or' : 'Le bout du tuyau, entouré d\'or,';
-          const text = who + ' n\'a qu\'une sortie libre' + (corner ? ' : il est contre le bord' + (why.length ? ' et ses autres voisines (surlignées) sont prises' : '') : why.length ? ' : ses autres voisines (surlignées) sont prises' : '') +
-            '. ' + (full ? 'Le tuyau suit les passages forcés jusqu\'à son autre point.' : 'Le tuyau avance donc ' + (gain > 1 ? 'de ' + gain + ' cases, toutes forcées.' : 'd\'une case.'));
+          const text = who + ' n\'a qu\'une sortie libre' + (corner ? (why.length ? ' : le bord et les cases surlignées bloquent le reste' : ' : il est contre le bord') : why.length ? ' : les cases surlignées sont prises' : '') +
+            '. ' + (full ? 'On suit ce passage forcé jusqu\'à l\'autre point.' : 'Le tuyau avance donc ' + (gain > 1 ? 'de ' + gain + ' cases, toutes forcées.' : 'd\'une case.'));
           return Object.assign({ text }, C.hintBoxes(canvas, why.concat(where)));
         }
         // 3. pas de passage forcé : coup de pouce, le tuyau le plus court

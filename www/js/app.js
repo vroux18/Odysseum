@@ -117,7 +117,13 @@
   // 14 niveaux par île (66 îles : 924 niveaux par tour) ; même valeur que PER dans world.js.
   // (avant : 6 par île — les sauvegardes sont converties une fois, voir « Conversion des sauvegardes »)
   const PER = 14;
-  const VARIANTS_ON = false; // variantes mises de côté pour l'instant (le code reste prêt)
+  // Variantes des mini-jeux : coupées par défaut ; le joueur les allume (réglage « Variantes », ou la carte
+  // « Trop facile ? » de fin de niveau). Éteintes, la quête est exactement celle d'avant.
+  const variantsOn = () => !!(C.store.settings && C.store.settings.variants);
+  // niveau de quête (1–40) à partir duquel chaque variante entre dans la quête : les plus intuitives d'abord
+  const VARIANT_FROM = { lumieres: 2, tuyaux: 2, pixels: 3, serpent: 3, flux: 4, paves: 5, coffre: 6, astres: 6, reines: 8 };
+  const VARIANT_CHANCE = 0.3; // par grille, une fois le jeu bien connu
+  const VARIANT_KNOWN = 4;    // grilles classiques réussies avant d'en voir la variante
   // ordre d'apparition des mini-jeux dans la quête (un jeu absent est ignoré)
   const ORDER = ['flux', 'reines', 'tuyaux', 'astres', 'paves', 'pixels', 'serpent', 'lumieres', 'coffre',
     'demineur', 'simon', 'amphores', 'mosaique', 'oracle', 'rushhour', 'bataille'].filter((id) => C.games.some((g) => g.id === id));
@@ -161,17 +167,17 @@
   //   les Argonautes (niveaux 630–923) : de 31 à 40 (puis 40 au-delà)
   // L'épreuve (boss) d'une île a 1 cran de plus ; plafond 40.
   const CURVE = [[0, 1], [6 * PER, 5], [15 * PER, 12], [30 * PER, 22], [45 * PER, 31], [SAGA_ISLES * PER - 1, 40]];
+  // Rythme (réglage, et question au premier lancement) : « doux » suit la courbe telle quelle ;
+  // « rapide » (joueur habitué) garde l'île 1 comme tutoriel puis avance deux fois plus vite sur la courbe
+  const fastPace = () => C.store.settings && C.store.settings.pace === 'rapide';
   function questLevel(L, boss) {
+    if (fastPace() && L >= PER) L = Math.min(SAGA_ISLES * PER - 1, PER + (L - PER) * 2);
     let i = 0;
     while (i < CURVE.length - 2 && L > CURVE[i + 1][0]) i++;
     const [a, va] = CURVE[i], [b, vb] = CURVE[i + 1];
     const t = Math.max(0, Math.min(1, (L - a) / (b - a)));
     return Math.min(40, Math.round(va + (vb - va) * t) + (boss ? 1 : 0));
-  // Rythme (réglage, et question au premier lancement) : « doux » suit la courbe telle quelle ;
-  // « rapide » (joueur habitué) garde l'île 1 comme tutoriel puis avance deux fois plus vite sur la courbe
-  const fastPace = () => C.store.settings && C.store.settings.pace === 'rapide';
   }
-    if (fastPace() && L >= PER) L = Math.min(SAGA_ISLES * PER - 1, PER + (L - PER) * 2);
 
   function levelInfo(L) {
     const c = Math.floor(L / PER), k = L % PER;
@@ -179,11 +185,17 @@
     const boss = k === PER - 1;
     const pool = poolOf(c);
     const fresh = c > 0 ? pool.filter((id) => !poolOf(c - 1).includes(id)) : pool.slice(); // nouveaux jeux du monde
-    const pickVariant = (id, chance) => {
-      const g = game(id);
-      // une variante seulement pour un jeu présent depuis au moins un monde
-      const known = c > 0 && poolOf(c - 1).includes(id);
-      return VARIANTS_ON && g.variants && g.variants[1] && known && rng() < chance ? g.variants[1].id : 'classic';
+    // variantes allumées : tirage à part (graine du niveau), le choix des jeux et les grilles ne bougent pas
+    const vrng = C.makeRng('variante:' + L);
+    const level0 = questLevel(L, boss);
+    const pickVariant = (id) => {
+      if (!variantsOn()) return 'classic';
+      const g = game(id), v = g.variants && g.variants[1];
+      const roll = vrng(); // toujours tiré : la variante d'une grille reste la même d'une partie à l'autre
+      if (!v || VARIANT_FROM[id] == null || level0 < VARIANT_FROM[id]) return 'classic';
+      // seulement un jeu présent depuis au moins une île, et déjà joué quelques fois
+      const known = c > 0 && poolOf(c - 1).includes(id) && ((C.store.games[id] || {}).solved || 0) >= VARIANT_KNOWN;
+      return known && roll < VARIANT_CHANCE ? v.id : 'classic';
     };
     const skillOf = (id) => (SKILLS.find((s) => s.games.includes(id)) || {}).id;
     let ids;
@@ -209,8 +221,7 @@
     }
     // difficulté de la quête : voir questLevel (courbe douce sur les trois sagas, épreuve +1, plafond 40)
     const level = questLevel(L, boss);
-    const vChance = boss ? Math.min(0.7, 0.25 + c * 0.1) : Math.min(0.55, 0.12 + c * 0.08);
-    const steps = ids.map((id) => ({ id, variant: pickVariant(id, vChance), level }));
+    const steps = ids.map((id) => ({ id, variant: pickVariant(id), level }));
     return { L, c, k, boss, id: steps[0].id, accent: ACCENT[steps[0].id], steps };
   }
 
@@ -455,6 +466,7 @@
       iconSvg: (id) => ICON[id],
       accentOf: (id) => ACCENT[id],
       onEvent: (c) => startEvent(c), // totem d'un événement spécial touché sur la carte
+      onCameraMode: (mode) => syncCamBtn(mode), // le monde repasse seul en suivi (Ulysse se met en route)
       onSelect: (L) => {
         standing = L != null;
         if (standing) { selected = L; J.selected = L; C.save(); }
@@ -643,6 +655,140 @@
     if (rezoom) rezoom();
     return out;
   };
+
+  // ------------------------------ Explique-moi (bouton 💬) ------------------------------
+  // Petit pas-à-pas posé sous la grille (à la place des boutons) : d'abord la MÉTHODE du jeu en une
+  // phrase, puis 2 ou 3 coups montrés sur la vraie grille, un par « Suivant » (ou en touchant la case
+  // dorée) : le coup est entouré d'or, ses raisons surlignées, une phrase dit pourquoi, puis il se joue.
+  // Chaque coup joué compte comme une astuce (une étoile en moins au plus, voir starsFor).
+  // Côté jeu : inst.method (la phrase de méthode), puis au choix
+  //  - inst.coach(k) → étape k (0, 1, 2…) : { text, where, why, clear, play?, last? } ou null (fini),
+  //    ou true pour l'astuce habituelle ; une étape sans play est un simple conseil (jeux de mémoire) :
+  //    rien n'est joué ni compté ; inst.coachSteps = nombre d'étapes (3 par défaut) ;
+  //  - sinon son hint() habituel, appelé « à blanc » : le coup est mis de côté par C.act et ne se
+  //    joue qu'au « Suivant ».
+  // C.act(fn) : dans un hint(), enveloppe ce qui modifie la grille (joué tout de suite pour 💡).
+  C.act = function (fn) {
+    if (!C.act.dry) { fn(); return; }
+    const prev = C.act.later;
+    C.act.later = prev ? () => { prev(); fn(); } : fn;
+  };
+  const COACH_MOVES = 3;
+  const coach = { on: false, ctx: null, k: -1, step: null, fx: [], busy: false, el: null, timer: 0 };
+  const calmMotion = () => document.documentElement.classList.contains('a11y-motion') ||
+    !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  function coachEl() {
+    if (coach.el) return coach.el;
+    const el = document.createElement('div');
+    el.id = 'coach';
+    el.className = 'hint-tip coach';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-label', 'Explication');
+    el.hidden = true;
+    el.innerHTML = '<button class="coach-x" type="button" aria-label="Fermer l\'explication">✕</button>' +
+      '<p class="coach-text" aria-live="polite"></p>' +
+      '<div class="coach-foot"><span class="coach-dots" aria-hidden="true"></span>' +
+      '<button class="coach-next" type="button"></button></div>';
+    el.querySelector('.coach-x').addEventListener('click', coachClose);
+    el.querySelector('.coach-next').addEventListener('click', coachNext);
+    const actions = $('#play .actions');
+    actions.parentNode.insertBefore(el, actions);
+    // pendant l'explication, la grille ne joue pas : toucher la case dorée vaut « Suivant »
+    const play = $('#play');
+    ['pointerdown', 'pointerup', 'click'].forEach((type) => play.addEventListener(type, (e) => {
+      if (!coach.on || !e.target.closest || !e.target.closest('#board')) return;
+      e.stopPropagation();
+      if (type !== 'pointerdown') return;
+      e.preventDefault();
+      const st = coach.step;
+      const hit = st && (st.where || []).some((w) => {
+        if (!w || !w.getBoundingClientRect) return false;
+        const r = w.getBoundingClientRect();
+        return e.clientX >= r.left - 4 && e.clientX <= r.right + 4 && e.clientY >= r.top - 4 && e.clientY <= r.bottom + 4;
+      });
+      if (hit) coachNext();
+      else { el.classList.remove('nudge'); void el.offsetWidth; el.classList.add('nudge'); }
+    }, true));
+    coach.el = el;
+    return el;
+  }
+  function coachUnmark() {
+    coach.fx.forEach(([el, cls]) => el.classList.remove(cls));
+    coach.fx = [];
+    const st = coach.step;
+    if (st && st.clear) try { st.clear(); } catch (e) { /* jeu déjà fermé */ }
+  }
+  function coachMark(st) {
+    const mark = (list, cls) => (list || []).forEach((el) => {
+      if (!el || !el.classList) return;
+      el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
+      coach.fx.push([el, cls]);
+    });
+    mark(st.why, 'hint-why');
+    mark(st.where, 'hint-where');
+  }
+  function coachShow(text, label, dot, total) {
+    const el = coachEl();
+    el.querySelector('.coach-text').textContent = text;
+    const next = el.querySelector('.coach-next');
+    next.textContent = label;
+    next.classList.toggle('go', label === 'À toi !');
+    el.querySelector('.coach-dots').innerHTML = [...Array(total)].map((_, i) => '<i class="' + (i <= dot ? 'on' : '') + (i === dot ? ' now' : '') + '"></i>').join('');
+    el.hidden = false;
+    el.classList.remove('in'); void el.offsetWidth; el.classList.add('in');
+  }
+  function coachClose() {
+    clearTimeout(coach.timer);
+    if (!coach.on) return;
+    coachUnmark();
+    coach.on = false; coach.ctx = null; coach.step = null; coach.busy = false;
+    if (coach.el) coach.el.hidden = true;
+    $('#play').classList.remove('coaching');
+  }
+  function coachOpen(ctx) {
+    coachClose();
+    hideTip();
+    coach.on = true; coach.ctx = ctx; coach.k = -1; coach.step = null;
+    $('#play').classList.add('coaching');
+    coachShow(ctx.method || 'Regarde bien : je te montre la méthode, coup par coup.', 'Montre-moi', 0, ctx.total + 1);
+    coachEl().querySelector('.coach-next').focus({ preventScroll: true });
+  }
+  function coachAdvance() {
+    const ctx = coach.ctx;
+    coachUnmark();
+    coach.k++;
+    const st = ctx.next(coach.k);
+    if (!st) {
+      if (coach.k === 0) { // rien à montrer pour l'instant (chant en cours, grille finie…)
+        coach.step = { last: true };
+        coachShow('Rien à montrer pour l\'instant : réessaie dans un moment.', 'À toi !', 0, 1);
+      } else coachClose();
+      return;
+    }
+    st.last = st.last || coach.k + 1 >= ctx.total;
+    coach.step = st;
+    coachMark(st);
+    coachShow(st.text || '', st.last ? 'À toi !' : 'Suivant', coach.k + 1, ctx.total + 1);
+  }
+  function coachNext() {
+    if (!coach.on || coach.busy) return;
+    const st = coach.step;
+    if (st && st.play && !st.played) {
+      // le coup se joue sous les yeux du joueur, puis l'étape suivante arrive
+      st.played = true;
+      coach.busy = true;
+      coach.ctx.spend();
+      st.play();
+      coach.timer = setTimeout(() => {
+        coach.busy = false;
+        if (!coach.on) return;
+        if (st.last || coach.ctx.won()) coachClose(); else coachAdvance();
+      }, calmMotion() ? 260 : 700);
+      return;
+    }
+    if (st && st.last) { coachClose(); return; }
+    coachAdvance();
+  }
 
   // ------------------------------ Zoom du plateau ------------------------------
   // Grandes grilles (Méga, événements, n ≥ 10) : pincer à deux doigts zoome de 1× à 2,5× et déplace
@@ -927,6 +1073,7 @@
         onWin() {
           if (won) return;
           won = true;
+          coachClose();
           C.sfx.win();
           // succès : une lueur douce monte du fond, aux couleurs du jeu
           const pl = $('#play'); pl.classList.remove('glow'); void pl.offsetWidth; pl.classList.add('glow');
@@ -988,6 +1135,8 @@
         elapsed(v) { if (v != null) elapsed = v; return elapsed; },
         hint(explain) {
           if (won || hints >= MAX_HINTS) { C.sfx.error && C.sfx.error(); return; }
+          if (explain) { this.explain(); return; }
+          coachClose();
           // compté AVANT l'appel : un indice qui termine la grille déclenche onWin tout de suite,
           // et cet indice doit déjà peser dans les étoiles
           hints++;
@@ -999,7 +1148,32 @@
             if (info.t0) info.penalty += 10; // compet : chaque indice coûte 10 secondes
           }
         },
-        // outil de test temporaire : résout la grille d'un coup
+        // 💬 : la méthode du jeu, puis quelques coups expliqués (voir « Explique-moi »)
+        explain() {
+          if (won) { C.sfx.error && C.sfx.error(); return; }
+          if (coach.on) { coachClose(); return; } // (second appui : on referme)
+          coachOpen({
+            method: typeof inst.method === 'function' ? inst.method() : inst.method,
+            total: inst.coach ? inst.coachSteps || COACH_MOVES : COACH_MOVES,
+            won: () => won,
+            // un coup montré compte comme une astuce (avant de le jouer : il peut finir la grille)
+            spend() { hints++; renderHints(MAX_HINTS - hints); if (info.t0) info.penalty += 10; },
+            next(k) {
+              if (won) return null;
+              if (inst.coach) { const s = inst.coach(k); if (s !== true) return s || null; } // (true : l'astuce habituelle)
+              // le hint() du jeu, à blanc : son coup est mis de côté et joué au « Suivant »
+              C.act.dry = true; C.act.later = null;
+              let res;
+              try { res = inst.hint(); } finally { C.act.dry = false; }
+              const later = C.act.later;
+              C.act.later = null;
+              if (!res) return null;
+              const r = typeof res === 'string' ? { text: res } : res;
+              if (later) r.play = later; else this.spend(); // (coup déjà joué par le jeu : compté tel quel)
+              return r;
+            }
+          });
+        },
         solve() {
           if (won) return;
           auto = true;
@@ -1007,7 +1181,7 @@
           if (inst.solve) { inst.solve(); return; }
           for (let i = 0; i < 400 && !won; i++) if (!inst.hint()) break;
         },
-        stop() { clearInterval(tick); inst.destroy(); }
+        stop() { coachClose(); clearInterval(tick); inst.destroy(); }
       };
     }, 60);
   }
@@ -1089,6 +1263,7 @@
       return;
     }
     if (!info.assisted) keepBest((J.stars = J.stars || {}), info.L, info.stars);
+    noteEase(info, run);
     if (info.L === J.done) {
       J.done++;
       pendingProgress = true;
@@ -1121,6 +1296,14 @@
     C.store.settings.playStyle = b.dataset.playStyle; C.save(); C.sfx.tap(); applyPlayStyle();
   }));
   applyPlayStyle();
+  // Réglage « Rythme » : doux / rapide (voir questLevel) ; les niveaux à venir s'en ressentent aussitôt
+  function applyPace() {
+    document.querySelectorAll('.pace-mode button').forEach((b) => b.classList.toggle('on', b.dataset.pace === (fastPace() ? 'rapide' : 'doux')));
+  }
+  document.querySelectorAll('.pace-mode button').forEach((b) => b.addEventListener('click', () => {
+    C.store.settings.pace = b.dataset.pace; C.save(); C.sfx.tap(); applyPace(); renderPlay();
+  }));
+  applyPace();
   const levelTime = (info) => (performance.now() - info.t0) / 1000 + (info.penalty || 0);
   // le chrono en direct s'affiche en régate, pendant une série de la quête
   setInterval(() => {
@@ -1133,14 +1316,6 @@
   }, 250);
 
   function shareTime(info) {
-  // Réglage « Rythme » : doux / rapide (voir questLevel) ; les niveaux à venir s'en ressentent aussitôt
-  function applyPace() {
-    document.querySelectorAll('.pace-mode button').forEach((b) => b.classList.toggle('on', b.dataset.pace === (fastPace() ? 'rapide' : 'doux')));
-  }
-  document.querySelectorAll('.pace-mode button').forEach((b) => b.addEventListener('click', () => {
-    C.store.settings.pace = b.dataset.pace; C.save(); C.sfx.tap(); applyPace(); renderPlay();
-  }));
-  applyPace();
     const txt = 'Odysseus · niveau ' + (info.L + 1) + ' bouclé en ' + C.formatTime(info.time) + '. Tu fais mieux ?';
     const url = 'https://vroux18.github.io/Odysseum/';
     if (navigator.share) {
@@ -1150,9 +1325,80 @@
     }
   }
 
+  // ------------------------- « Trop facile ? » -------------------------
+  // Trois niveaux de la quête d'affilée (au front du voyage) bouclés à 3 étoiles, sans indice, en moins de 60 %
+  // du temps des 3 étoiles : le bilan propose d'allumer les variantes ou de sauter quelques niveaux.
+  // J.easyStreak = série en cours ; J.easyNext = pas de nouvelle proposition avant ce niveau (refus : +10 niveaux).
+  // Jamais sur la première île.
+  const EASY_RUN = 3, EASY_FRAC = 0.6, EASY_PAUSE = 10, SKIP_MAX = 5;
+  function noteEase(info, run) {
+    if (info.L !== J.done) return; // niveau rejoué : ne compte pas
+    const fast = !info.assisted && info.stars >= 3 && !run.hints && run.target > 0 && run.time <= EASY_FRAC * starMarks(run.target)[0];
+    J.easyStreak = fast ? (J.easyStreak || 0) + 1 : 0;
+  }
+  // sauter : jusqu'à SKIP_MAX niveaux, sans dépasser la fin de l'île ; on s'arrête sur l'épreuve, jamais au-delà
+  const skipTarget = () => Math.min(J.done + SKIP_MAX, Math.floor(J.done / PER) * PER + PER - 1);
+  function easyOffer(info) {
+    if (info.summary || info.free || info.L == null || info.L < PER || info.assisted) return null;
+    if (info.L !== J.done - 1 || (J.easyStreak || 0) < EASY_RUN || J.done < (J.easyNext || 0)) return null;
+    const vars = !variantsOn(), skip = skipTarget() > J.done;
+    return vars || skip ? { vars, skip } : null;
+  }
+  function renderEasyCard(offer) {
+    let card = $('#ld-easy');
+    if (!card) {
+      card = document.createElement('div');
+      card.id = 'ld-easy';
+      card.className = 'ld-easy';
+      $('#level-done .ld-actions').before(card);
+    }
+    card.hidden = !offer;
+    if (!offer) return;
+    J.easyStreak = 0; // la proposition est faite : une nouvelle série devra se construire
+    J.easyNext = J.done + EASY_PAUSE; // (une réponse ou un refus : on ne redemande pas tout de suite)
+    C.save();
+    card.innerHTML = '<button class="le-close" aria-label="Non merci">' + UI('x') + '</button>' +
+      '<p class="le-title"><span class="le-face" aria-hidden="true">' +
+      '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M8 10.2h.01M16 10.2h.01"/><path d="M7.8 14.2q4.2 3.6 8.4 0"/></svg></span>Trop facile ?</p>' +
+      '<div class="le-choices">' +
+      (offer.vars ? '<button class="le-btn le-vars"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h10l-3-3M19 17H9l3 3"/></svg>Variantes</button>' : '') +
+      (offer.skip ? '<button class="le-btn le-skip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6l6 6-6 6M12 6l6 6-6 6"/></svg>Sauter</button>' : '') +
+      '</div>';
+    const done = () => { card.classList.add('le-gone'); setTimeout(() => { card.hidden = true; card.classList.remove('le-gone'); }, 260); };
+    card.querySelector('.le-close').addEventListener('click', () => { C.sfx.tap(); done(); });
+    const bv = card.querySelector('.le-vars');
+    if (bv) bv.addEventListener('click', () => {
+      setVariants(true);
+      C.sfx.win();
+      showXp('variantes allumées', ACCENT.tuyaux || '#5f9fd8');
+      done();
+    });
+    const bs = card.querySelector('.le-skip');
+    if (bs) bs.addEventListener('click', () => { C.sfx.tap(); skipAhead(); });
+  }
+  // saut : les niveaux passés comptent comme faits (0 étoile), puis Ulysse marche jusqu'à la nouvelle pierre
+  function skipAhead() {
+    const to = skipTarget();
+    if (to <= J.done) return;
+    J.done = to;
+    selected = to;
+    J.selected = to;
+    C.save();
+    pendingProgress = true;
+    $('#level-done').hidden = true;
+    goHome();
+  }
+  function setVariants(on) {
+    C.store.settings.variants = !!on;
+    C.save();
+    const o = $('#opt-variants'); if (o) o.checked = !!on;
+  }
+
   function showLevelDone(info) {
+    const offer = easyOffer(info);
     // récapitulatif passé (réglage) : les étoiles éclosent un instant, puis retour direct sur la carte
-    if (C.store.settings.skipDone && !info.summary) {
+    // (sauf s'il y a une proposition « Trop facile ? » à faire)
+    if (C.store.settings.skipDone && !info.summary && !offer) {
       if (info.stars && !info.assisted) popStars(info.stars);
       setTimeout(goHome, 1100);
       return;
@@ -1218,6 +1464,7 @@
         '<div class="skill-bar"><i style="width:' + startW + '%" data-to="' + Math.round(now.frac * 100) + '"></i></div></div>' +
         '<b class="ld-gain" data-gain="' + gain + '">+0</b></div>';
     }).join('');
+    renderEasyCard(offer); // « Trop facile ? » : variantes ou saut de quelques niveaux
     const ov = $('#level-done');
     ov.hidden = false;
     C.sfx.place();
@@ -1258,6 +1505,8 @@
     let pages = C.tutorial ? C.tutorial(g.id, variant, knowsBase) : [];
     if (!pages.length) pages = rulesOf(g, variant).map((r) => ({ art: '', text: r }));
     tuto = { pages, i: 0 };
+    // variante d'un jeu déjà connu : la page porte l'étiquette « Nouvelle règle » (voir voyage.css)
+    $('#rules').classList.toggle('new-rule', variant !== 'classic' && !!knowsBase);
     $('#rules').style.setProperty('--game', ACCENT[g.id]);
     $('#rules-icon').innerHTML = icon(g.id);
     renderTuto();
@@ -1470,8 +1719,11 @@
   try { libMode = localStorage.getItem('odysseum.libmode') || 'classic'; } catch (e) { /* ignore */ }
 
   function renderLibrary() {
-    document.querySelector('.lib-mode').hidden = !VARIANTS_ON;
-    document.querySelectorAll('.lib-mode button').forEach((b) => b.classList.toggle('on', b.dataset.mode === libMode));
+    // variantes allumées : la bascule classique / variante apparaît en tête de liste
+    const mode = variantsOn() ? libMode : 'classic';
+    document.querySelector('.lib-mode').hidden = !variantsOn();
+    $('#library').classList.toggle('lib-variant', mode === 'variant');
+    document.querySelectorAll('.lib-mode button').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
     const gl = $('#game-list');
     gl.innerHTML = '';
     // en tête : le défi du jour, petite rangée mise en avant
@@ -1507,17 +1759,25 @@
         group.className = 'lib-group';
         gl.appendChild(group);
       }
-      const v = VARIANTS_ON && libMode === 'variant' && g.variants && g.variants[1] ? g.variants[1].id : 'classic';
+      // onglet « variante » : les jeux qui en ont une se jouent en libre dans leur variante ; les autres pâlissent
+      const vr = mode === 'variant' ? (g.variants && g.variants[1]) || null : null;
       const b = document.createElement('button');
       const open = isUnlocked(g.id);
-      b.className = 'tile' + (open ? '' : ' locked unlock-locked');
+      b.className = 'tile' + (open ? '' : ' locked unlock-locked') + (mode === 'variant' ? (vr ? ' tile-variant' : ' tile-novariant') : '');
       b.style.setProperty('--game', ACCENT[g.id]);
       // pas encore débloqué : grisé, cadenas et l'île qui l'ouvre (« île 5 »)
       b.innerHTML = '<span class="tile-icon">' + icon(g.id) + (open ? '' : '<i class="ul-lock">' + LOCK + '</i>') + '</span>' +
         '<span class="tile-name">' + g.name + '</span>' +
-        (open ? '<span class="tile-lvl">niv. ' + gameLvl(g.id) + '</span>' : '<span class="tile-lvl ul-isle">île ' + unlockAt(g.id) + '</span>');
+        (!open ? '<span class="tile-lvl ul-isle">île ' + unlockAt(g.id) + '</span>'
+          : vr ? '<span class="tile-lvl tile-vname">' + vr.name + '</span>'
+          : '<span class="tile-lvl">niv. ' + gameLvl(g.id) + '</span>');
       if (!open) b.setAttribute('aria-label', g.name + ' · se débloque après l\'île ' + unlockAt(g.id));
-      b.addEventListener('click', () => (open ? openLevels(g.id) : lockedNudge(g.id, b)));
+      else if (vr) b.setAttribute('aria-label', g.name + ' · variante ' + vr.name);
+      b.addEventListener('click', () => {
+        if (!open) { lockedNudge(g.id, b); return; }
+        if (vr) { $('#library').hidden = true; startFree(g, vr.id); return; }
+        openLevels(g.id);
+      });
       group.appendChild(b);
     });
     renderMegaLib(gl);
@@ -1593,7 +1853,7 @@
     const list = sk.games.filter(isUnlocked);
     const pick = list.length ? list : unlockedIds();
     const g = game(pick[focusTurn % pick.length]);
-    const v = VARIANTS_ON && g.variants && g.variants[1] && Math.random() < 0.4 ? g.variants[1].id : 'classic';
+    const v = variantsOn() && g.variants && g.variants[1] && Math.random() < 0.4 ? g.variants[1].id : 'classic';
     const d = C.gameData(dataKey(g, v));
     $('#brain').hidden = true;
     playStep({ L: -1, free: true, focus: sk.id, seed: 'focus:' + g.id + ':' + v + ':' + d.level, steps: [{ id: g.id, variant: v, level: d.level }] }, 0);
@@ -2390,13 +2650,18 @@
   // crédits : depuis les réglages
   $('#open-credits').addEventListener('click', () => { $('#credits').hidden = false; C.sfx.tap(); });
   $('#credits').addEventListener('click', (e) => { if (e.target.id === 'credits') $('#credits').hidden = true; });
-  $('#cam-mode').addEventListener('click', () => {
-    if (!worldReady) return;
-    const mode = C.world.setCameraMode(C.world.cameraMode() === 'free' ? 'follow' : 'free');
+  // bouton « Vue » : allumé = caméra libre ; il suit aussi les retours automatiques en suivi
+  function syncCamBtn(mode) {
     const b = $('#cam-mode');
+    if (!b) return;
+    if (mode == null) mode = worldReady && C.world.cameraMode ? C.world.cameraMode() : 'follow';
     b.classList.toggle('on', mode === 'free');
     b.setAttribute('aria-pressed', String(mode === 'free'));
     b.setAttribute('aria-label', mode === 'free' ? 'Recentrer sur Ulysse' : 'Caméra libre');
+  }
+  $('#cam-mode').addEventListener('click', () => {
+    if (!worldReady) return;
+    syncCamBtn(C.world.setCameraMode(C.world.cameraMode() === 'free' ? 'follow' : 'free'));
     C.sfx.tap();
   });
   $('#open-library').addEventListener('click', () => { renderLibrary(); $('#library').hidden = false; });
@@ -2528,6 +2793,8 @@
   });
   // réglage « Bilan de fin de niveau » : affiché ou passé (on garde juste les étoiles un instant)
   { const o = $('#opt-ldshow'); if (o) { o.checked = !C.store.settings.skipDone; o.addEventListener('change', (e) => { C.store.settings.skipDone = !e.target.checked; C.save(); }); } }
+  // réglage « Variantes » : la quête mêle les variantes des jeux connus ; la liste des mini-jeux montre la bascule
+  { const o = $('#opt-variants'); if (o) { o.checked = variantsOn(); o.addEventListener('change', (e) => { setVariants(e.target.checked); C.sfx.tap(); }); } }
 
   $('#open-settings').addEventListener('click', () => { $('#settings').hidden = false; });
 
@@ -3079,6 +3346,9 @@
     ov.innerHTML = '<form class="ob-card" novalidate><span class="ob-crest">' + OB_SHIP + '</span>' +
       '<h2 id="ob-hello" class="ob-hello">Bienvenue, voyageur !</h2>' +
       '<label class="ob-field"><span>Ton nom</span><input id="ob-name" maxlength="16" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="go"></label>' +
+      // les casse-têtes, tu connais ? → rythme de la quête (modifiable ensuite dans les réglages)
+      '<div class="ob-field ob-pace"><span>Les casse-têtes, tu connais ?</span><div class="switch-mode ob-pace-sw" role="radiogroup">' +
+      '<button type="button" data-pace="doux" class="on">je découvre</button><button type="button" data-pace="rapide">j\'ai l\'habitude</button></div></div>' +
       '<button class="ob-go" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 12.5l4.2 4.2 8.8-9.4"/></svg>Créer mon héros</button></form>';
     document.body.appendChild(ov);
     const inp = ov.querySelector('#ob-name'), go = ov.querySelector('.ob-go');
@@ -3086,10 +3356,16 @@
     inp.value = playerName();
     const sync = () => { go.disabled = !clean(); };
     inp.addEventListener('input', sync); sync();
+    let pace = C.store.settings.pace === 'rapide' ? 'rapide' : 'doux';
+    const paceBtns = ov.querySelectorAll('.ob-pace-sw button');
+    const showPace = () => paceBtns.forEach((b) => b.classList.toggle('on', b.dataset.pace === pace));
+    paceBtns.forEach((b) => b.addEventListener('click', () => { pace = b.dataset.pace; C.sfx.tap(); showPace(); }));
+    showPace();
     ov.querySelector('form').addEventListener('submit', (e) => {
       e.preventDefault();
       const name = clean();
       if (!name) { inp.focus(); return; }
+      C.store.settings.pace = pace; applyPace();
       if (name !== String(profileOf().name || '')) { profileOf().name = name; C.save(); }
       inp.blur();
       C.sfx.tap();
@@ -3099,9 +3375,6 @@
   }
   // 2. l'atelier du personnage, en mode accueil : titre « Ton héros », dé mis en avant, « C'est parti ! »
   function obCreator() {
-      // les casse-têtes, tu connais ? → rythme de la quête (modifiable ensuite dans les réglages)
-      '<div class="ob-field ob-pace"><span>Les casse-têtes, tu connais ?</span><div class="switch-mode ob-pace-sw" role="radiogroup">' +
-      '<button type="button" data-pace="doux" class="on">je découvre</button><button type="button" data-pace="rapide">j\'ai l\'habitude</button></div></div>' +
     const wd = $('#wardrobe'), done = $('#wd-done'), gap = wd.querySelector('.cr-top .cr-gap');
     OB.creator = true;
     $('#open-wardrobe').click(); // même ouverture que le bouton Tenue (caméra, tenue, rendu)
@@ -3109,16 +3382,10 @@
     if (gap) gap.innerHTML = '<span class="ob-cr-title">Ton héros</span>';
     const t = done.lastChild;
     if (t && t.nodeType === 3) { OB.doneTxt = t.textContent; t.textContent = 'C\'est parti !'; }
-    let pace = C.store.settings.pace === 'rapide' ? 'rapide' : 'doux';
-    const paceBtns = ov.querySelectorAll('.ob-pace-sw button');
-    const showPace = () => paceBtns.forEach((b) => b.classList.toggle('on', b.dataset.pace === pace));
-    paceBtns.forEach((b) => b.addEventListener('click', () => { pace = b.dataset.pace; C.sfx.tap(); showPace(); }));
-    showPace();
   }
   // fin de l'atelier (bouton, retour, Échap…) : on remet l'atelier normal et la visite commence
   function obCreatorDone() {
     const wd = $('#wardrobe'), done = $('#wd-done'), gap = wd.querySelector('.cr-top .cr-gap');
-      C.store.settings.pace = pace; applyPace();
     OB.creator = false;
     wd.classList.remove('ob-mode', 'ob-rolled');
     if (gap) gap.innerHTML = '';
@@ -3332,6 +3599,7 @@
     startMega, megaParams, megaN, megaTrack: MEGA_TRACK, megaRec, zoom: Z, zoomTo,
     unlock: { table: UNLOCK, isUnlocked, unlockedIds, poolOf, showUnlockCard, scheduleUnlockCard, finishLevel, goHome } };
   $('#open-daily').addEventListener('click', openDaily);
+  window.Odysseum.variants = { on: variantsOn, set: setVariants, easyOffer, skipTarget, from: VARIANT_FROM }; // (tests)
 
   // appli installée depuis Chrome : toujours à jour (voir sw.js) ; inutile dans l'APK
   if ('serviceWorker' in navigator && location.protocol === 'https:' && !window.Capacitor) {

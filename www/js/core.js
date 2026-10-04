@@ -86,35 +86,62 @@
   let audioCtx = null, sfxBus = null, musicBus = null, noiseBuf = null, brownBuf = null;
   let duckGain = null, toneFilter = null, master = null, verbIn = null;
 
-  // réponse impulsionnelle de réverbération : bruit stéréo qui s'éteint (≈ 2,6 s), un peu sombre
-  function makeImpulse(ctx, sec) {
-    const n = Math.floor(ctx.sampleRate * sec), buf = ctx.createBuffer(2, n, ctx.sampleRate);
+  // réponse impulsionnelle de réverbération : bruit stéréo qui s'éteint (≈ 2,6 s), un peu sombre.
+  // On ne garde que les ~1,9 premières secondes (au-delà, la queue est sous −30 dB) : la
+  // convolution coûte en proportion de sa longueur, et sur téléphone, à côté du rendu 3D,
+  // un fil audio trop chargé « décroche » (grésillements).
+  function makeImpulse(ctx, sec, keep) {
+    const n = Math.floor(ctx.sampleRate * sec), m = Math.min(n, Math.floor(ctx.sampleRate * (keep || sec)));
+    const fade = Math.floor(ctx.sampleRate * 0.15), buf = ctx.createBuffer(2, m, ctx.sampleRate);
     for (let ch = 0; ch < 2; ch++) {
       const d = buf.getChannelData(ch);
       let lp = 0;
-      for (let i = 0; i < n; i++) {
+      for (let i = 0; i < m; i++) {
         const k = i / n;
         lp += (Math.random() * 2 - 1 - lp) * (0.55 - 0.4 * k); // plus la queue avance, plus elle s'assombrit
-        d[i] = lp * Math.pow(1 - k, 2.6) * (i < 200 ? i / 200 : 1);
+        d[i] = lp * Math.pow(1 - k, 2.6) * (i < 200 ? i / 200 : 1) * (i > m - fade ? (m - i) / fade : 1);
       }
     }
     return buf;
   }
 
+  // Hygiène des voix : chaque note libère ses nœuds quand sa source s'arrête (sinon ils
+  // s'accumulent dans le graphe), et on compte les voix en cours pour plafonner la musique.
+  let voices = 0;
+  const MAX_VOICES = 40; // au-delà, les notes d'arpège / de mélodie sont sautées (les effets passent toujours)
+  function release(src, nodes, counted) {
+    if (counted) voices++;
+    src.onended = () => {
+      if (counted) voices = Math.max(0, voices - 1);
+      try { src.disconnect(); } catch (e) { /* ignore */ }
+      (nodes || []).forEach((n) => { try { n.disconnect(); } catch (e) { /* ignore */ } });
+    };
+  }
+
   function ensureAudio() {
     if (audioCtx) return audioCtx;
     try {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const AC = window.AudioContext || window.webkitAudioContext;
+      // un seul contexte pour tout le jeu (effets, musique, Sirènes), à la fréquence native de
+      // l'appareil (pas de rééchantillonnage) ; tampon « playback » : un peu plus de latence,
+      // mais le fil audio ne manque plus d'échantillons quand la 3D occupe le téléphone
+      try { audioCtx = new AC({ latencyHint: 'playback' }); } catch (e) { audioCtx = new AC(); }
       const ctx = audioCtx;
       master = ctx.createGain();
       master.gain.value = 0.9;
       const comp = ctx.createDynamicsCompressor(); // filet de sécurité : jamais de pic désagréable
       comp.threshold.value = -16; comp.knee.value = 12; comp.ratio.value = 3; comp.attack.value = 0.01; comp.release.value = 0.25;
-      master.connect(comp).connect(ctx.destination);
+      // limiteur final (le compresseur ajoute un gain de compensation) : rien ne dépasse −1 dBFS,
+      // donc jamais d'écrêtage numérique
+      const limit = ctx.createDynamicsCompressor();
+      limit.threshold.value = -3; limit.knee.value = 0; limit.ratio.value = 20; limit.attack.value = 0.002; limit.release.value = 0.12;
+      const trim = ctx.createGain();
+      trim.gain.value = 0.82; // (annule le gain de compensation du limiteur, ≈ +1,7 dB : même volume qu'avant)
+      master.connect(comp).connect(limit).connect(trim).connect(ctx.destination);
       // réverbération partagée
       verbIn = ctx.createGain();
       const verb = ctx.createConvolver();
-      verb.buffer = makeImpulse(ctx, 2.6);
+      verb.buffer = makeImpulse(ctx, 2.6, 1.9);
       const verbOut = ctx.createGain();
       verbOut.gain.value = 0.6;
       verbIn.connect(verb).connect(verbOut).connect(master);
@@ -171,12 +198,18 @@
     p.pan.value = Math.max(-1, Math.min(1, pan));
     return p;
   }
+  // (renvoie le panoramique créé, pour le libérer avec la note)
   function out(node, bus, pan) {
     const p = panNode(pan);
     if (p) node.connect(p).connect(bus); else node.connect(bus);
+    return p;
   }
+  // jamais d'événement d'automation dans le passé : une note programmée en retard (fil
+  // principal occupé par la 3D) démarrerait au milieu de son enveloppe → clic
+  const at = (t) => Math.max(t, audioCtx.currentTime + 0.005);
 
   function tone(bus, freq, start, dur, type, vol) {
+    start = at(start);
     const o = audioCtx.createOscillator();
     const g = audioCtx.createGain();
     o.type = type;
@@ -187,13 +220,16 @@
     o.connect(g).connect(bus);
     o.start(start);
     o.stop(start + dur + 0.02);
+    release(o, [g]);
     return o;
   }
 
   // éclat de bruit filtré (clic de bois, souffle, écume)
   function noise(bus, start, dur, vol, type, freq, q, pan) {
+    start = at(start);
     const s = audioCtx.createBufferSource();
     s.buffer = noiseBuf;
+    s.loop = true; // (départ au hasard dans le tampon : sans boucle, il pouvait s'arrêter net en plein souffle)
     const f = audioCtx.createBiquadFilter();
     f.type = type || 'highpass';
     f.frequency.value = freq || 1000;
@@ -203,14 +239,18 @@
     g.gain.linearRampToValueAtTime(vol, start + Math.min(0.01, dur * 0.2));
     g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
     s.connect(f).connect(g);
-    out(g, bus, pan);
+    const p = out(g, bus, pan);
     s.start(start, Math.random() * 1.5);
     s.stop(start + dur + 0.02);
+    release(s, [f, g, p]);
     return f;
   }
 
   // Corde pincée (lyre / harpe) : triangle + harmoniques sinus, filtre qui se referme vite.
-  function pluck(bus, freq, start, vol, dur, bright, pan) {
+  // music = true : note de la musique, sautée si trop de voix sonnent déjà
+  function pluck(bus, freq, start, vol, dur, bright, pan, music) {
+    if (music && voices >= MAX_VOICES) return;
+    start = at(start);
     dur = dur || 1.6; bright = bright == null ? 1 : bright;
     const f = audioCtx.createBiquadFilter();
     f.type = 'lowpass';
@@ -223,23 +263,34 @@
     g.gain.exponentialRampToValueAtTime(vol * 0.35, start + 0.12);
     g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
     f.connect(g);
-    out(g, bus, pan);
+    const p = out(g, bus, pan);
     [[1, 'triangle', 1], [2, 'sine', 0.35], [3.01, 'sine', 0.12]].forEach(([mult, type, v]) => {
       const o = audioCtx.createOscillator();
       o.type = type;
       o.frequency.setValueAtTime(freq * mult, start);
-      let node = o;
-      if (v !== 1) { const h = audioCtx.createGain(); h.gain.value = v; o.connect(h); node = h; }
-      node.connect(f);
+      const end = start + (mult > 1 ? dur * 0.5 : dur) + 0.05;
+      if (v !== 1) {
+        // harmonique coupée à mi-course : fondu de 30 ms avant l'arrêt (sinon petit clic)
+        const h = audioCtx.createGain();
+        h.gain.setValueAtTime(v, start);
+        h.gain.setValueAtTime(v, end - 0.04);
+        h.gain.linearRampToValueAtTime(0, end - 0.01);
+        o.connect(h).connect(f);
+        release(o, [h]);
+      } else {
+        o.connect(f);
+        release(o, [f, g, p], true); // (la fondamentale sonne le plus longtemps : elle libère la chaîne)
+      }
       o.start(start);
-      o.stop(start + (mult > 1 ? dur * 0.5 : dur) + 0.05);
+      o.stop(end);
     });
   }
 
   // Cloche douce : attaque courte, longue extinction, harmonique discrète.
   function bell(bus, freq, start, dur, vol, pan) {
+    start = at(start);
     const g0 = audioCtx.createGain();
-    out(g0, bus, pan);
+    const p = out(g0, bus, pan);
     [[1, 1], [2.01, 0.25], [3.0, 0.08], [4.17, 0.03]].forEach(([mult, v]) => {
       const o = audioCtx.createOscillator();
       const g = audioCtx.createGain();
@@ -251,6 +302,7 @@
       o.connect(g).connect(g0);
       o.start(start);
       o.stop(start + dur / mult + 0.05);
+      release(o, mult === 1 ? [g, g0, p] : [g], mult === 1);
     });
   }
 
@@ -298,6 +350,7 @@
   }
 
   function pad(notes, start, len, light) {
+    start = at(start);
     const f = audioCtx.createBiquadFilter();
     f.type = 'lowpass';
     f.Q.value = 0.5;
@@ -312,20 +365,29 @@
     g.gain.setValueAtTime(v, start + len * 0.8);
     g.gain.linearRampToValueAtTime(0.0001, start + len * 1.25);
     f.connect(g).connect(musicBus);
+    // deux groupes (désaccordés −7 / +7 cents), chacun sur son panoramique : même image stéréo
+    // qu'un panoramique par oscillateur, avec 2 nœuds au lieu de 8 (moins de calcul audio)
+    const sides = [-0.35, 0.35].map((pan) => {
+      const pg = audioCtx.createGain();
+      pg.gain.value = 0.5;
+      const pn = panNode(pan);
+      if (pn) pg.connect(pn).connect(f); else pg.connect(f);
+      return [pg, pn];
+    });
+    const oscs = [];
     notes.forEach((m) => {
       [-7, 7].forEach((det, j) => {
         const o = audioCtx.createOscillator();
         o.type = 'sawtooth';
         o.frequency.setValueAtTime(midi(m), start);
         o.detune.value = det;
-        const pg = audioCtx.createGain();
-        pg.gain.value = 0.5;
-        const pn = panNode(j ? 0.35 : -0.35);
-        if (pn) o.connect(pg).connect(pn).connect(f); else o.connect(pg).connect(f);
+        o.connect(sides[j][0]);
         o.start(start);
         o.stop(start + len * 1.3);
+        oscs.push(o);
       });
     });
+    oscs.forEach((o, i) => release(o, i ? [] : [sides[0][0], sides[0][1], sides[1][0], sides[1][1], f, g]));
     // basse ronde : la fondamentale, une octave plus bas
     const root = notes[0] - 12;
     const o = audioCtx.createOscillator();
@@ -335,9 +397,12 @@
     bg.gain.setValueAtTime(0.0001, start);
     bg.gain.linearRampToValueAtTime(0.05, start + 0.6);
     bg.gain.setTargetAtTime(0.0001, start + len * 0.7, len * 0.25);
+    // (la décroissance exponentielle n'atteint jamais zéro : fondu court avant l'arrêt, sans clic)
+    bg.gain.setTargetAtTime(0, start + len * 1.2, 0.03);
     o.connect(bg).connect(musicBus);
     o.start(start);
     o.stop(start + len * 1.3);
+    release(o, [bg]);
   }
 
   // une mesure d'arpège de lyre sur l'accord courant
@@ -369,7 +434,7 @@
     steps.forEach(([i, m]) => {
       const t = start + i * BEAT / 2 + rnd(-0.008, 0.012) + (i % 2 ? BEAT * 0.04 : 0); // léger balancement
       const v = (i % 4 === 0 ? 0.038 : 0.028) * rnd(0.8, 1.1);
-      pluck(musicBus, midi(m), t, v, 2.2 + light * 0.6, 0.45 + 0.5 * light, rnd(-0.45, 0.45));
+      pluck(musicBus, midi(m), t, v, 2.2 + light * 0.6, 0.45 + 0.5 * light, rnd(-0.45, 0.45), true);
     });
   }
 
@@ -378,7 +443,7 @@
     const rhythm = pickOf([[0, 2, 3], [0, 1.5, 3], [0, 3], [1, 2, 3.5], [0, 2]]);
     rhythm.forEach((b) => {
       music.mel = Math.max(2, Math.min(PENTA.length - 1, music.mel + pickOf([-2, -1, -1, 1, 1, 2, 0])));
-      pluck(musicBus, midi(PENTA[music.mel] + (light > 0.4 ? 12 : 0)), start + b * BEAT, 0.03, 3.2, 0.3 + 0.3 * light, rnd(-0.2, 0.2));
+      pluck(musicBus, midi(PENTA[music.mel] + (light > 0.4 ? 12 : 0)), start + b * BEAT, 0.03, 3.2, 0.3 + 0.3 * light, rnd(-0.2, 0.2), true);
     });
   }
 
@@ -400,6 +465,7 @@
     s.connect(f).connect(g).connect(musicBus);
     s.connect(foamF).connect(foam).connect(musicBus);
     s.start();
+    release(s, [f, g, foamF, foam]);
     music.sea = { s, f, g, foam };
     music.nextSwell = audioCtx.currentTime + 0.5;
   }
@@ -441,8 +507,9 @@
       const f = audioCtx.createBiquadFilter();
       f.type = 'bandpass'; f.frequency.value = base * 1.1; f.Q.value = 1.2;
       o.connect(f).connect(g);
-      out(g, musicBus, pan);
+      const p = out(g, musicBus, pan);
       o.start(s); o.stop(s + 0.3);
+      release(o, [f, g, p]);
     }
   }
   // souffle de vent (surtout la nuit) : bruit en bande étroite qui se déplace
@@ -450,6 +517,9 @@
     const dur = rnd(5, 8);
     const s = audioCtx.createBufferSource();
     s.buffer = brownBuf;
+    // (souffle de 5 à 8 s, départ jusqu'à 2 s dans un tampon de 6 s : sans boucle, le tampon
+    // s'épuisait en plein souffle → coupure sèche, un « clac » audible)
+    s.loop = true;
     const f = audioCtx.createBiquadFilter();
     f.type = 'bandpass'; f.Q.value = 2.5;
     f.frequency.setValueAtTime(rnd(300, 450), t);
@@ -460,9 +530,10 @@
     g.gain.linearRampToValueAtTime(0.05, t + dur * 0.45);
     g.gain.linearRampToValueAtTime(0.0001, t + dur);
     s.connect(f).connect(g);
-    out(g, musicBus, rnd(-0.6, 0.6));
+    const p = out(g, musicBus, rnd(-0.6, 0.6));
     s.start(t, Math.random() * 2);
     s.stop(t + dur + 0.1);
+    release(s, [f, g, p]);
   }
 
   function schedule() {
@@ -538,9 +609,12 @@
     setMix(v) { store.settings.mix = v; applyMix(); save(); },
     // atténuation forcée de la musique (0..1) ; null = automatique (casse-tête → 0,5)
     duck(v) { music.duck = v == null ? null : Math.max(0, Math.min(1, v)); if (audioCtx && audioCtx.state === 'running') schedule(); },
+    // contexte partagé et entrée du bus maître (compresseur + limiteur) pour les jeux qui
+    // synthétisent leurs propres notes (Sirènes) : jamais de second AudioContext
+    graph() { return ensureAudio() ? { ctx: audioCtx, master } : null; },
     // état (outil de test)
     state() {
-      return { ctx: audioCtx ? audioCtx.state : 'none', music: !!music.timer, sea: !!music.sea, bar: music.bar,
+      return { ctx: audioCtx ? audioCtx.state : 'none', voices, music: !!music.timer, sea: !!music.sea, bar: music.bar,
         prog: music.prog, light: +music.light.toFixed(2), duck: duckGain ? +duckGain.gain.value.toFixed(2) : null,
         tone: toneFilter ? Math.round(toneFilter.frequency.value) : null };
     }
@@ -669,6 +743,12 @@
           oscs.push(o);
         });
         oscs.forEach((o) => { o.start(t); o.stop(t + dur + 0.4); });
+        // si personne ne coupe la charge, elle s'éteint d'elle-même en fondu (pas d'arrêt sec à plein volume)
+        g.gain.setValueAtTime(1, t + dur + 0.25);
+        g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.38);
+        release(src, [f, ng, shimmer, lfoG, g]);
+        oscs.slice(2).forEach((o) => release(o));
+        release(lfo);
         // arpège de lyre qui accélère en montant
         let s = t + 0.15, i = 0, gap = 0.26;
         while (s < t + dur - 0.04 && i < 24) {

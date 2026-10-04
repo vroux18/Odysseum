@@ -609,9 +609,11 @@
         // pourquoi : la passe, ou le bateau à qui l'on fait de la place (coup suivant), selon la phrase
         const { text, why } = explain(path);
         const i = diff(path[0], path[1]);
-        commit(i, path[1][i]);
+        C.act(() => commit(i, path[1][i]));
         return { text, where: [els[i]], why };
       },
+      // 💬 la méthode : partir de la passe et remonter la chaîne des barques qui gênent
+      method: 'Pars de la passe : quelles barques barrent la route du navire ? Pour chacune, cherche où elle peut aller, et qui la gêne à son tour.',
       // outil de test : on joue d'un coup toute la solution la plus courte
       solve() {
         if (won) return;

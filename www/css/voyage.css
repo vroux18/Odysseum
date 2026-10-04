@@ -386,3 +386,44 @@ html.chill #pop-stars, html.chill #play-timer, html.chill #ld-time, html.chill #
 :root.a11y-cb .mos-cell[data-g]:not([data-g=""])::after, :root.a11y-cb .mos-sw::after { content: attr(data-g); display: grid; place-items: center;
   position: absolute; inset: 0; pointer-events: none; font: 700 clamp(12px, 4vw, 20px)/1 sans-serif; color: rgba(255, 255, 255, .95); text-shadow: 0 1px 2px rgba(0, 0, 0, .45); }
 :root.a11y-cb .mos-cell, :root.a11y-cb .mos-sw { position: relative; }
+
+/* ---------- « Trop facile ? » et variantes des mini-jeux (app.js : easyOffer, renderEasyCard, variantsOn) ---------- */
+/* petite carte du bilan : visage rieur, deux gros boutons (Variantes / Sauter), une croix discrète */
+.ld-easy { position: relative; width: 100%; box-sizing: border-box; margin: 2px 0 4px; padding: 12px 14px 14px; border-radius: var(--k-r-md, 20px);
+  background: var(--k-bubble, #fff); box-shadow: 0 4px 0 var(--k-edge, #d9cfe8), var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14));
+  animation: le-in .5s var(--k-ease, cubic-bezier(.34, 1.56, .64, 1)) 1.6s both; }
+.ld-easy[hidden] { display: none; }
+.ld-easy.le-gone { animation: le-out .26s ease-in forwards; }
+@keyframes le-in { from { opacity: 0; transform: translateY(10px) scale(.92); } }
+@keyframes le-out { to { opacity: 0; transform: scale(.9); } }
+.le-title { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0 26px 10px; font: 700 18px/1.1 var(--k-font, 'Fredoka', sans-serif); color: var(--k-ink, #3a3550); }
+.le-face svg { display: block; width: 26px; height: 26px; fill: var(--k-sun, #ffc93d); stroke: var(--k-ink, #3a3550); stroke-width: 1.8; stroke-linecap: round; }
+.le-face { animation: le-wob 2.4s ease-in-out 2.2s infinite; }
+@keyframes le-wob { 0%, 70%, 100% { transform: rotate(0); } 78% { transform: rotate(-12deg); } 88% { transform: rotate(10deg); } }
+.le-choices { display: flex; gap: 10px; }
+.le-btn { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 46px; padding: 8px 10px; border: 0; cursor: pointer;
+  border-radius: var(--k-r-pill, 999px); font: 700 16px/1 var(--k-font, 'Fredoka', sans-serif); color: #fff; text-shadow: 0 1px 0 rgba(0, 0, 0, .15);
+  transition: transform .25s var(--k-ease, ease); }
+.le-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.le-btn:active { transform: translateY(3px); }
+.le-vars { background: var(--k-coral, #ff7eb0); box-shadow: 0 4px 0 #d9568c, var(--k-shine, inset 0 3px 0 rgba(255, 255, 255, .45)); }
+.le-skip { background: var(--k-sky, #5ec3f2); box-shadow: 0 4px 0 #2f98cc, var(--k-shine, inset 0 3px 0 rgba(255, 255, 255, .45)); }
+.le-vars:active { box-shadow: 0 1px 0 #d9568c; }
+.le-skip:active { box-shadow: 0 1px 0 #2f98cc; }
+.le-close { position: absolute; top: 6px; right: 6px; width: 32px; height: 32px; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  background: transparent; color: var(--k-ink-soft, #8a83a3); }
+.le-close svg { width: 16px; height: 16px; }
+.le-close:active { background: var(--k-well, #f1ecf8); }
+
+/* tutoriel d'une variante d'un jeu connu : étiquette « Nouvelle règle » au-dessus du dessin */
+#rules.new-rule .tuto-sheet { position: relative; }
+#rules.new-rule .tuto-sheet::before { content: 'Nouvelle règle'; align-self: center; margin-bottom: -4px; padding: 5px 14px; border-radius: 999px;
+  background: var(--game, var(--k-coral, #ff7eb0)); color: #fff; font: 700 14px/1 var(--k-font, 'Fredoka', sans-serif); letter-spacing: .02em;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .15); box-shadow: 0 3px 0 rgba(0, 0, 0, .12); animation: le-in .45s var(--k-ease, ease) both; }
+
+/* liste des mini-jeux, onglet « variante » : le nom de la variante en pastille, les jeux sans variante pâlissent */
+.library .lib-mode { align-self: center; margin: 0 auto 6px; }
+.library .lib-mode[hidden] { display: none; }
+.library .lib-mode button { text-transform: none; }
+.tile .tile-vname { color: #fff; background: var(--game); border-radius: 999px; padding: 2px 8px; font-weight: 700; }
+.tile.tile-novariant { opacity: .42; filter: saturate(.5); }

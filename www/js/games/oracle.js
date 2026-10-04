@@ -521,6 +521,8 @@
     render();
 
     return {
+      // 💬 la méthode : les cartes sûres d'abord, puis les ✓ qui barrent leur ligne et leur colonne
+      method: 'Commence par les cartes = et ≠ : pose tes ✓ et tes ✗. Puis un ✓ barre tout le reste de sa ligne et de sa colonne ; une ligne qui n\'a plus qu\'une case libre prend le ✓.',
       status() {
         if (won) return 'L\'Oracle a parlé';
         let n = 0;
@@ -553,8 +555,7 @@
           const [a, x, b, y] = k.split(':').map(Number);
           const m = getv(marks, a, x, b, y), t = getv(truth, a, x, b, y);
           if (m !== 0 && m !== t) {
-            setMark(a, x, b, y, 0);
-            render(); api.onChange();
+            C.act(() => { setMark(a, x, b, y, 0); render(); api.onChange(); });
             return { text: m === 1 ? 'Ce ✓ est faux : ces deux icônes ne vont pas ensemble. Je l\'efface.' : 'Cette ✗ est fausse : ces deux icônes vont ensemble. Je l\'efface.', where: [cellEls[k]], why: [] };
           }
         }
@@ -575,9 +576,11 @@
           }
           if (!d) return false;
         }
-        setMark(d.a, d.x, d.b, d.y, d.v);
-        if (d.v === 1) C.sfx.place(); else C.sfx.tap();
-        render(); api.onChange(); check();
+        C.act(() => {
+          setMark(d.a, d.x, d.b, d.y, d.v);
+          if (d.v === 1) C.sfx.place(); else C.sfx.tap();
+          render(); api.onChange(); check();
+        });
         const why = d.clues.map((i) => clueEls[i]).concat(d.cells.slice(0, 10).map((c) => cellEl(c[0], c[1], c[2], c[3]))).filter(Boolean);
         return { text: explainOracle(d), where: [cellEl(d.a, d.x, d.b, d.y)], why };
       },

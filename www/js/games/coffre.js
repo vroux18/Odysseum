@@ -223,6 +223,29 @@
     renderPad();
 
     return {
+      // 💬 la méthode, puis : lire les témoins de son dernier essai, et une case déduite
+      method: isLock
+        ? 'Vise le milieu : chaque flèche dit « plus haut » ou « plus bas », et coupe les chiffres possibles en deux.'
+        : 'Change peu de choses d\'un essai à l\'autre, puis compare les témoins : tu sauras quel symbole compte, et où.',
+      coachSteps: 2,
+      coach(k) {
+        if (over) return null;
+        if (k > 1) return null;
+        if (k === 1) {
+          if (rows.length) return true; // (2e étape : une case déduite, comme l'astuce)
+          const enter = pad.querySelector('.enter');
+          return { text: isLock ? 'Valide avec ✓ : à droite, une flèche par chiffre te dira plus haut ou plus bas.'
+            : 'Valide avec ✓ : à droite, les témoins pleins et creux te répondent. Reviens ici pour les lire !', where: enter ? [enter] : [], why: [] };
+        }
+        const els = [...board.querySelectorAll('.coffre-row')];
+        const last = rows.length ? els[rows.length - 1] : null, now = board.querySelector('.coffre-row.current');
+        if (isLock) return last
+          ? { text: 'Lis les flèches de ton dernier essai (surligné) : ▲ veut un chiffre plus haut, ▼ plus bas. Vise le milieu de ce qui reste.', why: [last], where: [] }
+          : { text: 'Pour commencer, essaie 5 partout : chaque flèche coupera les chiffres possibles en deux.', where: now ? [now] : [], why: [] };
+        return last
+          ? { text: 'Lis les témoins de ton dernier essai (surligné) : plein = bon symbole, bonne place ; creux = bon symbole, ailleurs. Garde ce qui marche, change une chose.', why: [last], where: [] }
+          : { text: 'Premier essai : prends des symboles tous différents. Les témoins te diront lesquels sont dans le code.', where: now ? [now] : [], why: [pad] };
+      },
       status() {
         return over ? 'Coffre verrouillé : essaie un nouveau code' : 'Essai ' + Math.min(rows.length + 1, puzzle.tries) + '/' + puzzle.tries;
       },
@@ -243,7 +266,7 @@
         const ord = (k) => k + (k === 1 ? 're' : 'e'), ordM = (k) => k + (k === 1 ? 'er' : 'e');
         const nameOf = (v) => (isLock ? String(v) : SYMBOLS[v].ch);
         const rowEls = () => [...board.querySelectorAll('.coffre-row')];
-        const reveal = (i) => { locked.set(i, code[i]); cur[i] = undefined; render(); api.onChange(); };
+        const reveal = (i) => C.act(() => { locked.set(i, code[i]); cur[i] = undefined; render(); api.onChange(); });
         const slotEl = (i) => { const row = board.querySelector('.coffre-row.current'); return row ? row.querySelectorAll('.slot')[i] : null; };
 
         if (isLock) {

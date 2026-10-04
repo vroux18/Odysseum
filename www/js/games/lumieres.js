@@ -149,6 +149,53 @@
           : 'Ça en rallume, mais cet appui fait partie de la solution.';
         return { text, where: [cells[best]], why: a.filter((j) => j !== best).map((j) => cells[j]) };
       },
+      // 💬 la méthode : repérer les motifs entiers, puis « chasser » les lumières de haut en bas
+      method: puzzle.variant === 'croix'
+        ? 'Repère les X allumés : touche leur centre, ils s\'éteignent d\'un coup. Un appui ne touche que les cases de sa couleur de damier.'
+        : n <= 3
+          ? 'Un appui inverse une croix : la case et ses 4 voisines. Repère les croix allumées et touche leur centre ; sinon, touche sous chaque lumière pour la chasser vers le bas.'
+          : 'Chasse les lumières de haut en bas : pour chaque lumière allumée, touche la case juste en dessous. Elle s\'éteint, et la ligne du haut reste noire.',
+      coach() {
+        if (won) return null;
+        const need = new Uint8Array(n * n);
+        puzzle.presses.forEach((i) => { need[i] ^= 1; });
+        const area = (i) => {
+          const r = Math.floor(i / n), c = i % n, out = [];
+          pattern.forEach(([dr, dc]) => { const y = r + dr, x = c + dc; if (y >= 0 && x >= 0 && y < n && x < n) out.push(y * n + x); });
+          return out;
+        };
+        const step = (i, text, why) => ({ text, where: [cells[i]], why: why.filter((j) => j !== i).map((j) => cells[j]), play: () => doPress(i) });
+        const shape = puzzle.variant === 'croix' ? 'un X' : 'une croix';
+        // 1. un motif entier allumé (croix ou X) : un seul appui l'éteint
+        for (let i = 0; i < n * n; i++) {
+          const a = area(i);
+          if (!(need[i] ^ mine[i]) || a.length < 3 || !a.every((j) => state[j])) continue;
+          return step(i, 'Ces ' + a.length + ' lumières forment ' + shape + ' : touche son centre (case dorée), elles s\'éteignent toutes d\'un coup.', a);
+        }
+        if (puzzle.variant !== 'croix') {
+          // 2. la chasse : la première lumière allumée au-dessus de la dernière ligne, on touche dessous
+          for (let i = 0; i < n * (n - 1); i++) {
+            if (!state[i]) continue;
+            return step(i + n, 'La lumière juste au-dessus de la case dorée est allumée : touche la case dorée. Celle du dessus s\'éteint, et rien ne bouge plus haut.', [i]);
+          }
+          // 3. il ne reste que la dernière ligne : elle se règle depuis la ligne du haut, puis on rechasse
+          const top = [...Array(n).keys()].find((c) => need[c] ^ mine[c]);
+          if (top != null) {
+            const last = [...Array(n).keys()].map((c) => (n - 1) * n + c).filter((j) => state[j]);
+            return step(top, 'Il ne reste que la dernière ligne (surlignée) : elle se règle par le haut. Touche la case dorée, puis chasse à nouveau vers le bas.', last);
+          }
+        }
+        // 4. sinon : l'appui utile qui éteint le plus de lumières
+        let best = -1, bestScore = -Infinity;
+        for (let i = 0; i < n * n; i++) {
+          if (!(need[i] ^ mine[i])) continue;
+          const a = area(i), off = a.filter((j) => state[j]).length;
+          if (2 * off - a.length > bestScore) { bestScore = 2 * off - a.length; best = i; }
+        }
+        if (best < 0) return null;
+        const a = area(best), off = a.filter((j) => state[j]).length;
+        return step(best, 'Touche la case dorée : les cases surlignées s\'inversent. ' + (off * 2 > a.length ? 'Ça éteint plus de lumières que ça n\'en allume.' : 'Ça en rallume un peu, mais cet appui fait partie de la solution.'), a);
+      },
       destroy() {}
     };
   }

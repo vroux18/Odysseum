@@ -17,14 +17,27 @@
   const START = 2; // longueur de départ d'une mélodie
 
   // ------------------------------------------------------------------
-  // Audio : un petit contexte à part (celui du noyau n'est pas exposé),
-  // créé une seule fois, coupé si les effets sont désactivés.
+  // Audio : le contexte partagé du noyau (C.audio.graph), branché sur son bus maître
+  // (compresseur + limiteur) ; deux AudioContext en parallèle doublaient le travail du fil
+  // audio sur téléphone (grésillements). Repli : un petit contexte à part, créé une seule fois.
   // ------------------------------------------------------------------
-  let ctx = null, out = null;
+  let ctx = null, out = null, level = 1;
   function audio() {
     if (ctx) return ctx;
     try {
-      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const shared = C.audio && C.audio.graph ? C.audio.graph() : null;
+      let dest;
+      // (le bus maître du noyau rehausse les sons doux d'environ ×1,4 : on compense pour garder le même volume)
+      if (shared) { ctx = shared.ctx; dest = shared.master; level = 0.7; } else {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        try { ctx = new AC({ latencyHint: 'playback' }); } catch (e) { ctx = new AC(); }
+        dest = ctx.destination;
+        // on suit la mise en veille de la page, comme le noyau
+        document.addEventListener('visibilitychange', () => {
+          if (!ctx) return;
+          if (document.hidden) ctx.suspend(); else ctx.resume();
+        });
+      }
       out = ctx.createGain();
       const soft = ctx.createBiquadFilter();
       soft.type = 'lowpass';
@@ -35,15 +48,10 @@
       const fb = ctx.createGain(); fb.gain.value = 0.25;
       const wet = ctx.createGain(); wet.gain.value = 0.22;
       out.connect(soft);
-      soft.connect(ctx.destination);
+      soft.connect(dest);
       soft.connect(delay);
       delay.connect(fb).connect(delay);
-      delay.connect(wet).connect(ctx.destination);
-      // on suit la mise en veille de la page, comme le noyau
-      document.addEventListener('visibilitychange', () => {
-        if (!ctx) return;
-        if (document.hidden) ctx.suspend(); else ctx.resume();
-      });
+      delay.connect(wet).connect(dest);
     } catch (e) { ctx = null; }
     return ctx;
   }
@@ -57,9 +65,9 @@
     try {
       if (ctx.state === 'suspended') ctx.resume();
       const mix = s.mix == null ? 50 : s.mix;
-      const vol = 0.07 * Math.min(1, 2 * (1 - mix / 100));
+      const vol = 0.07 * level * Math.min(1, 2 * (1 - mix / 100));
       if (vol <= 0) return;
-      const t = ctx.currentTime;
+      const t = ctx.currentTime + 0.005; // (jamais d'enveloppe programmée dans le passé : pas de clic)
       const f = midi(m);
       [[1, 'triangle', 1], [2, 'sine', 0.22], [3, 'sine', 0.06]].forEach(([mult, type, v]) => {
         const o = ctx.createOscillator();
@@ -71,7 +79,8 @@
         g.gain.exponentialRampToValueAtTime(0.0001, t + dur / mult);
         o.connect(g).connect(out);
         o.start(t);
-        o.stop(t + dur + 0.05);
+        o.stop(t + dur / mult + 0.05); // (chaque harmonique s'arrête une fois éteinte)
+        o.onended = () => { try { o.disconnect(); g.disconnect(); } catch (e) { /* ignore */ } };
       });
     } catch (e) { /* ignore */ }
   }
@@ -306,6 +315,16 @@
     whenReady(() => sing());
 
     return {
+      // 💬 la méthode : des conseils de mémoire (rien n'est joué à la place du joueur)
+      method: 'Ta mémoire retient mieux de petits paquets que des notes une à une. Voici trois astuces.',
+      coach(k) {
+        if (phase === 'won') return null;
+        return [
+          { text: 'Donne un nom à chaque coquille : rose, bleu, jaune, vert… Dire les noms dans ta tête aide à retenir.', why: pads.slice(), where: [] },
+          { text: 'Découpe le chant en paquets de 2 ou 3 notes, comme un numéro de téléphone. Le premier paquet part toujours de la coquille dorée.', where: [pads[seq[0]]], why: [] },
+          { text: 'Le début ne change jamais : à chaque tour, il suffit de retenir la note ajoutée à la fin.', where: [], why: [core] }
+        ][k] || null;
+      },
       status() {
         if (phase === 'won') return 'Chant retenu';
         if (phase === 'turn') return 'À toi · ' + pos + '/' + len + ' (but ' + target + ')';

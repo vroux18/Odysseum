@@ -242,6 +242,20 @@
     whenReady(() => showModel(puzzle.show));
 
     return {
+      // 💬 la méthode : des conseils de mémoire (rien n'est peint à la place du joueur)
+      method: 'Ne retiens pas case par case : repère la couleur du fond, puis la forme des taches.',
+      coach(k) {
+        if (phase === 'won') return null;
+        const half = cells.filter((_, i) => (i % n) < Math.ceil(n / 2));
+        const tips = [
+          puzzle.sym === 'none'
+            ? { text: 'Décris le motif avec des mots : « une bande bleue en haut, un carré jaune au centre ». Les mots tiennent mieux que les cases.', where: [], why: [] }
+            : { text: 'Le motif est symétrique : retiens une moitié, l\'autre en est le reflet.' + (puzzle.sym === 'quad' ? ' Ici, les quatre coins se ressemblent.' : ''), where: [], why: puzzle.sym === 'axis' ? [] : half }, // (axe au hasard : on ne montre pas de moitié)
+          { text: 'Pour peindre, commence par le fond : choisis sa couleur et glisse le doigt sur toute la grille.', where: [], why: [pal] },
+          { text: 'Ajoute ensuite les taches. Si une tesselle frémit à la fin, c\'est elle qu\'il faut corriger.', where: [], why: [] }
+        ];
+        return tips[k] || null;
+      },
       status() {
         if (phase === 'won') return 'Mosaïque reconstituée';
         if (phase === 'show') return 'Retiens le motif';

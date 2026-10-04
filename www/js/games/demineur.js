@@ -309,6 +309,8 @@
 
     return {
       tools: [{ id: 'fill', label: 'Sonder' }, { id: 'cross', label: 'Marquer' }],
+      // 💬 la méthode : compter autour des nombres, des sûrs aux écueils
+      method: 'Regarde chaque nombre et compte ses cases cachées. S\'il a déjà tous ses écueils, le reste autour est sûr. S\'il a juste autant de cases cachées que d\'écueils, ce sont tous des écueils.',
       status() {
         const flags = state.reduce((s, v) => s + (v === 1 || v === 3 ? 1 : 0), 0);
         return 'Écueils ' + flags + '/' + total + (mistakes ? ' · heurtés ' + mistakes : '');
@@ -349,8 +351,7 @@
         // un fanion posé sur une case sûre fausse tout : on le retire d'abord
         for (let i = 0; i < N; i++) {
           if (state[i] === 1 && !mine[i]) {
-            history.push(state.slice());
-            state[i] = 0; render(); api.onChange();
+            C.act(() => { history.push(state.slice()); state[i] = 0; render(); api.onChange(); });
             return { text: 'Ce fanion est mal placé : il n\'y a pas d\'écueil sous cette case. Je le retire.', where: [cells[i]], why: [] };
           }
         }
@@ -359,7 +360,6 @@
         const mv = findMove(n, num, st);
         if (!mv) return false;
         const target = mv.cells[0];
-        history.push(state.slice());
         const ka = num[mv.src[0]], kb = mv.src[1] != null ? num[mv.src[1]] : 0;
         // les deux nombres d'une déduction croisée : celui qui « place » et celui qui conclut
         let why;
@@ -369,21 +369,23 @@
         const shared = mv.rule === 'subset' ? (mv.ra === 1 ? (last ? 'Le dernier écueil du ' : 'L\'écueil du ') + ka + ' qui brille est'
           : 'Les ' + mv.ra + (last ? ' derniers' : '') + ' écueils du ' + ka + ' qui brille sont') + ' aussi autour ' + deB : '';
         if (mv.kind === 'safe') {
-          open([target]);
           why = mv.rule === 'single'
             ? (ka === 1 ? 'Le 1 qui brille a déjà son écueil : ses autres cases cachées sont sûres. J\'ouvre la case dorée.'
               : 'Le ' + ka + ' qui brille a déjà ses ' + ka + ' écueils : ses autres cases cachées sont sûres. J\'ouvre la case dorée.')
             : shared + ', qui n\'en attend pas d\'autre : ' + (mv.cells.length > 1 ? 'ses autres cases cachées, dont la dorée, sont sûres.' : 'sa dernière case cachée, la dorée, est sûre.');
         } else {
-          state[target] = 1;
-          render(); C.sfx.place();
           why = mv.rule === 'single'
             ? (mv.cells.length === 1 ? 'Le ' + ka + ' qui brille n\'a plus qu\'une case cachée pour son écueil : la dorée. J\'y plante un fanion.'
               : 'Le ' + ka + ' qui brille a juste autant de cases cachées que d\'écueils à trouver : ce sont tous des écueils, dont la dorée.')
             : shared + ', mais ' + theB + ' en attend ' + mv.rd + ' de plus : ' + (mv.cells.length > 1 ? 'ses autres cases cachées, dont la dorée, sont des écueils.' : 'sa dernière case cachée, la dorée, est un écueil.');
         }
-        api.onChange();
-        check();
+        C.act(() => {
+          history.push(state.slice());
+          if (mv.kind === 'safe') open([target]);
+          else { state[target] = 1; render(); C.sfx.place(); }
+          api.onChange();
+          check();
+        });
         return { text: why, where: [cells[target]], why: mv.src.map((s) => cells[s]) };
       },
       destroy() { if (press) clearTimeout(press.timer); }

@@ -1658,6 +1658,9 @@ svg.ic.ic-solid { --duo-o: 1; }
 /* petits signes = / × des Astres */
 .astres .edge-mark.hint-why { z-index: 5; border-radius: 50%; background: var(--hint) !important; color: #fff; box-shadow: 0 0 0 3px var(--hint-soft), 0 0 12px 2px var(--hint-glow) !important; }
 .astres .edge-mark.hint-why svg { stroke: #fff !important; }
+/* (les tuiles des Astres ont leur propre ombre en !important : l'anneau et le voile doivent passer devant) */
+.astres .cell.hint-where { box-shadow: inset 0 0 0 3px var(--hint), 0 0 0 2px var(--hint), 0 0 16px 4px var(--hint-glow) !important; }
+.astres .cell.hint-why { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--hint) 75%, transparent), inset 0 0 0 999px var(--hint-soft) !important; }
 
 /* Port : le bateau garde sa position (transform) ; la lueur suit sa silhouette */
 .rh-boat.hint-where, .rh-boat.hint-why { box-shadow: none !important; border-radius: 10px; }
@@ -1693,6 +1696,41 @@ svg.ic.ic-solid { --duo-o: 1; }
   .hint-where, .rh-boat.hint-where { animation: none !important; }
 }
 :root.a11y-motion .hint-where, :root.a11y-motion .rh-boat.hint-where { animation: none !important; }
+
+/* Explique-moi (💬) : le pas-à-pas prend la place des boutons, sous la grille (il ne la couvre jamais).
+   La phrase en haut, puis les pastilles d'étape et « Suivant » / « À toi ! » ; ✕ referme. */
+#play.coaching .actions, #play.coaching #hint-tip { display: none !important; }
+.hint-tip.coach {
+  display: grid; grid-template-columns: 22px 1fr; column-gap: 10px; row-gap: 10px; align-items: start;
+  width: min(380px, calc(100% - 32px)); max-width: none; box-sizing: border-box; margin: 6px auto 4px; padding: 12px 12px 12px 12px;
+}
+.hint-tip.coach::before { grid-column: 1; grid-row: 1; }
+.coach-text { grid-column: 2; grid-row: 1; margin: 0; padding-right: 26px; min-height: 2.8em; text-wrap: pretty; }
+.coach-x {
+  position: absolute; top: 4px; right: 4px; width: 34px; height: 34px; display: grid; place-items: center;
+  border: 0; border-radius: 50%; background: transparent; color: var(--k-ink-soft, var(--muted)); font: 600 15px/1 var(--k-font, var(--font, sans-serif)); cursor: pointer;
+}
+.coach-x:active { transform: scale(.88); }
+.coach-foot { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.coach-dots { display: flex; gap: 7px; padding-left: 4px; }
+.coach-dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--k-edge, var(--faint)); transition: background .3s, transform .3s; }
+.coach-dots i.on { background: var(--hint); }
+.coach-dots i.now { transform: scale(1.25); }
+.coach-next {
+  min-height: 42px; min-width: 112px; padding: 0 18px; border: 0; border-radius: 999px; cursor: pointer;
+  font: 600 15.5px/1 var(--k-font, var(--font, sans-serif)); color: #4a2f00;
+  background: linear-gradient(var(--k-sun-lt, #ffd84d), var(--k-sun, #ffc93d)); box-shadow: 0 3px 0 var(--k-sun-dk, #e08f00);
+}
+.coach-next:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--k-sun-dk, #e08f00); }
+.coach-next.go { color: #fff; background: linear-gradient(color-mix(in srgb, var(--game, #3fae2a) 80%, #fff), var(--game, #3fae2a));
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--game, #3fae2a) 70%, #000); }
+.hint-tip.coach.nudge { animation: coach-nudge .4s ease-in-out; }
+@keyframes coach-nudge { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+@media (prefers-reduced-motion: reduce) {
+  .hint-tip.coach.in, .hint-tip.coach.nudge { animation: none; }
+  .coach-dots i { transition: none; }
+}
+:root.a11y-motion .hint-tip.coach.in, :root.a11y-motion .hint-tip.coach.nudge { animation: none; }
 
 /* Coffre : le code révélé s'aligne sur les jetons des essais (même place que la colonne des témoins) */
 .coffre-reveal .slots { padding: 4px 10px; box-sizing: content-box; margin-right: 34px; }

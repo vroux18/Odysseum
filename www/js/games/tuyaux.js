@@ -312,6 +312,10 @@
     const deduce = () => deduceShapes(n, wrap, puzzle.solution);
 
     return {
+      // 💬 la méthode : les bords et les coins d'abord, puis suivre les pièces forcées
+      method: wrap
+        ? 'Ici les bords communiquent : pars des bouts de tuyau (pièces à une seule sortie). Deux bouts ne se branchent jamais ensemble, et chaque pièce fixée en force une voisine.'
+        : 'Commence par les bords et les coins : aucun tuyau ne doit pointer dehors. Chaque pièce fixée en force une voisine : suis la chaîne.',
       status() { return ''; },
       undo() { if (history.length) { cur = history.pop(); draw(); if (!raf) raf = requestAnimationFrame(animate); api.onChange(); } }, // (l'eau se retire en douceur)
       reset() {
@@ -328,11 +332,13 @@
         // la pièce fausse qui se déduit le plus tôt, sinon un coup de pouce
         const ded = wrongs.filter((i) => fixedAt[i] >= 0).sort((a, b) => fixedAt[a] - fixedAt[b]);
         const i = ded.length ? ded[0] : wrongs[0];
-        history.push(cur.slice());
-        cur[i] = puzzle.solution[i];
-        spin(i);
-        if (!raf) raf = requestAnimationFrame(animate);
-        check();
+        C.act(() => {
+          history.push(cur.slice());
+          cur[i] = puzzle.solution[i];
+          spin(i);
+          if (!raf) raf = requestAnimationFrame(animate);
+          check();
+        });
         // surlignage : la pièce, les bords et les voisines qui imposent son orientation
         const x0 = (k) => pad + (k % n) * cell, y0 = (k) => pad + Math.floor(k / n) * cell;
         const boxes = [{ x: x0(i) + 2, y: y0(i) + 2, w: cell - 4, h: cell - 4, kind: 'where' }];

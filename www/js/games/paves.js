@@ -302,6 +302,8 @@
     render();
 
     return {
+      // 💬 la méthode : les nombres qui n'ont qu'une forme, puis les cases qu'un seul nombre atteint
+      method: 'Commence par les nombres qui n\'ont qu\'une forme possible, souvent près des bords et des coins. Puis cherche les cases qu\'un seul nombre peut atteindre.',
       status() {
         const covered = rects.reduce((s, rc) => s + rc.w * rc.h, 0);
         return 'Couvert ' + Math.round((100 * covered) / (n * n)) + ' %';
@@ -331,9 +333,11 @@
         // 1. un rectangle qui ne fait pas partie de la solution : on l'enlève
         const wrong = rects.find((x) => !puzzle.solution.some((s) => same(s, x)));
         if (wrong) {
-          history.push(rects.slice());
-          rects = rects.filter((x) => x !== wrong);
-          render(); api.onChange();
+          C.act(() => {
+            history.push(rects.slice());
+            rects = rects.filter((x) => x !== wrong);
+            render(); api.onChange();
+          });
           const nums = puzzle.clues.filter((k) => inside(wrong, k.cell));
           let text;
           if (!nums.length) text = 'Ce rectangle ne contient aucun nombre : il en faut un, et un seul, par rectangle. Je l\'enlève.';
@@ -365,10 +369,12 @@
           cands.set(k, list);
         });
         const place = (k, rc, text, why) => {
-          history.push(rects.slice());
-          rects = rects.filter((x) => !overlap(x, rc));
-          rects.push(Object.assign({}, rc));
-          render(); api.onChange(); check();
+          C.act(() => {
+            history.push(rects.slice());
+            rects = rects.filter((x) => !overlap(x, rc));
+            rects.push(Object.assign({}, rc));
+            render(); api.onChange(); check();
+          });
           return { text, where: [area(rc)], why: [clueEl(k.cell)].concat(why || []), clear };
         };
         // 2a. un nombre qui n'a plus qu'une forme possible
@@ -387,8 +393,9 @@
             }
           }
           const why = blockers.slice(0, 6).map(clueEl);
-          return place(k, rc, label(k) + ' n\'a plus qu\'une forme possible, le cadre doré : les autres sortiraient de la grille' +
-            (blockers.length ? ', prendraient un autre nombre (surligné)' : '') + ' ou mordraient sur un rectangle posé.', why);
+          const lost = ['sortiraient de la grille'].concat(blockers.length ? ['engloberaient un autre nombre (surligné)'] : [], known.length ? ['mordraient sur un rectangle posé'] : []);
+          return place(k, rc, label(k) + ' n\'a qu\'une forme possible, le cadre doré : les autres ' +
+            (lost.length > 1 ? lost.slice(0, -1).join(', ') + ' ou ' + lost[lost.length - 1] : lost[0]) + '.', why);
         }
         // 2b. une case vide qu'un seul nombre peut atteindre : ce nombre doit la couvrir
         for (let x = 0; x < n * n; x++) {

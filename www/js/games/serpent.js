@@ -254,6 +254,9 @@
     resize();
 
     return {
+      // 💬 la méthode : avancer par les passages forcés, sans laisser de cul-de-sac
+      method: (puzzle.variant === 'laby' ? 'Avance depuis le départ, ' : 'Avance depuis le 1 vers le numéro suivant, ') +
+        'case par case : quand une seule case est possible, prends-la. Une case qui n\'a plus qu\'une sortie doit être prise tout de suite, sinon c\'est un cul-de-sac.',
       status() { return 'Cases ' + path.length + '/' + n * n; },
       undo() { if (history.length) { path = history.pop(); draw(); api.onChange(); } },
       reset() { history.push(path.slice()); path = [startCell]; draw(); api.onChange(); },
@@ -265,18 +268,21 @@
           const m = round ? cell * 0.14 : cell * 0.05;
           return { x: (c % n) * cell + m, y: Math.floor(c / n) * cell + m, w: cell - 2 * m, h: cell - 2 * m, kind, round };
         };
-        const finish = (text, boxes) => {
-          draw(); api.onChange();
-          if (path.length === n * n && num.get(path[path.length - 1]) === K) api.onWin();
+        // (le chemin change dans C.act : joué tout de suite, ou au « Suivant » de l'explication)
+        const finish = (text, boxes, next) => {
+          C.act(() => {
+            history.push(path.slice());
+            path = next;
+            draw(); api.onChange();
+            if (path.length === n * n && num.get(path[path.length - 1]) === K) api.onWin();
+          });
           return Object.assign({ text }, C.hintBoxes(canvas, boxes));
         };
         // 1. le tracé s'égare : on le ramène à sa dernière case juste
         if (ok < path.length) {
-          history.push(path.slice());
           const lost = path.slice(ok);
-          path = sol.slice(0, ok);
           return finish('Le chemin s\'est égaré après la case dorée : les cases surlignées menaient à une impasse. Je le ramène là, repars d\'ici.',
-            lost.map((c) => box(c, 'why')).concat([box(path[path.length - 1], 'where', true)]));
+            lost.map((c) => box(c, 'why')).concat([box(sol[ok - 1], 'where', true)]), sol.slice(0, ok));
         }
         // 2. passages forcés : on avance tant que la case suivante est imposée
         const N = n * n;
@@ -311,10 +317,8 @@
           steps.push(pick); used.add(pick);
           if (num.get(pick) === need) need++;
         }
-        history.push(path.slice());
         if (steps.length) {
           const head = path[path.length - 1];
-          path = path.concat(steps);
           const boxes = [box(head, 'why', true)];
           let text;
           if (reason.t === 'only') {
@@ -325,14 +329,13 @@
             text = 'La case dorée n\'a plus qu\'une autre sortie (surlignée) : si le chemin n\'y passe pas maintenant, elle deviendra un cul-de-sac.';
           }
           if (steps.length > 1) text += ' La suite est forcée aussi.';
-          return finish(text, boxes.concat(steps.map((c, i) => box(c, 'where', i === 0))));
+          return finish(text, boxes.concat(steps.map((c, i) => box(c, 'where', i === 0))), path.concat(steps));
         }
         // 3. aucun passage forcé : coup de pouce vers le prochain numéro
         const add = sol.slice(path.length, path.length + 2);
-        path = path.concat(add);
         const target = puzzle.variant === 'laby' ? 'l\'arrivée' : 'le ' + need;
         return finish('Coup de pouce : rien n\'est forcé pour l\'instant. Le chemin continue par les cases dorées, en route vers ' + target + '.',
-          add.map((c, i) => box(c, 'where', i === 0)));
+          add.map((c, i) => box(c, 'where', i === 0)), path.concat(add));
       },
       redraw: draw,
       destroy() { window.removeEventListener('resize', resize); }

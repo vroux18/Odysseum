@@ -266,6 +266,9 @@
     render();
 
     return {
+      // 💬 la méthode : partir de la région la plus coincée, et écarter ce que chaque couronne bloque
+      method: 'Commence par la région la plus petite ou la plus coincée : sa couronne a peu de places. Chaque couronne écarte sa ligne, sa colonne, sa région' +
+        (puzzle.variant === 'cavaliers' ? ' et les cases à un saut de cavalier.' : ' et les 8 cases qui l\'entourent.'),
       status() {
         const { queens } = conflicts();
         return 'Couronnes ' + queens + '/' + n;
@@ -291,7 +294,6 @@
         for (let i = 0; i < N; i++) {
           if (state[i] !== 2 || isSol(i)) continue;
           const { bad } = conflicts();
-          history.push(snap());
           let why = [], text;
           if (bad.has(i)) {
             why = crownsOn().filter((j) => j !== i && bad.has(j));
@@ -302,8 +304,7 @@
             if (dead) { why = dead.cells; text = 'Avec cette couronne, ' + uName(dead) + ' n\'a plus aucune case libre pour la sienne. Je la retire.'; }
             else text = 'Cette couronne n\'est pas à sa place : elle mène à une impasse un peu plus loin. Je la retire.';
           }
-          state[i] = 0; cleared[i] = 1;
-          done();
+          C.act(() => { history.push(snap()); state[i] = 0; cleared[i] = 1; done(); });
           return { text, where: [cells[i]], why: why.map((j) => cells[j]) };
         }
 
@@ -321,19 +322,20 @@
             const f = freeIn(u);
             if (f.length !== 1 || !isSol(f[0])) continue;
             const i = f[0];
-            history.push(snap());
-            state[i] = 2;
-            done();
-            const text = 'Dans ' + uName(u) + ', toutes les autres cases sont écartées : sa couronne va forcément sur la case dorée.';
+            C.act(() => { history.push(snap()); state[i] = 2; done(); });
+            const text = u.cells.length === 1 ? 'Cette région n\'a qu\'une case : sa couronne y va forcément. Regarde tout ce qu\'elle écarte.'
+              : 'Dans ' + uName(u) + ', toutes les autres cases sont écartées : sa couronne va forcément sur la case dorée.';
             return { text, where: [cells[i]], why: u.cells.filter((j) => j !== i).map((j) => cells[j]) };
           }
         }
 
         // 3. une région tient toute dans une seule ligne (ou colonne) : le reste de cette ligne est barré
         const mark = (list, text, why) => {
-          history.push(snap());
-          list.forEach((j) => { state[j] = 1; cleared[j] = 0; });
-          render(); api.onChange();
+          C.act(() => {
+            history.push(snap());
+            list.forEach((j) => { state[j] = 1; cleared[j] = 0; });
+            render(); api.onChange();
+          });
           return { text, where: list.map((j) => cells[j]), why: why.map((j) => cells[j]) };
         };
         for (const u of open) {
@@ -374,9 +376,7 @@
         for (let r = 0; r < n; r++) {
           const i = r * n + puzzle.solution[r];
           if (state[i] === 2) continue;
-          history.push(snap());
-          state[i] = 2;
-          done();
+          C.act(() => { history.push(snap()); state[i] = 2; done(); });
           return { text: 'Coup de pouce : rien n\'est forcé pour l\'instant, alors je pose une couronne sur la case dorée. Regarde les cases qu\'elle écarte.', where: [cells[i]], why: [] };
         }
         return false;

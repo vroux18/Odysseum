@@ -4714,15 +4714,24 @@
     hero.wait = delay || 0;
   }
 
+  // Ulysse se met en route (fin de niveau, flèches, voyage, traversée…) : si la caméra était
+  // libre, elle revient en douceur derrière lui (sinon il sortirait du champ)
+  function followHero() {
+    if (camMode !== 'follow' && World.setCameraMode) World.setCameraMode('follow');
+  }
+
   function travelTo(L, delay) {
     const s = startLeg();
     if (Math.abs(L - s.node) > 14 || !chapters[chapterOf(L)]) { // trop loin : on y va directement
+      const moved = L !== s.node || !!hero.free;
       hero.route = null; hero.free = null; selected = L;
+      if (moved) followHero();
       setMarker();
       if (opts.onSelect) opts.onSelect(L);
       return;
     }
     go(s.route.concat(routeBetween(s.node, L).slice(1)), delay);
+    if (hero.route) followHero();
   }
 
   function wanderTo(c, at) {
@@ -4735,6 +4744,7 @@
       const first = hero.free ? s.route : [{ level: s.node }];
       go(first.concat(routeBetween(s.node, target).slice(1)).concat([{ c, at }]));
     }
+    if (hero.route) followHero();
     if (opts.onSelect) opts.onSelect(null);
   }
 
@@ -5084,7 +5094,8 @@
     // Caméra « suivi » : toujours derrière Ulysse, un peu au-dessus de l'épaule, tournée vers
     // la suite du sentier ; pendant une traversée elle s'élève pour montrer les deux îles.
     // Caméra « libre » : on survole la carte (glisser, pincer, tourner à deux doigts).
-    let rate = 3, thetaRate = 0;
+    let rate = 3, thetaRate = 0, trackRate = 0;
+    if (camMode !== 'follow' || showcaseOn) followBoost = 0;
     if (showcaseOn) {
       // vitrine (garde-robe) : Ulysse de face, en pied, cadré dans le haut de l'écran ;
       // la caméra oscille lentement de part et d'autre de lui
@@ -5150,6 +5161,13 @@
       rate = 1.6; thetaRate = 0.7;
       // pendant le geste (et son inertie), la caméra suit le doigt de près, sans à-coup
       if (orbit.active > 0) { orbit.active -= dt; thetaRate = 9; rate = 6; }
+      // longue marche (traversée d'une île à l'autre, course au toucher) : plus Ulysse prend
+      // d'avance sur la visée, plus la cible le rattrape vite — il reste dans le cadre, même en
+      // portrait. Le renfort monte et retombe en douceur (pas d'à-coup au retour de la vue libre).
+      const lag = Math.hypot(focus.x - cam.tx, focus.z - cam.tz);
+      const want = hero.route ? Math.min(5, Math.pow(Math.max(0, lag - 0.5) / 0.3, 2)) : 0;
+      followBoost += (want - followBoost) * (1 - Math.exp(-dt * 2.5));
+      trackRate = rate * (1 + followBoost);
     } else {
       goal.theta = userTheta;
       goal.tx = freeTarget.x; goal.ty = 0.9; goal.tz = freeTarget.z;
@@ -5168,6 +5186,11 @@
     // l'angle suit plus lentement que la cible (amorti fort : pas de toupie)
     cam.theta += dth * (thetaRate && swoopT <= 0 && !lvlCam ? 1 - Math.exp(-dt * thetaRate) : k);
     ['elev', 'radius', 'tx', 'ty', 'tz'].forEach((key) => { cam[key] += (goal[key] - cam[key]) * k; });
+    // suivi pendant une marche : la visée horizontale rattrape Ulysse plus vite (voir followBoost)
+    if (trackRate > rate && swoopT <= 0 && !lvlCam) {
+      const kt = 1 - Math.exp(-dt * trackRate), extra = (kt - k) / Math.max(1e-6, 1 - k);
+      cam.tx += (goal.tx - cam.tx) * extra; cam.tz += (goal.tz - cam.tz) * extra;
+    }
     // entrée dans un niveau : plongée rapide par-dessus l'épaule vers la pierre devant lui
     if (lvlCam && lvlCam.kind === 'enter') {
       lvlCam.t += dt;
@@ -5186,7 +5209,7 @@
     }
     placeCamera();
   }
-  let camMode = 'follow', groundY = 0.7;
+  let camMode = 'follow', groundY = 0.7, followBoost = 0;
   const freeTarget = { x: 0, z: 0 };
   // caméra de suivi : distance, inclinaison (réglables au doigt), coup d'œil latéral temporaire
   // (vue fixe, un peu reculée : on voit le coin d'île autour d'Ulysse ; pas de zoom au doigt)
@@ -5866,6 +5889,8 @@
       userTheta = cam.theta; goal.radius = Math.max(R_MIN, Math.min(R_MAX, cam.radius * 1.6)); goal.elev = clampElev(Math.max(0.55, cam.elev));
     }
     if (camMode === 'follow') { followYaw = 0; rotVel = 0; orbit.yaw = orbit.pitch = orbit.vel = 0; }
+    // l'appli met à jour son bouton « Vue » (le monde peut repasser seul en suivi)
+    if (camMode !== was && opts && opts.onCameraMode) { try { opts.onCameraMode(camMode); } catch (e) { /* ignore */ } }
     return camMode;
   };
   World.cameraMode = () => camMode;
@@ -6245,7 +6270,8 @@
     if (cine && cine.snd) cine.snd();
     cine = null;
     hero.focusTarget = 0;
-    camMode = 'follow'; followYaw = 0;
+    World.setCameraMode('follow'); // (prévient l'appli : bouton « Vue » éteint)
+    followYaw = 0;
     orbit.yaw = orbit.pitch = orbit.vel = 0;
     const ry = hero.group.rotation.y, fx = Math.sin(ry), fz = Math.cos(ry);
     const p = hero.group.position;
@@ -6286,6 +6312,8 @@
       if (ch) hero.free = { c: ch.c, at: new THREE.Vector3(p.x, 0, p.z) };
     }
     hero.focusTarget = 1;
+    // on entre dans un niveau : au retour, la caméra suivra Ulysse (pas de vue libre figée)
+    followHero();
     if (!camSave) camSave = { radius: goal.radius, elev: goal.elev };
     lvlCam = null;
     const soft = reducedMotion();

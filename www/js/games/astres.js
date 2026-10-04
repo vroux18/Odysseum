@@ -269,6 +269,9 @@
     render();
 
     return {
+      // 💬 la méthode : border les paires, puis compter la moitié par ligne
+      method: 'Cherche les paires : jamais trois pareils à la suite, alors une paire se borde avec l\'autre symbole. Puis compte : chaque ligne a autant de carrés que de ronds.' +
+        (puzzle.edges.length ? ' Les signes = et × relient deux cases voisines.' : ''),
       status() {
         const filled = state.filter((v) => v).length;
         return 'Rempli ' + filled + '/' + n * n;
@@ -287,9 +290,11 @@
         const rowOf = (i) => Math.floor(i / n), colOf = (i) => i % n;
         const rowCells = (r) => [...Array(n)].map((_, k) => r * n + k), colCells = (c) => [...Array(n)].map((_, k) => k * n + c);
         const put = (i, v, text, why) => {
-          history.push(state.slice());
-          state[i] = v;
-          render(); api.onChange(); check();
+          C.act(() => {
+            history.push(state.slice());
+            state[i] = v;
+            render(); api.onChange(); check();
+          });
           return { text, where: [cells[i]], why: why.map((x) => (typeof x === 'number' ? cells[x] : x)) };
         };
         if (wrong.length) {

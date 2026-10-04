@@ -222,6 +222,20 @@
     whenReady(start);
 
     return {
+      // 💬 la méthode : des conseils de mémoire (rien n'est retourné à la place du joueur)
+      method: 'Retourne les amphores dans l\'ordre, ligne par ligne : tu sauras toujours lesquelles tu as déjà vues.',
+      coach(k) {
+        if (phase === 'won') return null;
+        const live = (i) => i !== hole && !found[i];
+        const row = [...Array(total).keys()].filter((i) => live(i)).slice(0, cols);
+        const fresh = [...Array(total).keys()].find((i) => live(i) && !seen[i]);
+        return [
+          { text: 'Commence en haut à gauche et avance case par case. Dis tout bas ce que tu vois : « chouette, en haut à gauche ».', where: row.length ? [tiles[row[0]]] : [], why: row.slice(1).map((i) => tiles[i]) },
+          { text: 'Retourne d\'abord une amphore jamais vue' + (fresh != null ? ' (comme la dorée)' : '') + '. Si son motif te rappelle une amphore déjà vue, va la chercher en second.', where: fresh != null ? [tiles[fresh]] : [], why: [] },
+          { text: puzzle.similar ? 'Attention aux cousins : même dessin, autre couleur. Retiens le dessin ET la couleur.'
+            : 'Une paire ratée n\'est pas perdue : elle t\'a montré deux motifs de plus à retenir.', where: [], why: [] }
+        ][k] || null;
+      },
       status() {
         const n = (found.filter(Boolean).length - (hole >= 0 ? 1 : 0)) / 2;
         return phase === 'won' ? 'Toutes les paires' : n + ' / ' + puzzle.pairs + ' paires';
