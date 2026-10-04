@@ -2292,8 +2292,8 @@
   $('#btn-hint').addEventListener('click', () => session && session.hint(false));
   $('#btn-explain').addEventListener('click', () => session && session.hint(true));
   $('#btn-autosolve').addEventListener('click', () => session && session.solve());
-  // bouton de test « autosolve » : seulement en mode développeur (?dev dans l'adresse)
-  $('#btn-autosolve').hidden = !/[?&]dev\b/.test(location.search);
+  // bouton de test « autosolve » : visible pour l'instant (pendant les tests) ; plus tard, seulement avec ?dev
+  $('#btn-autosolve').hidden = false;
   $('#hint-tip').addEventListener('click', hideTip);
   $('#btn-rules').addEventListener('click', () => session && openTutorial(session.g, session.variant, false));
   $('#rules-close').addEventListener('click', nextTuto);
