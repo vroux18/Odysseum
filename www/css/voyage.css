@@ -254,9 +254,11 @@
 #home #open-library { left: calc(24px + 3 * (100vw - 48px) / 4) !important; }
 
 /* Pavés : un rectangle validé se remplit en douceur (fondu + léger gonflement), sans rebond ni éclair */
-.paves .rect:not(.preview):not(.invalid) { animation: rect-soft .32s ease-out !important; }
-@keyframes rect-soft { from { opacity: 0; transform: scale(.94); } }
-.paves .rect { transition: background-color .25s ease, box-shadow .25s ease !important; }
+/* posé : simple fondu, sans mouvement ; l'aperçu et les changements de couleur ne s'animent pas */
+.paves .rect:not(.preview):not(.invalid) { animation: rect-soft .2s ease-out !important; }
+@keyframes rect-soft { from { opacity: .35; } }
+.paves .rect { transition: none !important; transform: none !important; }
+.paves .rect.preview { animation: none !important; }
 
 
 /* carte du niveau v3 : à gauche île + niveau + étoiles, au centre les mini-jeux, à droite le bouton Play */
@@ -458,11 +460,11 @@
 #home #go svg.ic, #home #go svg { width: 20px !important; height: 20px !important; }
 
 /* étoiles et icônes plus grandes, flèches resserrées vers le centre */
-#home { --lc-h: 140px; }
-.lvcard { grid-template-rows: auto auto auto 52px !important; row-gap: 4px !important; }
-.lvcard .lc-st svg { width: 17px !important; height: 17px !important; }
-.lvcard .lc-chip i { width: 28px !important; height: 28px !important; }
-.lvcard .lc-chip svg { width: 16px !important; height: 16px !important; }
+#home { --lc-h: 150px; }
+.lvcard { grid-template-rows: auto auto auto 52px !important; row-gap: 5px !important; }
+.lvcard .lc-st svg { width: 21px !important; height: 21px !important; }
+.lvcard .lc-chip i { width: 33px !important; height: 33px !important; }
+.lvcard .lc-chip svg { width: 19px !important; height: 19px !important; }
 .lvcard .lc-games { gap: 6px !important; }
 .lvcard .lc-nav { top: 44px !important; }
 .lvcard .lc-nav[data-d="-1"] { left: calc(50% - 118px) !important; }
