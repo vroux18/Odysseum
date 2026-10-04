@@ -133,9 +133,9 @@
   // C'est aussi l'index (à partir de 0) de la première île où il entre dans la quête.
   // Tout dépend de J.done seul (voir « Déblocage des mini-jeux » plus bas pour la célébration).
   const UNLOCK = {
-    flux: 0, tuyaux: 0, amphores: 0, // relier, tourner, retrouver des paires : rien à expliquer
-    reines: 1, pixels: 2, lumieres: 3, simon: 4, astres: 5, serpent: 6, paves: 7,
-    coffre: 8, mosaique: 9, demineur: 10, rushhour: 11, oracle: 12,
+    flux: 0, tuyaux: 0, reines: 0, // relier, tourner, placer : les trois jeux les plus forts au départ
+    pixels: 1, astres: 2, simon: 3, serpent: 4, paves: 5, coffre: 6, mosaique: 7,
+    demineur: 8, rushhour: 9, amphores: 10, lumieres: 11, oracle: 12, // (Amphores et Lumières repoussés : à retravailler)
     bataille: 13 // (pas encore chargé dans index.html : ignoré tant qu'il est absent)
   };
   const unlockAt = (id) => UNLOCK[id] || 0; // (un jeu absent du tableau est ouvert d'office)
@@ -3427,7 +3427,7 @@
         '<path d="M36 110L90 104L144 110L200 102" fill="none" stroke="var(--k-ink)" stroke-width="3" stroke-linecap="round" stroke-dasharray=".1 8" opacity=".45"/>' +
         [[36, 110], [90, 104], [144, 110]].map(([x, y]) => '<ellipse cx="' + x + '" cy="' + y + '" rx="17" ry="8" fill="#ece3d1" stroke="' + OB_INK + '" stroke-width="2.6"/>').join('') +
         '<path d="M36 94v-8M90 88v-8M144 94v-8" stroke="var(--k-ink)" stroke-width="2.4" stroke-linecap="round" opacity=".4"/>' +
-        obChip('flux', 36, 66, 17) + obChip('tuyaux', 90, 60, 17) + obChip('amphores', 144, 66, 17) +
+        obChip('flux', 36, 66, 17) + obChip('tuyaux', 90, 60, 17) + obChip('reines', 144, 66, 17) +
         '<ellipse cx="200" cy="104" rx="25" ry="11" fill="#ece3d1" stroke="' + OB_INK + '" stroke-width="2.8"/>' +
         '<path d="M200 100V40" stroke="' + OB_INK + '" stroke-width="3.2" stroke-linecap="round"/>' +
         '<path d="M201 41q12-5 24 0v20q-12-5-24 0z" fill="#e5483a" stroke="' + OB_INK + '" stroke-width="2.6" stroke-linejoin="round"/>' +
@@ -3440,7 +3440,7 @@
         obIsle(180, 100, 0.95, true) + obPalm(166, 80) +
         '<g stroke="' + OB_INK + '" stroke-width="1.6"><circle cx="192" cy="84" r="3.4" fill="#ff7eb0"/><circle cx="200" cy="89" r="3" fill="#ffc93d"/><circle cx="158" cy="90" r="3" fill="#ff7eb0"/></g>' +
         '<path d="M214 60v6M196 52l-6 3M232 52l6 3" stroke="#ffc93d" stroke-width="3" stroke-linecap="round"/>' +
-        obChip('lumieres', 214, 36, 17) + obSpark(236, 14, 5) + obSpark(194, 18, 3.5)) },
+        obChip('pixels', 214, 36, 17) + obSpark(236, 14, 5) + obSpark(194, 18, 3.5)) },
     { // 4. les coups de pouce : 3 étoiles pour la vitesse, l'ampoule (un coup) et la bulle (la méthode)
       t: 'Coups de pouce', p: 'Va vite pour 3 étoiles ; bloqué ? ' + OB_BULB_IC + ' montre un coup, ' + OB_CHAT_IC + ' la méthode.',
       art: () => obArt(
