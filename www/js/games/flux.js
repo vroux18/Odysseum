@@ -462,13 +462,25 @@
           roundRect(ctx, x, y, cell - gap, cell - gap, rad);
           ctx.fill();
         }
-        // contour net et foncé de chaque case (lisibilité de la grille)
-        ctx.strokeStyle = css('--k-ink') || '#3a3550';
-        ctx.globalAlpha = 0.85;
-        ctx.lineWidth = Math.max(1.5, cell * 0.035);
-        roundRect(ctx, x + ctx.lineWidth / 2, y + ctx.lineWidth / 2, cell - gap - ctx.lineWidth, cell - gap - ctx.lineWidth, rad);
+      }
+      // vraie grille : on recouvre les interstices par un quadrillage foncé continu, cadre arrondi autour
+      {
+        const ink = css('--k-ink') || '#3a3550', lw = Math.max(1.5, cell * 0.035), S = n * cell;
+        ctx.save();
+        roundRect(ctx, 0, 0, S, S, rad * 0.7); ctx.clip(); // coins du plateau arrondis
+        ctx.fillStyle = tile;
+        for (let c = 0; c < n * n; c++) { // combler les interstices entre tuiles
+          const x = (c % n) * cell, y = Math.floor(c / n) * cell;
+          if (g.bridgeIdx.has(c) || own[c] < 0) { ctx.fillRect(x, y, cell, cell); }
+          else { ctx.fillStyle = tile; ctx.fillRect(x, y, cell, cell); ctx.fillStyle = COLORS[own[c]] + '3a'; ctx.fillRect(x, y, cell, cell); ctx.fillStyle = tile; }
+        }
+        ctx.strokeStyle = ink; ctx.globalAlpha = 0.85; ctx.lineWidth = lw;
+        ctx.beginPath();
+        for (let k = 1; k < n; k++) { ctx.moveTo(k * cell, 0); ctx.lineTo(k * cell, S); ctx.moveTo(0, k * cell); ctx.lineTo(S, k * cell); }
         ctx.stroke();
-        ctx.globalAlpha = 1;
+        roundRect(ctx, lw / 2, lw / 2, S - lw, S - lw, rad * 0.7);
+        ctx.lineWidth = lw * 1.4; ctx.stroke();
+        ctx.restore();
       }
       // ponts vides : petits rails
       puzzle.bridges.forEach((b) => {
