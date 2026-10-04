@@ -251,7 +251,10 @@
       if (bad.size === 0) api.onWin();
     }
 
-    wrap.addEventListener('click', (e) => {
+    // dès le contact du doigt (un « click » se perd parfois au téléphone, surtout en tapant deux fois vite)
+    wrap.style.touchAction = 'manipulation';
+    wrap.addEventListener('pointerdown', (e) => {
+      if (!e.isPrimary || e.button > 0) return;
       const d = e.target.closest('.cell');
       if (!d) return;
       const i = +d.dataset.i;

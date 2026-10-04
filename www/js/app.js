@@ -435,9 +435,10 @@
   }
 
   // 3 astuces par grille ; le petit chiffre sur l'ampoule les décompte
-  const MAX_HINTS = 3;
+  const MAX_HINTS = Infinity; // indices illimités (chacun coûte quand même dans le calcul des étoiles)
   function renderHints(left) {
-    $('#hint-left').textContent = left;
+    $('#hint-left').textContent = isFinite(left) ? left : '';
+    $('#hint-left').hidden = !isFinite(left);
     $('#btn-hint').classList.toggle('empty', left <= 0);
     const ex = $('#btn-explain'); if (ex) ex.classList.toggle('empty', left <= 0);
   }

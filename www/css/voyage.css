@@ -523,6 +523,9 @@
 #lv-tabs button.on .lv-tab-bar { background: rgba(255, 255, 255, .35); }
 #lv-tabs button.on .lv-tab-bar > i { background: #fff; }
 
+/* grille centrée verticalement : la marge basse « auto » était portée par le bouton de test, désormais caché */
+#play > .actions { margin-bottom: auto !important; }
+
 /* la carte du niveau se cache vraiment (son display: grid !important l'emportait sur [hidden]) */
 #home .lvcard[hidden] { display: none !important; }
 /* cartes voisines qui dépassent derrière, à gauche / à droite : on devine qu'on peut faire défiler */
