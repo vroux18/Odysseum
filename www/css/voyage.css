@@ -496,6 +496,11 @@
 .dc-game { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--c); box-shadow: 0 0 0 2.5px #fff; }
 .dc-game svg { width: 18px; height: 18px; fill: none; stroke: #fff; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
 .dc-game svg .f { fill: #fff; }
+.dc-done { display: flex; align-items: center; justify-content: center; gap: 10px; width: min(300px, 100%); height: 52px; margin-top: 4px; border-radius: 26px;
+  background: var(--k-well, #f1ecf8); font: 700 19px/1 var(--k-font, 'Fredoka', sans-serif); color: var(--k-ink, #3a3550); }
+.dc-done .dc-check { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: #5cc93a; box-shadow: inset 0 -2px 0 #3a9a26; }
+.dc-done .dc-stars svg { width: 18px; height: 18px; fill: var(--k-edge, #d9cfe8); }
+.dc-done .dc-stars svg.on { fill: #ffc93d; }
 .dc-stars { display: flex; gap: 2px; }
 .dc-stars svg { width: 16px; height: 16px; fill: rgba(255, 255, 255, .45); }
 .dc-stars svg.on { fill: #ffe27a; }

@@ -1226,8 +1226,10 @@
       '<div class="dc-head"><i class="dc-nav" data-d="-1"' + (calMonth <= -1 ? ' hidden' : '') + '>‹</i><span>' + month + '</span>' +
         '<i class="dc-nav" data-d="1"' + (calMonth >= 0 ? ' hidden' : '') + '>›</i></div>' +
       '<div class="dc-grid">' + cells + '</div>' +
-      '<button class="dc-play' + (d.rec ? ' replay' : '') + '"><span class="dc-game" style="--c:' + d.info.accent + '"><svg viewBox="0 0 24 24">' + (ICON[d.info.id] || '') + '</svg></span>' +
-        (d.rec ? starRow(d.rec.stars, 'dc-stars') : '') + UI('play') + '</button>';
+      // défi réussi : plus de bouton, juste « Fait » avec les étoiles gagnées
+      (d.rec
+        ? '<div class="dc-done"><i class="dc-check">' + CHECK + '</i>Fait' + starRow(d.rec.stars, 'dc-stars') + '</div>'
+        : '<button class="dc-play"><span class="dc-game" style="--c:' + d.info.accent + '"><svg viewBox="0 0 24 24">' + (ICON[d.info.id] || '') + '</svg></span>' + UI('play') + '</button>');
   }
 
   // ------------------------ Liste des mini-jeux ------------------------
@@ -1251,7 +1253,7 @@
       '<span class="dr-badges">' + (dd.rec ? starRow(dd.rec.stars, 'mini-stars dr-stars') : '') +
       (dd.streak > 0 ? '<i class="dr-flame">' + FLAME + '<b>' + dd.streak + '</b></i>' : '') + '</span>' +
       '<span class="daily-go">' + (dd.rec ? CHECK : UI('play')) + '</span>';
-    row.addEventListener('click', startDaily);
+    row.addEventListener('click', () => { if (dd.rec) { $('#library').hidden = true; openDaily(); } else startDaily(); }); // fait : on montre juste le calendrier
     gl.appendChild(row);
     // rangés par capacité : un petit titre coloré, puis les cartes de ses mini-jeux
     let group = null;
