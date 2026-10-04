@@ -1079,6 +1079,7 @@
           d.totalTime += elapsed;
           gainXp(g, step.level, info.event != null ? 2 : info.daily || info.boss || info.mega ? 1.5 : 1, elapsed, hints, auto);
           info.run.time += elapsed; info.run.target += target; info.run.hints += hints;
+          nudgeNote(step, g.id, elapsed, target, hints, info, auto); // invitations : résultat de la grille (voir « Invitations »)
           if (mark) {
             tierMark(g.id, mark.tier.id, mark.k);
             // la grille de la quête est aussi un niveau de palier : ses étoiles y comptent
@@ -1462,6 +1463,7 @@
         '<b class="ld-gain" data-gain="' + gain + '">+0</b></div>';
     }).join('');
     renderEasyCard(offer); // « Trop facile ? » : variantes ou saut de quelques niveaux
+    renderLdNudge(info, !!offer); // petite invitation sous les étoiles (jamais avec « Trop facile ? »)
     const ov = $('#level-done');
     ov.hidden = false;
     C.sfx.place();
@@ -1584,6 +1586,7 @@
     renderPlay();
     renderBadge();
     scheduleOutfitCard(); // niveau de cerveau gagné : « Nouvelle tenue ! », après les autres cartes
+    nudgeHome(); // bulle d'invitation, une fois toutes les cartes passées (voir « Invitations »)
   }
 
   // étoiles des niveaux de la quête sur la carte (animate : les nouvelles montent de leur pierre)
@@ -3730,6 +3733,391 @@
   });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const o = openSheet(); if (o) o.hidden = true; } });
 
+  // =====================================================================
+  // ============================ INVITATIONS ============================
+  // Une bulle légère pour guider sans insister : la chouette d'Athéna propose UNE chose à la fois.
+  //  - Accueil : petite bulle au-dessus de la carte du niveau (une phrase, un bouton, une croix).
+  //    Au plus une par retour sur la carte, jamais pendant une autre carte (île, saga, tenue, visite…),
+  //    rien pendant les 3 premiers niveaux de la toute première partie (sauf « À toi de jouer ! »).
+  //  - Fin de niveau : une rangée discrète sous les étoiles (jamais avec « Trop facile ? »).
+  // Priorités : bon retour › découvrir un jeu neuf › s'entraîner (jeu difficile) › défi du jour ›
+  //   nouvelle tenue › jeu aimé. À part : « À toi de jouer ! » après ~8 s sans geste (premières parties).
+  // Mémoire : C.store.nudges = { sessions, firstSession, lastSeen, lastShown, until: { clé: date }, dismissed: { type: n },
+  //   games: { jeu: { r: [[étoiles, indices]…6 dernières], n, free, coached } }, today: { date, n }, wardrobeLevel }
+  // Styles : css/nudge.css. Hooks : playStep (onWin → nudgeNote), showLevelDone (renderLdNudge), goHome (nudgeHome).
+  // =====================================================================
+  const NG_H = 3600e3, NG_D = 24 * NG_H;
+  const NG_GAP = 4 * 60e3;        // pas deux bulles d'accueil à moins de 4 min
+  const NG_IDLE = 8000;           // « À toi de jouer ! » après 8 s sans geste
+  const NG = (() => {
+    const fresh = !C.store.nudges;
+    const N = (C.store.nudges = C.store.nudges || {});
+    N.until = N.until || {}; N.dismissed = N.dismissed || {}; N.games = N.games || {};
+    if (fresh) { N.firstSession = !(J.done > 0); N.wardrobeLevel = brainLevel(); }
+    if (N.wardrobeLevel == null) N.wardrobeLevel = brainLevel();
+    N.sessions = (N.sessions || 0) + 1;
+    return N;
+  })();
+  // retour après une journée (ou plus) sans ouvrir le jeu : « Bon retour ! » au prochain passage sur la carte
+  let ngBack = !!(NG.lastSeen && Date.now() - NG.lastSeen >= NG_D && J.done > 0);
+  NG.lastSeen = Date.now();
+  C.save();
+  setInterval(() => { if (!document.hidden) NG.lastSeen = Date.now(); }, 60e3);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { NG.lastSeen = Date.now(); C.save(); } });
+
+  const ngGame = (id) => { const r = (NG.games[id] = NG.games[id] || { r: [], n: 0 }); r.r = r.r || []; return r; };
+  const ngPeek = (id) => NG.games[id] || { r: [], n: 0 }; // (lecture seule : ne crée rien dans la sauvegarde)
+  const ngName = (id) => (game(id) || {}).name || id;
+  // les 3 premiers niveaux de la toute première partie : seulement l'invitation à jouer
+  const ngEarly = () => !!NG.firstSession && NG.sessions === 1 && (J.done || 0) < 3;
+  const ngFree = (key) => !(NG.until[key] > Date.now());
+  const ngMotion = () => !obReduced();
+  const ngNbsp = (s) => String(s).replace(/ ([?!:;])/g, '\u00a0$1'); // (typographie : « ? » et « ! » restent collés au mot)
+
+  // résultat de chaque grille réussie (appelé par onWin) : étoiles et indices, jeu libre ou non
+  function nudgeNote(step, id, elapsed, target, hints, info, auto) {
+    if (auto) return; // résolue d'office : ne compte pas
+    const s = starsFor(elapsed, target, hints);
+    if (step) step.res = { s, h: hints };
+    const r = ngGame(id);
+    r.r.push([s, hints]);
+    if (r.r.length > 6) r.r.shift();
+    r.n = (r.n || 0) + 1;
+    if (info && info.free && !info.daily && info.event == null) r.free = (r.free || 0) + 1;
+    const today = C.todayKey();
+    if (!NG.today || NG.today.date !== today) NG.today = { date: today, n: 0 };
+    NG.today.n++;
+    // (C.save est appelé juste après, dans onWin)
+  }
+  // grille « difficile » : des indices, ou une seule étoile en régate (en croisière, le temps ne compte pas)
+  const ngWeak = (s, h) => h >= 2 || (isCompet() ? s <= 1 : h >= 1);
+
+  // ---------- les suggestions possibles, de la plus importante à la moins pressée ----------
+  function ngCandidates() {
+    const out = [];
+    const today = C.todayKey();
+    if (ngBack) out.push({ type: 'back', key: 'back', text: 'Bon retour ! Ton île t\'attend', label: 'Jouer', accent: 'var(--k-grass)' });
+    // un jeu tout juste débloqué, jamais joué hors de la quête
+    unlockedIds().filter((id) => unlockAt(id) > 0 && islesDone() - unlockAt(id) <= 3 && !(ngPeek(id).free > 0))
+      .forEach((id) => out.push({ type: 'discover', key: 'discover:' + id, id, text: 'Découvre ' + ngName(id), label: 'Essayer' }));
+    // un jeu qui résiste : 2 des 3 dernières grilles avec indices (ou 1 étoile en régate)
+    const weak = unlockedIds().map((id) => {
+      const r = (ngPeek(id).r || []).slice(-3);
+      return { id, w: r.length >= 2 ? r.filter(([s, h]) => ngWeak(s, h)).length : 0 };
+    }).filter((x) => x.w >= 2).sort((a, b) => b.w - a.w);
+    weak.forEach((x) => out.push({ type: 'train', key: 'train:' + x.id, id: x.id, text: 'Envie de t\'entraîner à ' + ngName(x.id) + ' ?', label: 'Jouer' }));
+    // défi du jour pas encore fait, une fois qu'on a un peu joué aujourd'hui
+    if (!DAY.days[today] && NG.today && NG.today.date === today && NG.today.n >= 2) {
+      const d = dailyInfo();
+      out.push({ type: 'daily', key: 'daily:' + today, id: d.id, text: 'Le défi du jour t\'attend', label: 'Voir' });
+    }
+    // une pièce de tenue gagnée (sa carte est passée) que l'atelier n'a pas encore montrée
+    const fresh = ngOutfitFresh();
+    if (fresh.length) out.push({ type: 'outfit', key: 'outfit:' + brainLevel(), fresh, text: 'Essaie ta nouvelle tenue', label: 'Essayer', accent: 'var(--k-coral)' });
+    // un jeu aimé ou réussi : souvent 3 étoiles sans indice, ou très souvent joué ; encore peu joué en libre
+    unlockedIds().map((id) => {
+      const g = ngPeek(id), top = (g.r || []).filter(([s, h]) => s >= 3 && !h).length;
+      return { id, n: g.n || 0, top, free: g.free || 0 };
+    }).filter((x) => x.free < 3 && ((x.top >= 4 && x.n >= 5) || x.n >= 15)).sort((a, b) => b.top - a.top || b.n - a.n)
+      .forEach((x) => out.push({ type: 'like', key: 'like:' + x.id, id: x.id, text: 'Tu aimes ' + ngName(x.id) + ' ? Entraîne-toi', label: 'Jouer' }));
+    return out;
+  }
+  function ngOutfitFresh() {
+    const from = NG.wardrobeLevel || 0, now = Math.min(brainLevel(), C.store.outfitSeen || 0), opts = skinOptions(), fresh = [];
+    if (now <= from) return fresh;
+    Object.keys(OUTFIT_UNLOCK).forEach((key) => {
+      const need = OUTFIT_UNLOCK[key], [cat, id] = key.split(':');
+      const o = (opts[cat] || []).find((x) => x.id === id);
+      if (o && need > from && need <= now && skinState()[cat] !== id) fresh.push({ cat, o, need });
+    });
+    return fresh.sort((a, b) => a.need - b.need);
+  }
+  // l'atelier ouvert : les pièces gagnées jusqu'ici sont vues
+  $('#open-wardrobe').addEventListener('click', () => { NG.wardrobeLevel = brainLevel(); C.save(); });
+
+  // durées de pause (après affichage, refus ✕, ou action) ; un refus répété double la pause (jusqu'à 30 jours)
+  const NG_CD = {
+    back: [0, 0, 0],
+    discover: [NG_D, 3 * NG_D, 365 * NG_D],
+    train: [NG_D, 3 * NG_D, 2 * NG_D],
+    daily: [NG_D, NG_D, NG_D],
+    outfit: [NG_D, 2 * NG_D, NG_D],
+    like: [3 * NG_D, 7 * NG_D, 7 * NG_D],
+    idle: [0, 0, 0]
+  };
+  function ngPause(c, how) { // how : 0 affiché, 1 refusé, 2 accepté
+    const base = (NG_CD[c.type] || [NG_D, NG_D, NG_D])[how];
+    if (!base) return;
+    let t = base;
+    if (how === 1) t = Math.min(30 * NG_D, base * Math.pow(2, Math.min(4, (NG.dismissed[c.type] || 1) - 1)));
+    NG.until[c.key] = Math.max(NG.until[c.key] || 0, Date.now() + t);
+    // (ménage : on oublie les pauses échues)
+    Object.keys(NG.until).forEach((k) => { if (NG.until[k] < Date.now()) delete NG.until[k]; });
+  }
+  function nudgePick() {
+    if (ngEarly()) return null;
+    const list = ngCandidates();
+    const back = list.find((c) => c.type === 'back');
+    if (back) return back; // (un « Bon retour » passe outre l'espacement)
+    if (Date.now() - (NG.lastShown || 0) < NG_GAP) return null;
+    return list.find((c) => ngFree(c.key)) || null;
+  }
+
+  // ---------- quelque chose d'autre à l'écran ? (cartes, feuilles, visite, intro, Ulysse en route) ----------
+  const ngOpen = (s) => { const e = $(s); return !!(e && !e.hidden); };
+  const NG_CARDS = ['#unlock-card', '#outfit-card', '#saga-card'];
+  const ngCardSoon = () => !!(unlockBusy() || unlockAfter || unlockTimer || outfitTimer || NG_CARDS.some(ngOpen));
+  function ngBlocked() {
+    const intro = document.getElementById('intro');
+    if (screens.home.hidden || (intro && intro.style.display !== 'none') || OB.on || document.querySelector('.ob-welcome, .ob-tour')) return true;
+    if (ngCardSoon() || ['#level-done', '#rules', '#ld-easy:not([hidden])'].some(ngOpen)) return true;
+    if (SHEETS.some((id) => ngOpen('#' + id)) || document.documentElement.classList.contains('creator-open')) return true;
+    const go = $('#go'), card = $('#lvcard');
+    return !go || go.hidden || go.classList.contains('ff') || !card || card.hidden;
+  }
+
+  // ---------- la bulle de l'accueil ----------
+  // chouette d'Athéna (dessin maison, trait encre, couleurs fixes)
+  const NG_OWL = '<svg viewBox="0 0 48 48" aria-hidden="true"><g stroke="#3a3550" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round">' +
+    '<path d="M14 18 11.5 8.5 20 14.5zM34 18l2.5-9.5-8.5 6z" fill="#a8774c"/>' +
+    '<path d="M10.5 41C8 29 10.5 14.5 24 13.5 37.5 14.5 40 29 37.5 41 30 45.5 18 45.5 10.5 41z" fill="#b9875a"/>' +
+    '<path d="M16.5 40.5c-.5-6 2.5-10 7.5-10s8 4 7.5 10c-4.5 2-10.5 2-15 0z" fill="#f3dcb5" stroke-width="2"/>' +
+    '<circle cx="18" cy="24" r="6" fill="#fff" stroke-width="2"/><circle cx="30" cy="24" r="6" fill="#fff" stroke-width="2"/></g>' +
+    '<g class="ng-eyes" fill="#3a3550"><circle cx="19" cy="24.5" r="2.7"/><circle cx="29" cy="24.5" r="2.7"/></g>' +
+    '<circle cx="20" cy="23.4" r=".9" fill="#fff"/><circle cx="30" cy="23.4" r=".9" fill="#fff"/>' +
+    '<path d="M22.2 28h3.6L24 31.6z" fill="#ffc93d" stroke="#3a3550" stroke-width="1.6" stroke-linejoin="round"/>' +
+    '<path d="M18 35.5q1.2 1.2 2.4 0M22.8 37.5q1.2 1.2 2.4 0M27.6 35.5q1.2 1.2 2.4 0" fill="none" stroke="#c99a68" stroke-width="1.4" stroke-linecap="round"/></svg>';
+  const NG_X = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg>';
+  const NG_PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>';
+  let ngCur = null, ngHideT = 0, ngWatch = 0;
+  function ngEl() {
+    let el = $('#ng-bubble');
+    if (el) return el;
+    el = document.createElement('div');
+    el.id = 'ng-bubble';
+    el.className = 'ng-bubble';
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+    el.hidden = true;
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.ng-x')) { nudgeHide(1); return; }
+      if (e.target.closest('.ng-go')) nudgeAct();
+    });
+    $('#home').appendChild(el);
+    return el;
+  }
+  // affiche une suggestion (c : objet de ngCandidates, ou { type: 'idle' })
+  function nudgeShow(c) {
+    if (!c) return;
+    const el = ngEl();
+    ngCur = c;
+    const accent = c.accent || (c.id ? ACCENT[c.id] : 'var(--k-grass)');
+    const chip = c.id ? '<i class="ng-chip">' + icon(c.id) + '</i>' : NG_PLAY;
+    el.style.setProperty('--ng-c', accent);
+    el.dataset.type = c.type;
+    el.innerHTML = '<span class="ng-owl">' + NG_OWL + '</span>' +
+      '<div class="ng-card"><p class="ng-text">' + ngNbsp(c.text) + '</p>' +
+      '<button class="ng-go" type="button">' + chip + '<span>' + c.label + '</span></button>' +
+      '<button class="ng-x" type="button" aria-label="Plus tard">' + NG_X + '</button></div>';
+    el.classList.toggle('still', !ngMotion());
+    el.classList.remove('out');
+    el.hidden = false;
+    el.classList.remove('in'); void el.offsetWidth; el.classList.add('in');
+    if (c.type === 'idle') { const go = $('#go'); if (go) go.classList.add('ng-pulse'); }
+    else {
+      NG.lastShown = Date.now();
+      ngPause(c, 0);
+      if (c.type === 'back') ngBack = false;
+      C.save();
+    }
+    if (C.sfx && C.sfx.tap) C.sfx.tap();
+    // elle s'en va seule après un moment (sans compter comme un refus)
+    clearTimeout(ngHideT);
+    ngHideT = setTimeout(() => nudgeHide(0), c.type === 'idle' ? 9000 : 14000);
+    // une feuille s'ouvre, la carte du niveau disparaît (Ulysse en route), une partie démarre : la bulle s'efface
+    clearInterval(ngWatch);
+    ngWatch = setInterval(() => { if (ngCur && ngBlocked()) nudgeHide(0); }, 400);
+  }
+  // how : 0 simple disparition, 1 refus (✕), 2 action
+  function nudgeHide(how) {
+    clearTimeout(ngHideT); clearInterval(ngWatch);
+    const go = $('#go'); if (go) go.classList.remove('ng-pulse');
+    const c = ngCur, el = $('#ng-bubble');
+    ngCur = null;
+    if (c && how && c.type !== 'idle') {
+      if (how === 1) NG.dismissed[c.type] = (NG.dismissed[c.type] || 0) + 1;
+      if (c.type === 'outfit') NG.wardrobeLevel = brainLevel(); // (refusée ou acceptée : on n'en reparle pas)
+      ngPause(c, how);
+      C.save();
+    }
+    if (how === 1 && C.sfx && C.sfx.tap) C.sfx.tap();
+    if (!el || el.hidden) return;
+    el.classList.add('out');
+    setTimeout(() => { if (!ngCur) { el.hidden = true; el.classList.remove('in', 'out'); } }, ngMotion() ? 260 : 0);
+  }
+  // le bouton de la bulle
+  function nudgeAct() {
+    const c = ngCur;
+    if (!c) return;
+    nudgeHide(2);
+    C.sfx.tap();
+    if (c.type === 'back' || c.type === 'idle') { const go = $('#go'); if (go && !go.hidden) go.click(); return; }
+    if (c.type === 'daily') { openDaily(); return; }
+    if (c.type === 'like') { openLevels(c.id); return; }
+    if (c.type === 'discover') { ngTrial(c.id, false); return; }
+    if (c.type === 'train') { ngTrain(c.id); return; }
+    if (c.type === 'outfit') {
+      const fresh = c.fresh || [];
+      if (fresh.length) wdPart = fresh[0].cat;
+      $('#open-wardrobe').click();
+      crFresh = fresh.map((f) => f.cat + ':' + f.o.id);
+      renderWardrobe(true);
+      const t = $('#wd-choices .cr-tile.fresh');
+      if (t) t.scrollIntoView({ block: 'nearest' });
+    }
+  }
+  // essai d'un jeu : 3 grilles au prochain niveau de son palier, puis retour sur la carte
+  function ngTrial(id) {
+    const nx = nextTier(id);
+    startTier(id, nx ? nx.tier.id : TIERS[0].id, nx ? nx.k : 1, false, 3);
+  }
+  // entraînement : 3 grilles du palier Basique (au niveau où l'on en est), et la première fois, on montre 💬
+  function ngTrain(id) {
+    const k = Math.max(1, Math.min(TIER_SIZE, tierDone(id, 'basique') + 1));
+    startTier(id, 'basique', k, false, 3);
+    const r = ngGame(id);
+    if (r.coached) return;
+    r.coached = 1;
+    C.save();
+    let tries = 0;
+    const offer = () => {
+      if (tries++ > 50 || screens.play.hidden) return;
+      if (!session || session.g.id !== id || !$('#rules').hidden) { setTimeout(offer, 300); return; }
+      const b = $('#btn-explain');
+      if (!b) return;
+      b.classList.add('ng-pulse');
+      setTimeout(() => b.classList.remove('ng-pulse'), 6000);
+      showTip({ text: 'Bloqué ? Touche la bulle : je t\'explique la méthode.' }, true);
+    };
+    setTimeout(offer, 600);
+  }
+
+  // au retour sur la carte (goHome) et à l'ouverture : on attend que tout soit calme, puis une suggestion
+  let ngWait = 0, ngVisit = 0;
+  function nudgeHome() {
+    clearTimeout(ngWait);
+    if (ngCur) nudgeHide(0);
+    const visit = ++ngVisit;
+    let tries = 0, card = false;
+    const check = () => {
+      ngWait = 0;
+      if (visit !== ngVisit || screens.home.hidden) return;
+      // une carte (île, saga, tenue) passe pendant ce retour : on n'ajoute rien, ce sera pour le prochain
+      if (ngCardSoon()) card = true;
+      if (ngBlocked()) { if (tries++ < 60) ngWait = setTimeout(check, 700); return; }
+      if (!card) nudgeShow(nudgePick());
+      ngIdleArm();
+    };
+    ngWait = setTimeout(check, 3200); // (après la carte « Nouvelle tenue ! », programmée à 2,7 s)
+  }
+
+  // ---------- « À toi de jouer ! » : premières parties, 8 s sur la carte sans rien toucher ----------
+  let ngIdleT = 0, ngIdleN = 0;
+  const ngIdleOk = () => (NG.sessions <= 3 || (J.done || 0) < 5) && ngIdleN < 2;
+  function ngIdleArm() {
+    clearTimeout(ngIdleT);
+    if (!ngIdleOk() || screens.home.hidden) return;
+    ngIdleT = setTimeout(() => {
+      if (screens.home.hidden || !ngIdleOk()) return;
+      if (ngCur || ngBlocked()) { ngIdleArm(); return; }
+      ngIdleN++;
+      nudgeShow({ type: 'idle', key: 'idle', text: 'À toi de jouer !', label: 'Jouer', accent: 'var(--k-grass)' });
+    }, NG_IDLE);
+  }
+  ['pointerdown', 'keydown', 'wheel'].forEach((t) => document.addEventListener(t, (e) => {
+    if (ngCur && ngCur.type === 'idle' && !(e.target.closest && e.target.closest('#ng-bubble'))) nudgeHide(0);
+    if (ngIdleT) ngIdleArm();
+  }, { capture: true, passive: true }));
+  // le bouton Jouer touché : la bulle s'efface (sans compter comme un refus)
+  $('#go').addEventListener('click', () => { if (ngCur) nudgeHide(0); clearTimeout(ngIdleT); });
+
+  // ---------- fin de niveau : une petite rangée sous les étoiles ----------
+  function renderLdNudge(info, easy) {
+    let row = $('#ld-nudge');
+    if (!row) {
+      row = document.createElement('div');
+      row.id = 'ld-nudge';
+      row.className = 'ld-nudge';
+      row.hidden = true;
+      row.addEventListener('click', (e) => {
+        const b = e.target.closest('.ldn-go');
+        if (!b || !row._c) return;
+        const c = row._c;
+        ngPause(c, 2);
+        C.save();
+        C.sfx.tap();
+        $('#level-done').hidden = true;
+        if (c.type === 'train') ngTrain(c.id);
+        else { goHome(); setTimeout(() => openLevels(c.id), 350); }
+      });
+      $('#level-done .ld-actions').before(row);
+    }
+    row.hidden = true;
+    row._c = null;
+    if (easy || info.summary || info.assisted || ngEarly() || !info.steps) return;
+    if (Date.now() - (NG.lastShown || 0) < 2 * 60e3) return; // une invitation vient d'être faite
+    const steps = info.steps.filter((s) => s.res && isUnlocked(s.id));
+    let c = null;
+    // une grille difficile : un petit entraînement à ce jeu
+    const weak = steps.filter((s) => ngWeak(s.res.s, s.res.h)).map((s) => s.id).find((id) => ngFree('ldtrain:' + id) && ngFree('train:' + id));
+    if (weak) c = { type: 'train', key: 'ldtrain:' + weak, id: weak, text: 'Un petit entraînement à ' + ngName(weak) + ' ?' };
+    else {
+      // 3 étoiles sans indice sur un jeu souvent réussi, encore peu joué en libre : le jouer en libre
+      const liked = steps.filter((s) => s.res.s >= 3 && !s.res.h).map((s) => s.id).find((id) => {
+        const g = ngPeek(id);
+        return (g.free || 0) < 3 && (g.r || []).filter(([s, h]) => s >= 3 && !h).length >= 3 && ngFree('ldlike:' + id) && ngFree('like:' + id);
+      });
+      if (liked) c = { type: 'like', key: 'ldlike:' + liked, id: liked, text: ngName(liked) + ' te plaît ? Joue-le en libre' };
+    }
+    if (!c) return;
+    row._c = c;
+    row.style.setProperty('--ng-c', ACCENT[c.id]);
+    row.innerHTML = '<i class="ng-chip">' + icon(c.id) + '</i><p class="ldn-text">' + ngNbsp(c.text) + '</p>' +
+      '<button class="ldn-go" type="button" aria-label="Jouer">' + NG_PLAY + '</button>';
+    row.classList.toggle('still', !ngMotion());
+    row.hidden = false;
+    NG.lastShown = Date.now();
+    ngPause(c, 0);
+    NG.until[c.key] = Date.now() + (c.type === 'train' ? NG_D : 3 * NG_D);
+    C.save();
+  }
+
+  // ouverture du jeu : même attente que pour un retour (l'intro, l'accueil du premier lancement passent d'abord)
+  nudgeHome();
+  // (tests) Odysseum.nudge.show('daily' | 'train' | 'like' | 'discover' | 'outfit' | 'back' | 'idle', idJeu)
+  const nudgeTest = {
+    state: NG, candidates: ngCandidates, pick: nudgePick, hide: nudgeHide, home: nudgeHome, levelDone: renderLdNudge, note: nudgeNote,
+    blocked: ngBlocked, idle: ngIdleArm,
+    show(type, id) {
+      const d = dailyInfo();
+      id = id || (type === 'daily' ? d.id : unlockedIds()[0]);
+      const T = {
+        back: { text: 'Bon retour ! Ton île t\'attend', label: 'Jouer', accent: 'var(--k-grass)', id: null },
+        discover: { text: 'Découvre ' + ngName(id), label: 'Essayer' },
+        train: { text: 'Envie de t\'entraîner à ' + ngName(id) + ' ?', label: 'Jouer' },
+        daily: { text: 'Le défi du jour t\'attend', label: 'Voir' },
+        outfit: { text: 'Essaie ta nouvelle tenue', label: 'Essayer', accent: 'var(--k-coral)', id: null, fresh: ngOutfitFresh() },
+        like: { text: 'Tu aimes ' + ngName(id) + ' ? Entraîne-toi', label: 'Jouer' },
+        idle: { text: 'À toi de jouer !', label: 'Jouer', accent: 'var(--k-grass)', id: null }
+      }[type];
+      if (!T) return null;
+      const c = Object.assign({ type, key: 'test:' + type, id }, T);
+      if (c.id === null) delete c.id;
+      nudgeShow(c);
+      return c;
+    }
+  };
+
   // exposé pour les tests
   window.Odysseum = { levelInfo, journey: J, eventInfo, eventList, startEvent,
     session: () => session, targetTime, starsFor, dailyInfo, startDaily, renderDaily, dailyStreak, refreshStars, startLevel, startTier, openLevels,
@@ -3737,6 +4125,7 @@
     unlock: { table: UNLOCK, isUnlocked, unlockedIds, poolOf, showUnlockCard, scheduleUnlockCard, finishLevel, goHome } };
   $('#open-daily').addEventListener('click', openDaily);
   window.Odysseum.variants = { on: variantsOn, set: setVariants, easyOffer, skipTarget, from: VARIANT_FROM }; // (tests)
+  window.Odysseum.nudge = nudgeTest; // (tests) invitations : Odysseum.nudge.show(type, jeu)
 
   // appli installée depuis Chrome : toujours à jour (voir sw.js) ; inutile dans l'APK
   if ('serviceWorker' in navigator && location.protocol === 'https:' && !window.Capacitor) {

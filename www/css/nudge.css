@@ -1,0 +1,92 @@
+/* =====================================================================
+   Odysseus — invitations (app.js, section « Invitations ») : la bulle de la chouette
+   d'Athéna sur l'accueil (#ng-bubble), la petite rangée du bilan (#ld-nudge),
+   et les pulsations douces (bouton Jouer, bouton 💬).
+   Chargée en dernier. Jetons de couleur de css/cartoon.css (clair et sombre).
+   --ng-c : couleur de la suggestion (le jeu proposé, l'herbe, le corail…).
+   ===================================================================== */
+
+/* ---------- Accueil : la bulle, posée juste au-dessus de la carte du niveau ---------- */
+#home .ng-bubble { --ng-w: min(360px, calc(100vw - 32px));
+  position: fixed; z-index: 7; left: 50%; width: var(--ng-w); margin-left: calc(var(--ng-w) / -2);
+  bottom: calc(var(--lc-b) + var(--lc-h) + 16px);
+  display: flex; align-items: flex-end; gap: 8px; pointer-events: none;
+  font-family: var(--k-font, 'Fredoka', sans-serif); }
+#home .ng-bubble[hidden] { display: none; }
+.ng-bubble > * { pointer-events: auto; }
+
+/* la chouette, dans sa pastille ronde */
+.ng-owl { flex: none; width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--k-bubble, #fff); box-shadow: 0 4px 0 var(--k-edge, #d9cfe8), var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14)); }
+.ng-owl svg { width: 40px; height: 40px; display: block; overflow: visible; }
+
+/* la bulle de parole : une phrase, un bouton, une croix discrète */
+.ng-card { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px;
+  padding: 10px 34px 10px 14px; border-radius: 22px; min-height: 56px; box-sizing: border-box;
+  background: var(--k-bubble, #fff); color: var(--k-ink, #3a3550);
+  box-shadow: 0 5px 0 var(--k-edge, #d9cfe8), var(--k-drop, 0 8px 18px rgba(80, 60, 140, .18)); }
+/* la pointe, tournée vers la chouette */
+.ng-card::before { content: ''; position: absolute; left: -6px; bottom: 16px; width: 14px; height: 14px; border-radius: 3px;
+  background: var(--k-bubble, #fff); transform: rotate(45deg); }
+.ng-text { position: relative; flex: 1; min-width: 0; margin: 0; font: 700 15px/1.2 var(--k-font, 'Fredoka', sans-serif); color: var(--k-ink, #3a3550);
+  text-wrap: balance; }
+.ng-go { position: relative; flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px 0 6px; border: 0; cursor: pointer;
+  border-radius: var(--k-r-pill, 999px); background: var(--ng-c, var(--k-grass, #5cc93b)); color: #fff;
+  font: 700 15px/1 var(--k-font, 'Fredoka', sans-serif); text-shadow: 0 1px 0 rgba(0, 0, 0, .18); white-space: nowrap;
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--ng-c, #5cc93b) 68%, #1c1530), var(--k-shine, inset 0 3px 0 rgba(255, 255, 255, .45));
+  transition: transform .2s var(--k-ease, ease); }
+.ng-go:active { transform: translateY(2px); box-shadow: 0 1px 0 color-mix(in srgb, var(--ng-c, #5cc93b) 68%, #1c1530); }
+.ng-go > svg { width: 18px; height: 18px; margin-left: 6px; fill: #fff; }
+.ng-chip { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; flex: none; background: rgba(255, 255, 255, .24); }
+.ng-chip svg { width: 18px; height: 18px; fill: none; stroke: #fff; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
+.ng-chip svg .f { fill: #fff; }
+.ng-x { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  display: grid; place-items: center; background: transparent; color: var(--k-ink-soft, #8a83a3); }
+.ng-x svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; }
+.ng-x:active { background: var(--k-well, #f1ecf8); }
+
+/* arrivée : la bulle s'ouvre depuis la chouette, qui fait un petit saut ; départ : fondu */
+.ng-bubble.in .ng-card { animation: ng-in .45s var(--k-ease, cubic-bezier(.34, 1.56, .64, 1)) .12s both; transform-origin: 0 100%; }
+.ng-bubble.in .ng-owl { animation: ng-hop .5s var(--k-ease, ease) both, ng-bob 3.2s ease-in-out 1s infinite; }
+.ng-bubble.in .ng-eyes { animation: ng-blink 4.5s ease-in-out 1.4s infinite; transform-origin: 24px 24.5px; }
+.ng-bubble.out { animation: ng-out .26s ease-in forwards; }
+@keyframes ng-in { from { opacity: 0; transform: translateY(8px) scale(.85); } }
+@keyframes ng-hop { from { opacity: 0; transform: translateY(16px) scale(.8); } 60% { transform: translateY(-4px); } }
+@keyframes ng-bob { 50% { transform: translateY(-3px) rotate(-4deg); } }
+@keyframes ng-blink { 0%, 92%, 100% { transform: scaleY(1); } 96% { transform: scaleY(.1); } }
+@keyframes ng-out { to { opacity: 0; transform: translateY(6px); } }
+
+/* très petits écrans : un peu plus serré */
+@media (max-width: 380px) {
+  .ng-text { font-size: 14px; }
+  .ng-card { gap: 8px; padding-left: 12px; }
+  .ng-go { padding-right: 12px; font-size: 14px; }
+}
+
+/* ---------- pulsations douces : le bouton Jouer (« À toi de jouer ! »), le bouton 💬 (premier entraînement) ---------- */
+#home #go.ng-pulse { animation: ng-go 1.2s ease-in-out .2s 4; }
+@keyframes ng-go { 50% { scale: 1.09; } }
+#btn-explain.ng-pulse { outline: 3px solid var(--k-sun, #ffc93d); outline-offset: 2px; border-radius: 50%; animation: ng-ring 1.1s ease-out 5; }
+@keyframes ng-ring { from { outline-offset: 0; outline-color: var(--k-sun, #ffc93d); } to { outline-offset: 9px; outline-color: transparent; } }
+
+/* ---------- Fin de niveau : une petite rangée sous les étoiles ---------- */
+.ld-nudge { width: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 10px; margin: 2px 0 4px; padding: 7px 7px 7px 9px;
+  border-radius: var(--k-r-md, 20px); background: color-mix(in srgb, var(--ng-c, #5cc93b) 13%, var(--k-bubble, #fff));
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ng-c, #5cc93b) 30%, transparent);
+  animation: ng-in .45s var(--k-ease, cubic-bezier(.34, 1.56, .64, 1)) 1.6s both; }
+.ld-nudge[hidden] { display: none; }
+.ld-nudge .ng-chip { width: 34px; height: 34px; background: var(--ng-c, #5cc93b); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .15); }
+.ld-nudge .ng-chip svg { width: 20px; height: 20px; }
+.ldn-text { flex: 1; min-width: 0; margin: 0; text-align: left; font: 700 15px/1.2 var(--k-font, 'Fredoka', sans-serif); color: var(--k-ink, #3a3550); }
+.ldn-go { flex: none; width: 44px; height: 44px; border: 0; border-radius: 50%; cursor: pointer; display: grid; place-items: center;
+  background: var(--ng-c, #5cc93b); box-shadow: 0 3px 0 color-mix(in srgb, var(--ng-c, #5cc93b) 68%, #1c1530), var(--k-shine, inset 0 3px 0 rgba(255, 255, 255, .45)); }
+.ldn-go svg { width: 20px; height: 20px; margin-left: 3px; fill: #fff; }
+.ldn-go:active { transform: translateY(2px); box-shadow: 0 1px 0 color-mix(in srgb, var(--ng-c, #5cc93b) 68%, #1c1530); }
+
+/* ---------- animations réduites (réglage du jeu ou du téléphone) : tout reste immobile ---------- */
+.ng-bubble.still, .ng-bubble.still *, .ld-nudge.still { animation: none !important; }
+html.a11y-motion .ng-bubble, html.a11y-motion .ng-bubble *, html.a11y-motion .ld-nudge,
+html.a11y-motion #home #go.ng-pulse, html.a11y-motion #btn-explain.ng-pulse { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .ng-bubble, .ng-bubble *, .ld-nudge, #home #go.ng-pulse, #btn-explain.ng-pulse { animation: none !important; }
+}
