@@ -55,13 +55,24 @@
     };
     cols.forEach((c, r) => { region[r * n + c] = r; });
     cols.forEach((c, r) => pushNb(r * n + c, r));
+    // régions plus équilibrées : le plus souvent, on fait grandir une des plus petites
+    // (sinon une couronne reste vite enfermée dans une région d'une seule case)
+    const size = new Array(n).fill(1);
     while (frontier.length) {
-      const i = rng.int(frontier.length);
+      let i = rng.int(frontier.length);
+      if (rng() < 0.75) {
+        let min = Infinity;
+        frontier.forEach(([cell, id]) => { if (region[cell] < 0 && size[id] < min) min = size[id]; });
+        const small = [];
+        frontier.forEach(([cell, id], k) => { if (region[cell] < 0 && size[id] === min) small.push(k); });
+        if (small.length) i = small[rng.int(small.length)];
+      }
       const [cell, id] = frontier[i];
       frontier[i] = frontier[frontier.length - 1];
       frontier.pop();
       if (region[cell] >= 0) continue;
       region[cell] = id;
+      size[id]++;
       pushNb(cell, id);
     }
     return region;
@@ -115,22 +126,33 @@
     return placed === n;
   }
 
+  // régions d'une seule case : elles donnent la réponse d'office (trop facile) — on les évite
+  function singles(n, region) {
+    const size = new Array(n).fill(0);
+    region.forEach((k) => { size[k]++; });
+    return size.filter((s) => s === 1).length;
+  }
+
   function generate(rng, p) {
-    let fallback = null, unique = null;
-    for (let t = 0; t < (p.easy ? 1500 : 400); t++) {
+    let fallback = null, best = null, bestS = 99;
+    for (let t = 0; t < (p.easy ? 1500 : 600); t++) {
       const cols = placeQueens(p.n, rng, p.variant);
       const region = growRegions(p.n, cols, rng);
       const puzzle = { n: p.n, variant: p.variant, region: Array.from(region), solution: cols };
       if (!fallback) fallback = puzzle;
+      const s = singles(p.n, region);
+      if (s >= bestS) continue; // on garde la grille unique qui a le moins de cases seules
       if (countSolutions(p.n, region, 2, p.variant) !== 1) continue;
-      if (!p.easy || easySolvable(p.n, region, p.variant)) return puzzle;
-      if (!unique) unique = puzzle;
+      if (p.easy && !easySolvable(p.n, region, p.variant)) continue;
+      best = puzzle; bestS = s;
+      if (s === 0) return puzzle;
     }
-    return unique || fallback;
+    return best || fallback;
   }
 
   function params(level, variant) {
-    // premiers niveaux : grilles qui se résolvent par simples évidences (voir easySolvable)
+    // premiers niveaux : grilles qui se résolvent par simples évidences (voir easySolvable),
+    // sans être données d'office par des régions d'une seule case (voir generate)
     return { n: Math.min(9, (variant === 'cavaliers' ? 6 : 4) + Math.floor((level - 1) / 5)), variant, easy: level <= 12 };
   }
 

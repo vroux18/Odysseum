@@ -448,8 +448,8 @@
     setTimeout(() => { el.hidden = true; el.classList.remove('in', 'out'); }, 300);
     C.sfx.tap();
     if (tryId) {
-      const nx = nextTier(tryId);
-      setTimeout(() => startTier(tryId, nx ? nx.tier.id : TIERS[0].id, nx ? nx.k : 1, false, 3), 250); // 3 grilles d'essai
+      const f = fitTier(-2); // au niveau du joueur, un cran en dessous pour découvrir
+      setTimeout(() => startTier(tryId, f.tier, f.k, false, 3), 250); // 3 grilles d'essai
       return; // (une carte de saga en attente passera au retour sur la carte)
     }
     if (unlockAfter) { const f = unlockAfter; unlockAfter = null; setTimeout(f, 350); }
@@ -1894,6 +1894,16 @@
     C.save();
   }
   // prochain niveau à jouer d'un mini-jeu : le plus haut palier ouvert pas encore terminé
+  // palier et numéro de niveau dont la difficulté correspond à celle du joueur dans la quête (+ décalage) :
+  // les jeux proposés (essai, entraînement) sont ainsi à son niveau, ni trop simples ni trop durs
+  function fitTier(offset) {
+    const want = Math.max(1, Math.min(40, questLevel(J.done, false) + (offset || 0)));
+    let t = TIERS[0];
+    TIERS.forEach((x) => { if (x.from <= want) t = x; });
+    let k = 1;
+    while (k < TIER_SIZE && tierLevel(t, k) < want) k++;
+    return { tier: t.id, k };
+  }
   function nextTier(id) {
     let nx = null;
     TIERS.forEach((t, k) => { const d = tierDone(id, t.id); if (tierOpen(id, k) && d < TIER_SIZE) nx = { tier: t, k: d + 1 }; });
@@ -3976,15 +3986,15 @@
       if (t) t.scrollIntoView({ block: 'nearest' });
     }
   }
-  // essai d'un jeu : 3 grilles au prochain niveau de son palier, puis retour sur la carte
+  // essai d'un jeu : 3 grilles au niveau du joueur (voir fitTier), puis retour sur la carte
   function ngTrial(id) {
-    const nx = nextTier(id);
-    startTier(id, nx ? nx.tier.id : TIERS[0].id, nx ? nx.k : 1, false, 3);
+    const f = fitTier(-2); // découverte : un cran sous le niveau du joueur
+    startTier(id, f.tier, f.k, false, 3);
   }
-  // entraînement : 3 grilles du palier Basique (au niveau où l'on en est), et la première fois, on montre 💬
+  // entraînement : 3 grilles un cran sous le niveau du joueur, et la première fois, on montre 💬
   function ngTrain(id) {
-    const k = Math.max(1, Math.min(TIER_SIZE, tierDone(id, 'basique') + 1));
-    startTier(id, 'basique', k, false, 3);
+    const f = fitTier(-2);
+    startTier(id, f.tier, f.k, false, 3);
     const r = ngGame(id);
     if (r.coached) return;
     r.coached = 1;
