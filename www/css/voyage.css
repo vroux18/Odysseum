@@ -240,11 +240,6 @@
 #home #cam-mode.on { background: color-mix(in srgb, var(--k-sea, #1d9be0) 18%, transparent) !important; }
 #home #open-library:active, #home #open-daily:active, #home #open-wardrobe:active, #home #cam-mode:active { background: color-mix(in srgb, var(--k-ink, #3a3550) 10%, transparent) !important; }
 
-/* mode épuré (toucher la carte) : seuls restent le paysage et la carte du prochain niveau */
-#home #open-brain, #home #open-settings, #home #open-daily, #home #open-library, #home #open-wardrobe, #home #cam-mode, #home::after { transition: opacity .3s ease, transform .3s ease; }
-#home.calm #open-brain, #home.calm #open-settings { opacity: 0 !important; pointer-events: none !important; transform: translateY(-12px) !important; }
-#home.calm #open-daily, #home.calm #open-library, #home.calm #open-wardrobe, #home.calm #cam-mode, #home.calm::after { opacity: 0 !important; pointer-events: none !important; }
-#home.calm { --lc-b: calc(22px + env(safe-area-inset-bottom, 0px)); }
 #home .lvcard, #home #go { transition: bottom .35s cubic-bezier(.34, 1.4, .64, 1); }
 
 /* ordre des onglets : Défi · Tenue · Vue · Jeux (Jeux tout à droite) */
