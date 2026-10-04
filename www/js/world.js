@@ -3575,6 +3575,10 @@
   let _sr = null; // (THREE n'est connu qu'après World.init)
   function updateStars(t) {
     if (!starPts) return;
+    // vitrine : les étoiles rapetissent et s'effacent (elles passeraient devant Ulysse)
+    starPts.material.size = 0.34 * (1 - showVeil);
+    starPts.visible = showVeil < 0.97;
+    if (!starPts.visible) return;
     _sr = _sr || new THREE.Vector3();
     _sr.setFromMatrixColumn(camera.matrixWorld, 0); _sr.y = 0;
     if (_sr.lengthSq() < 1e-6) _sr.set(1, 0, 0); else _sr.normalize();
@@ -3604,7 +3608,9 @@
   function animateEvent(ch, dt, t) {
     const ev = ch.event;
     if (!ev || !ev.st) return;
-    ev.group.visible = ch.fade > 0.3;
+    // (vitrine : le totem se replie pour ne pas masquer Ulysse)
+    ev.group.visible = ch.fade > 0.3 && showVeil < 0.97;
+    ev.group.scale.setScalar(Math.max(0.01, 1 - showVeil));
     if (!ev.group.visible) return;
     const open = ev.st.open, still = calm;
     const bob = still ? 0 : Math.sin(t * 1.8 + ev.phase) * (open ? 0.07 : 0.025);
@@ -4438,6 +4444,7 @@
       }
     }
     hero.moving = moving;
+    showVeil += ((showcaseOn ? 1 : 0) - showVeil) * (1 - Math.exp(-dt * 6));
     if (hero.celebrate > 0) {
       hero.celebrate = Math.max(0, hero.celebrate - dt * 1.6);
       const jump = Math.sin(Math.PI * (1 - hero.celebrate)) * 0.4;
@@ -4829,6 +4836,9 @@
   // (vue fixe, un peu reculée : on voit le coin d'île autour d'Ulysse ; pas de zoom au doigt)
   const FOLLOW_R = 6.9, FOLLOW_ELEV = 0.5;
   let showcaseOn = false, showcaseT = 0, showcaseBase = 0, showBack = 0;
+  // showVeil : 0 → 1 pendant la vitrine (étoiles des pierres, totems… s'effacent pour ne pas
+  // passer devant Ulysse, puis reviennent) ; showFacing : son orientation avant la vitrine
+  let showVeil = 0, showFacing = null;
   // Atelier du personnage (showcase(true, opts)) : cadrage en pied dans une zone haute de l'écran,
   // rotation du héros au doigt (showYaw, showSpin = vitesse d'inertie), petit podium lumineux.
   let showOpts = null, showYaw = 0, showSpin = 0, showDrag = false, showStill = 0, showIdle = 0, showHH = 1.1, showPodium = null;
@@ -5569,6 +5579,10 @@
     showYaw = 0; showSpin = 0; showDrag = false; showStill = 0; showIdle = 0;
     if (on) {
       cine = null; lvlCam = null; World.setCameraMode('follow');
+      // en plein trajet (juste après un niveau) : il arrive d'un coup sur sa pierre, sinon il
+      // marcherait hors du podium en tournant le dos à la caméra
+      if (hero.route) World.skipWalk();
+      showFacing = hero.facing;
       // on garde l'angle de l'île (vue déjà dégagée) : la caméra s'approche, Ulysse se retourne
       const p = hero.group.position;
       let near = chapterOf(selected), bd = Infinity;
@@ -5587,6 +5601,8 @@
         showPodium.position.set(p.x, p.y + 0.02, p.z);
       } else showcaseBase = clearShowcaseTheta(islandTheta(near));
     }
+    // fin de vitrine : il reprend l'orientation qu'il avait (hors pierre, rien d'autre ne la fixe)
+    else if (showFacing != null) { if (hero.free && !hero.route) hero.facing = showFacing; showFacing = null; }
     if (showPodium) showPodium.visible = !!(on && showOpts);
     if (!running) placeCamera();
   };
