@@ -474,10 +474,11 @@
           if (g.bridgeIdx.has(c) || own[c] < 0) { ctx.fillRect(x, y, cell, cell); }
           else { ctx.fillStyle = tile; ctx.fillRect(x, y, cell, cell); ctx.fillStyle = COLORS[own[c]] + '3a'; ctx.fillRect(x, y, cell, cell); ctx.fillStyle = tile; }
         }
-        ctx.strokeStyle = ink; ctx.globalAlpha = 0.85; ctx.lineWidth = lw;
+        ctx.strokeStyle = ink; ctx.globalAlpha = 0.28; ctx.lineWidth = lw; // lignes intérieures discrètes
         ctx.beginPath();
         for (let k = 1; k < n; k++) { ctx.moveTo(k * cell, 0); ctx.lineTo(k * cell, S); ctx.moveTo(0, k * cell); ctx.lineTo(S, k * cell); }
         ctx.stroke();
+        ctx.globalAlpha = 0.85; // cadre extérieur bien net
         roundRect(ctx, lw / 2, lw / 2, S - lw, S - lw, rad * 0.7);
         ctx.lineWidth = lw * 1.4; ctx.stroke();
         ctx.restore();

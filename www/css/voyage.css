@@ -456,3 +456,36 @@
   font: 700 18px/1 var(--k-font, 'Fredoka', sans-serif); color: #fff; opacity: 1 !important; transform: none !important; width: auto; height: auto; background: none !important; }
 #home #go.boss::after { content: 'Épreuve' !important; }
 #home #go svg.ic, #home #go svg { width: 20px !important; height: 20px !important; }
+
+/* ---- Sagas : l'Odyssée, les Douze Travaux, les Argonautes (app.js : sagaEmblem, showSagaCard) ---- */
+.saga-emblem { width: 1em; height: 1em; fill: currentColor; flex: none; }
+[data-saga="0"] { --saga: #3d8ee8; --saga2: #3fe0d0; }
+[data-saga="1"] { --saga: #f08a2c; --saga2: #ffd23f; }
+[data-saga="2"] { --saga: #8a6fe0; --saga2: #3fc6e8; }
+/* titre de saga dans la liste du voyage */
+.vy-saga { width: 100%; margin: 6px 0 -2px; display: flex; align-items: center; gap: 8px; font: 700 13px/1 var(--k-font, 'Fredoka', sans-serif);
+  letter-spacing: .08em; text-transform: uppercase; color: var(--saga, #3d8ee8); }
+.vy-saga .saga-emblem { width: 26px; height: 26px; padding: 5px; box-sizing: border-box; border-radius: 50%; color: #fff;
+  background: linear-gradient(160deg, var(--saga2), var(--saga)); box-shadow: 0 3px 0 rgba(0, 0, 0, .12); }
+.vy-saga::after { content: ''; flex: 1; height: 3px; border-radius: 3px; background: currentColor; opacity: .18; }
+/* emblème de la saga devant le nom de l'île (carte du niveau) */
+.lc-isle .lc-saga { display: inline-flex; vertical-align: -1px; margin-right: 4px; color: var(--k-sun-dk, #e08f00); font-size: 11px; font-style: normal; }
+/* carte plein écran « changement de monde » */
+.saga-card { position: fixed; inset: 0; z-index: 9000; display: flex; align-items: center; justify-content: center; cursor: pointer;
+  background: radial-gradient(circle at 50% 42%, var(--saga2) 0, var(--saga) 70%); color: #fff; }
+.saga-card[hidden] { display: none; }
+.saga-card.in { animation: sagaIn .45s var(--k-ease, ease-out) both; }
+.saga-card.out { animation: sagaOut .32s ease-in both; }
+.saga-card .sc-inner { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; padding: 0 24px; }
+.saga-card .saga-emblem { width: 120px; height: 120px; padding: 26px; box-sizing: border-box; border-radius: 50%; color: var(--saga);
+  background: #fff; box-shadow: 0 10px 0 rgba(0, 0, 0, .12), 0 0 0 10px rgba(255, 255, 255, .25); animation: sagaPop .7s .1s var(--k-ease, ease-out) both; }
+.saga-card b { font: 700 34px/1.05 var(--k-font, 'Fredoka', sans-serif); text-shadow: 0 3px 0 rgba(0, 0, 0, .15); animation: sagaUp .5s .25s ease-out both; }
+.saga-card i { font: 600 16px/1 var(--k-font, 'Fredoka', sans-serif); font-style: normal; opacity: .85; animation: sagaUp .5s .4s ease-out both; }
+@keyframes sagaIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sagaOut { to { opacity: 0; } }
+@keyframes sagaPop { from { transform: scale(.2) rotate(-30deg); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes sagaUp { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .saga-card.in, .saga-card .saga-emblem, .saga-card b, .saga-card i { animation: none; } }
+
+/* bandeau et barre d'onglets sur toute la largeur (petite marge) */
+#home { --W: calc(100vw - 24px); }
