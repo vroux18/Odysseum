@@ -462,6 +462,13 @@
           roundRect(ctx, x, y, cell - gap, cell - gap, rad);
           ctx.fill();
         }
+        // contour net et foncé de chaque case (lisibilité de la grille)
+        ctx.strokeStyle = css('--k-ink') || '#3a3550';
+        ctx.globalAlpha = 0.85;
+        ctx.lineWidth = Math.max(1.5, cell * 0.035);
+        roundRect(ctx, x + ctx.lineWidth / 2, y + ctx.lineWidth / 2, cell - gap - ctx.lineWidth, cell - gap - ctx.lineWidth, rad);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
       }
       // ponts vides : petits rails
       puzzle.bridges.forEach((b) => {
