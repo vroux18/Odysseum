@@ -1016,7 +1016,7 @@
     const ldTime = $('#ld-time');
     const compet = isCompet() && info.t0 && !info.assisted;
     ldTime.hidden = !compet;
-    $('#ld-share').hidden = !compet;
+    $('#ld-share').hidden = true; // pas de partage du temps (retiré à la demande)
     if (compet) {
       if (!info.stopped) { info.time = levelTime(info); info.stopped = true; }
       J.best = J.best || {};
@@ -1027,7 +1027,6 @@
       // (le temps lui-même est déjà sur la piste du chrono : ici seulement le record)
       ldTime.innerHTML = (record ? '<small class="record">' + (prev == null ? 'premier temps' : 'nouveau record') + '</small>'
           : '<small>record ' + C.formatTime(prev) + '</small>');
-      $('#ld-share').onclick = () => shareTime(info);
     }
     const before = info.xpStart || {};
     const rows = SKILLS.filter((sk) => (C.store.xp[sk.id] || 0) > (before[sk.id] || 0));
