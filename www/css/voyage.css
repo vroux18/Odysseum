@@ -472,6 +472,39 @@
   background: var(--k-bubble, #fff) !important; box-shadow: 0 4px 0 var(--k-edge, #d9cfe8), var(--k-drop, 0 6px 14px rgba(80, 60, 140, .18)); }
 .lvcard .lc-nav[data-d="-1"] { left: -50px !important; right: auto !important; }
 .lvcard .lc-nav[data-d="1"] { right: -50px !important; left: auto !important; }
+/* onglet du défi du jour : série, calendrier du mois, Jouer */
+.daily-sheet { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 22px 18px calc(20px + env(safe-area-inset-bottom, 0px)) !important;
+  font-family: var(--k-font, 'Fredoka', sans-serif); color: var(--k-ink, #3a3550); }
+.dc-streak { display: flex; align-items: center; gap: 6px; }
+.dc-streak i svg { width: 38px; height: 38px; fill: #ff8a3d; filter: drop-shadow(0 2px 0 #d9601c); }
+.dc-streak b { font: 700 36px/1 var(--k-font, 'Fredoka', sans-serif); }
+.dc-streak.off i svg { fill: var(--k-edge, #d9cfe8); filter: none; }
+.dc-best { font: 600 16px/1 var(--k-font, 'Fredoka', sans-serif); opacity: .5; margin-left: 2px; }
+.dc-head { display: flex; align-items: center; justify-content: center; gap: 14px; font: 600 16px/1 var(--k-font, 'Fredoka', sans-serif); text-transform: capitalize; }
+.dc-head span { min-width: 130px; text-align: center; }
+.dc-nav { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; font: 700 20px/1 var(--k-font, 'Fredoka', sans-serif); font-style: normal;
+  background: var(--k-well, #f1ecf8); cursor: pointer; }
+.dc-nav[hidden] { display: grid; visibility: hidden; }
+.dc-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; width: min(320px, 100%); }
+.dc-wd { font: 600 11px/1 var(--k-font, 'Fredoka', sans-serif); text-align: center; opacity: .5; padding-bottom: 2px; }
+.dc-day { aspect-ratio: 1; display: grid; place-items: center; border-radius: 50%; font: 600 14px/1 var(--k-font, 'Fredoka', sans-serif); background: var(--k-well, #f1ecf8); }
+.dc-day.future { background: none; opacity: .35; }
+.dc-day.won { background: #ffc93d; box-shadow: inset 0 -2px 0 #e08f00; }
+.dc-check svg { width: 16px; height: 16px; fill: none; stroke: #fff; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; display: block; }
+.dc-day.dc-today { box-shadow: 0 0 0 2.5px #5cc93a; }
+.dc-day.won.dc-today { box-shadow: inset 0 -2px 0 #e08f00, 0 0 0 2.5px #5cc93a; }
+.dc-play { display: flex; align-items: center; justify-content: center; gap: 10px; width: min(300px, 100%); height: 52px; margin-top: 4px; border: 0; border-radius: 26px; cursor: pointer;
+  background: radial-gradient(circle at 38% 30%, #8be36a, #5cc93a 70%); box-shadow: 0 5px 0 #3a9a26; color: #fff; }
+.dc-play:active { transform: translateY(3px); box-shadow: 0 2px 0 #3a9a26; }
+.dc-play svg.ic, .dc-play > svg { width: 22px; height: 22px; }
+.dc-play svg .f, .dc-play > svg * { fill: #fff; stroke: #fff; stroke-linejoin: round; }
+.dc-game { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--c); box-shadow: 0 0 0 2.5px #fff; }
+.dc-game svg { width: 18px; height: 18px; fill: none; stroke: #fff; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
+.dc-game svg .f { fill: #fff; }
+.dc-stars { display: flex; gap: 2px; }
+.dc-stars svg { width: 16px; height: 16px; fill: rgba(255, 255, 255, .45); }
+.dc-stars svg.on { fill: #ffe27a; }
+
 /* pas d'élan vert : le bouton ne glisse plus à l'apparition et ne saute plus de côté quand on appuie */
 #home #go.in { animation: none !important; }
 #home #go:active { transform: translateY(3px) !important; }

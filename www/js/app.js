@@ -1186,6 +1186,49 @@
     b.classList.toggle('done', !!d.rec);
     b.setAttribute('aria-label', 'Défi du jour · ' + game(d.info.id).name);
   }
+  // onglet du défi : la série en cours, le calendrier du mois (jours réussis), et Jouer
+  let calMonth = 0; // décalage en mois depuis aujourd'hui (0 = ce mois-ci, -1 = le précédent)
+  function openDaily() {
+    let ov = $('#daily');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'daily'; ov.className = 'overlay daily-ov'; ov.hidden = true;
+      ov.innerHTML = '<div class="sheet daily-sheet"></div>';
+      ov.addEventListener('click', (e) => {
+        if (e.target === ov) { ov.hidden = true; return; }
+        const nav = e.target.closest('.dc-nav');
+        if (nav) { calMonth = Math.min(0, Math.max(-1, calMonth + +nav.dataset.d)); C.sfx.tap(); renderDailySheet(); return; }
+        if (e.target.closest('.dc-play')) { ov.hidden = true; startDaily(); }
+      });
+      document.body.appendChild(ov);
+    }
+    calMonth = 0;
+    renderDailySheet();
+    ov.hidden = false;
+    C.sfx.tap();
+  }
+  function renderDailySheet() {
+    const d = dailyBadges(), streak = d.streak, today = C.todayKey();
+    const now = new Date(), first = new Date(now.getFullYear(), now.getMonth() + calMonth, 1);
+    const nDays = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+    const lead = (first.getDay() + 6) % 7; // semaine qui commence le lundi
+    const month = first.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    let cells = ['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((x) => '<b class="dc-wd">' + x + '</b>').join('');
+    for (let i = 0; i < lead; i++) cells += '<i></i>';
+    for (let k = 1; k <= nDays; k++) {
+      const key = C.todayKey(new Date(first.getFullYear(), first.getMonth(), k)), rec = DAY.days[key];
+      cells += '<span class="dc-day' + (rec ? ' won' : '') + (key === today ? ' dc-today' : '') + (key > today ? ' future' : '') + '">' +
+        (rec ? '<i class="dc-check">' + CHECK + '</i>' : k) + '</span>';
+    }
+    $('#daily .daily-sheet').innerHTML =
+      '<div class="dc-streak' + (streak ? '' : ' off') + '"><i>' + FLAME + '</i><b>' + streak + '</b>' +
+        (DAY.best > streak ? '<span class="dc-best" title="Record">/ ' + DAY.best + '</span>' : '') + '</div>' +
+      '<div class="dc-head"><i class="dc-nav" data-d="-1"' + (calMonth <= -1 ? ' hidden' : '') + '>‹</i><span>' + month + '</span>' +
+        '<i class="dc-nav" data-d="1"' + (calMonth >= 0 ? ' hidden' : '') + '>›</i></div>' +
+      '<div class="dc-grid">' + cells + '</div>' +
+      '<button class="dc-play' + (d.rec ? ' replay' : '') + '"><span class="dc-game" style="--c:' + d.info.accent + '"><svg viewBox="0 0 24 24">' + (ICON[d.info.id] || '') + '</svg></span>' +
+        (d.rec ? starRow(d.rec.stars, 'dc-stars') : '') + UI('play') + '</button>';
+  }
 
   // ------------------------ Liste des mini-jeux ------------------------
   let libMode = 'classic';
@@ -2076,7 +2119,7 @@
     else { selected = L; J.selected = L; C.save(); renderPlay(); }
   });
   $('#voyage').addEventListener('click', (e) => { if (e.target.id === 'voyage') $('#voyage').hidden = true; });
-  // toucher la carte (sans glisser) : on masque les menus, il ne reste que la carte du prochain niveau ; re-toucher les ramène
+  // toucher la carte (sans glisser) pendant qu'Ulysse marche : il se met à courir
   {
     const w = $('#world');
     let p0 = null;
@@ -2087,8 +2130,7 @@
       p0 = null;
       if (!(moved < 8 && quick) || $('#home').hidden) return;
       // Ulysse marche encore : un toucher le fait courir
-      if (worldReady && C.world.walking && C.world.walking()) { C.world.hurry(); return; }
-      $('#home').classList.toggle('calm');
+      if (worldReady && C.world.walking && C.world.walking()) C.world.hurry();
     });
   }
   // crédits : depuis les réglages
@@ -2790,7 +2832,7 @@
   window.Odysseum = { levelInfo, journey: J, eventInfo, eventList, startEvent,
     session: () => session, targetTime, starsFor, dailyInfo, startDaily, renderDaily, dailyStreak, refreshStars, startLevel, startTier, openLevels,
     startMega, megaParams, megaN, megaTrack: MEGA_TRACK, megaRec, zoom: Z, zoomTo };
-  $('#open-daily').addEventListener('click', startDaily);
+  $('#open-daily').addEventListener('click', openDaily);
 
   // appli installée depuis Chrome : toujours à jour (voir sw.js) ; inutile dans l'APK
   if ('serviceWorker' in navigator && location.protocol === 'https:' && !window.Capacitor) {
