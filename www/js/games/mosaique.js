@@ -7,6 +7,7 @@
 
   // tesselles : terre cuite, mer, or, olive, violet nuit
   const COLORS = ['#ee7a4d', '#3d8ee8', '#ffc22e', '#4cb82e', '#6c5fc7'];
+  const GLYPHS = ['●', '▲', '■', '◆', '★']; // un symbole par couleur (réglage « symboles sur les couleurs »)
 
   // ------------------------------------------------------------------
   // Difficulté (niveaux 1 → 40) : taille 3×3 → 6×6, 2 → 5 couleurs, affichage plus court,
@@ -114,6 +115,7 @@
       const s = document.createElement('button');
       s.className = 'mos-sw';
       s.style.setProperty('--c', COLORS[k]);
+      s.dataset.g = GLYPHS[k % GLYPHS.length];
       s.setAttribute('aria-label', 'Couleur ' + (k + 1));
       s.addEventListener('click', () => { sel = k; C.sfx.tap(); render(); });
       pal.appendChild(s);
@@ -145,6 +147,7 @@
       cells.forEach((c, i) => {
         const v = showing ? truth[i] : paint[i];
         c.style.setProperty('--c', v >= 0 ? COLORS[v] : 'transparent');
+        c.dataset.g = v >= 0 ? GLYPHS[v % GLYPHS.length] : ''; // accessibilité : symbole par couleur (réglage « symboles »)
         c.classList.toggle('on', v >= 0);
         c.classList.toggle('off', !showing && wrong.has(i));
         c.classList.toggle('ghost', peekOn && phase === 'paint');

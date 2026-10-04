@@ -340,24 +340,24 @@
         if (ded.length) {
           const rs = reasons[i], parts = [];
           const t = Math.max(4, cell * 0.08);
+          // le bord en cause : un petit trait arrondi au milieu du côté (plutôt qu'une barre sur toute la longueur)
           rs.borders.forEach((bit) => {
-            const x = x0(i), y = y0(i);
-            boxes.push(bit === 1 ? { x, y: y - t / 2, w: cell, h: t } : bit === 4 ? { x, y: y + cell - t / 2, w: cell, h: t }
-              : bit === 8 ? { x: x - t / 2, y, w: t, h: cell } : { x: x + cell - t / 2, y, w: t, h: cell });
+            const x = x0(i), y = y0(i), L = cell * 0.5, o = (cell - L) / 2;
+            boxes.push(bit === 1 ? { x: x + o, y: y - t / 2, w: L, h: t } : bit === 4 ? { x: x + o, y: y + cell - t / 2, w: L, h: t }
+              : bit === 8 ? { x: x - t / 2, y: y + o, w: t, h: L } : { x: x + cell - t / 2, y: y + o, w: t, h: L });
             boxes[boxes.length - 1].line = true;
           });
           rs.open.concat(rs.closed, rs.leaf).forEach((j) => boxes.push({ x: x0(j) + 3, y: y0(j) + 3, w: cell - 6, h: cell - 6 }));
-          if (rs.borders.length) parts.push('ne s\'ouvre pas vers le bord (trait doré)');
+          if (rs.borders.length) parts.push('touche le bord : elle ne peut pas pointer dehors');
           if (rs.open.length) parts.push('doit rejoindre ' + (rs.open.length > 1 ? 'les voisines qui pointent' : 'la voisine qui pointe') + ' vers elle');
-          if (rs.closed.length) parts.push('ne vise pas ' + (rs.closed.length > 1 ? 'les voisines qui lui tournent' : 'la voisine qui lui tourne') + ' le dos');
-          if (rs.leaf.length) parts.push('ne se branche pas sur un autre bout de tuyau');
+          if (rs.closed.length) parts.push('ne doit pas viser ' + (rs.closed.length > 1 ? 'les voisines qui lui tournent' : 'la voisine qui lui tourne') + ' le dos');
+          if (rs.leaf.length) parts.push('ne peut pas se brancher sur un autre bout de tuyau');
           // deux raisons au plus dans la phrase, pour rester courte (toutes restent surlignées)
           const two = parts.slice(0, 2);
-          const list = two.length > 1 ? two[0] + ' et ' + two[1] : two[0] || 'n\'a qu\'une position possible';
-          const lit = rs.open.length + rs.closed.length + rs.leaf.length ? ' (voisines surlignées)' : '';
-          text = 'La pièce dorée ' + list + lit + '. Une seule position convient.';
+          const list = two.length > 1 ? two[0] + ', et elle ' + two[1] : two[0] || 'n\'a qu\'une position possible';
+          text = 'La pièce entourée ' + list + '. Il ne lui reste qu\'une orientation.';
         } else {
-          text = 'Coup de pouce : pas de déduction simple ici, alors je tourne la pièce dorée dans le bon sens.';
+          text = 'Rien ne se déduit simplement ici : je tourne la pièce entourée dans le bon sens.';
         }
         return Object.assign({ text }, C.hintBoxes(canvas, boxes));
       },

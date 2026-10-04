@@ -160,7 +160,8 @@
       b.style.setProperty('--a', a + 'deg');
       b.style.setProperty('--c', COLORS[i % COLORS.length]);
       b.style.setProperty('--k', i);
-      b.innerHTML = '<span class="simon-shell">' + SHELL + '</span>';
+      b.innerHTML = '<span class="simon-shell">' + SHELL + '</span>' +
+        '<b class="a11y-glyph">' + ['●', '▲', '■', '◆', '★', '✚'][i % 6] + '</b>'; // visible avec « symboles sur les couleurs »
       ring.appendChild(b);
       pads.push(b);
     }
