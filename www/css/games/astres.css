@@ -7,7 +7,10 @@
 
 /* taille : la grille prend la largeur disponible (plus de plafond à 52 px par case) */
 .cell-grid.astres { --gap: 7px; gap: var(--gap) !important; margin-inline: auto;
-  max-width: min(440px, 94%, calc(100dvh - 290px)) !important; }
+  max-width: min(480px, 100%, calc(100dvh - 270px)) !important; }
+.cell-grid.astres[style*="--n: 6"] { --gap: 5px; }
+/* marges de l'écran réduites pendant la partie : la grille gagne ~20 px */
+#play:has(.cell-grid.astres) { padding-inline: 10px !important; }
 #play.mega .cell-grid.astres { --gap: 3px; }
 
 .astres .cell { border-radius: 20% !important; border: 0 !important; background: var(--as-empty) !important; outline: 0 !important; filter: none !important;

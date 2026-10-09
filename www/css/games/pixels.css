@@ -3,7 +3,9 @@
    nombres clairs ; la ligne et la colonne touchées s'éclairent avec leurs nombres. */
 .nono { --px-off: #232944; --px-off-edge: rgba(255, 255, 255, .07); --px-on: #8fe05a; --px-on-deep: #4fb52f; --px-x: #7480b3;
   --px-clue: #ecebff; --px-clue-ok: #545c84; --px-cur: rgba(255, 255, 255, .07); --px-cur-clue: #b7f28e;
-  gap: 4px !important; }
+  gap: 3px !important; max-width: min(520px, 100%, calc(100dvh - 240px)) !important; }
+/* marges de l'écran réduites pendant la partie : la grille gagne ~20 px */
+#play:has(.nono) { padding-inline: 10px !important; }
 #play.mega .nono { gap: 2px !important; }
 
 .nono-cell { border: 0 !important; margin: 0 !important; border-radius: 22% !important; background: var(--px-off) !important;
