@@ -1,8 +1,8 @@
 /* Pixels : se joue toujours en thème sombre (imposé par le jeu pendant la partie, voir g.theme).
    Écran de pixels allumés : cases éteintes bleu nuit, cases pleines vert lumineux, croix bien lisibles,
    nombres clairs ; la ligne et la colonne touchées s'éclairent avec leurs nombres. */
-.nono { --px-off: #232944; --px-off-edge: rgba(255, 255, 255, .07); --px-on: #8fe05a; --px-on-deep: #4fb52f; --px-x: #7480b3;
-  --px-clue: #ecebff; --px-clue-ok: #545c84; --px-cur: rgba(255, 255, 255, .07); --px-cur-clue: #b7f28e;
+.nono { --px-off: #155c45; --px-off-edge: rgba(255, 255, 255, .07); --px-on: #8af07f; --px-on-deep: #2fbf55; --px-x: #8fd1b4;
+  --px-clue: #ecebff; --px-clue-ok: #5f9c84; --px-cur: rgba(255, 255, 255, .07); --px-cur-clue: #f7c948;
   gap: 3px !important; max-width: min(520px, 100%, calc(100dvh - 240px)) !important; }
 /* marges de l'écran réduites pendant la partie : la grille gagne ~20 px */
 #play:has(.nono) { padding-inline: 10px !important; }

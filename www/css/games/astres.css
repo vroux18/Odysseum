@@ -1,13 +1,13 @@
 /* Astres : seule feuille de style du jeu (chargée en dernier).
    Carré ambre et rond bleu, symbole blanc ; les cases données sont à plat et un peu passées,
    celles que le joueur pose sont en relief. Les erreurs n'apparaissent qu'après une courte pause. */
-:root { --as-empty: #e6e1d6; --as-edge: #d2cbbb; --as-bg: var(--k-bg, #fbf6ea); --as-sq: #f0a432; --as-sq-edge: #d2861a; --as-ro: #4a8be0; --as-ro-edge: #2f6dc0; --as-bad: #ff5348; }
+:root { --as-empty: #e6e1d6; --as-edge: #d2cbbb; --as-bg: #f6f1e7; --as-sq: #f08a5d; --as-sq-edge: #c8643a; --as-ro: #5d9de3; --as-ro-edge: #3b78c4; --as-bad: #ff5348; }
 :root[data-theme="dark"] { --as-empty: #353a48; --as-edge: #474d5e; --as-bg: #1d2233; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --as-empty: #353a48; --as-edge: #474d5e; --as-bg: #1d2233; } }
 
 /* taille : la grille prend la largeur disponible (plus de plafond à 52 px par case) */
 .cell-grid.astres { --gap: 7px; gap: var(--gap) !important; margin-inline: auto;
-  max-width: min(480px, 100%, calc(100dvh - 270px)) !important; }
+  max-width: min(480px, calc(100% - 24px), calc(100dvh - 290px)) !important; }
 .cell-grid.astres[style*="--n: 6"] { --gap: 5px; }
 /* marges de l'écran réduites pendant la partie : la grille gagne ~20 px */
 #play:has(.cell-grid.astres) { padding-inline: 10px !important; }

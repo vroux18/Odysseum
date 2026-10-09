@@ -109,7 +109,7 @@
   };
 
   // Pixels : dessins dans les couleurs du jeu (écran sombre, pixels verts, croix bleu gris)
-  const PX = { bg: '#1b2036', off: '#2a3152', on: '#8fe05a', x: '#8a95c4', ink: '#ecebff', ghost: '#f3c552' };
+  const PX = { bg: '#0a3d2d', off: '#155c45', on: '#8af07f', x: '#8fd1b4', ink: '#f3efe6', ghost: '#f7c948' };
   const pxBack = (y, h) => '<rect x="4" y="' + y + '" width="112" height="' + h + '" rx="12" fill="' + PX.bg + '"/>';
   // une ligne de cases : f pleine, e vide, x barrée, g contour doré (place possible d'un bloc)
   function pxRow(y, clue, cells, s) {

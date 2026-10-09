@@ -1013,8 +1013,10 @@
     if (worldReady) C.world.stop();
     if (screens.play.hidden) playRun = { xp: Object.assign({}, C.store.xp), id: step.id }; // début de partie : bilan d'XP au bouton « Arrêter »
     show('play');
-    // un mini-jeu peut imposer son thème pendant la partie (Pixels se joue en sombre)
-    if ((g.theme || null) !== forcedTheme) { forcedTheme = g.theme || null; applyTheme(); }
+    // thème de la partie : clair (cases claires sur le panneau crème du fond émeraude), sauf si le mini-jeu
+    // en impose un autre (Pixels se joue en sombre)
+    const playTheme = g.theme || 'light';
+    if (playTheme !== forcedTheme) { forcedTheme = playTheme; applyTheme(); }
     $('#play').style.setProperty('--game', ACCENT[g.id]);
     $('#play').classList.remove('done');
     $('#play').classList.toggle('mega', info.event != null || !!info.mega); // grande grille : cases plus serrées
