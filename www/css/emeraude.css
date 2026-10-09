@@ -107,3 +107,5 @@ body:has(#play:not([hidden])) { background: var(--em-bg-deep) !important; }
 .cr-done:active { box-shadow: 0 2px 0 var(--em-go-lip) !important; }
 /* profil : bouton Classement */
 .pc-rank-go { background: linear-gradient(180deg, var(--em-go), var(--em-go-deep)) !important; box-shadow: 0 3px 0 var(--em-go-lip) !important; color: #fff !important; }
+/* voyage : L'Odyssée (saga 0) prend l'émeraude au lieu du bleu par défaut */
+.vy-saga:not([data-saga="1"]):not([data-saga="2"]), [data-saga="0"] { --saga: #0b7a48; --saga2: #f7c948; }
