@@ -13,10 +13,10 @@
 
   // couleurs des barques, avec leur nom (au féminin : « la barque verte »)
   const COLORS = [
-    { c: '#79b27a', n: 'verte' }, { c: '#6b9bd6', n: 'bleue' }, { c: '#e3bd52', n: 'jaune' },
-    { c: '#9a85c9', n: 'violette' }, { c: '#e397b2', n: 'rose' }, { c: '#3fa89e', n: 'turquoise' },
-    { c: '#e8925a', n: 'orange' }, { c: '#98a1a7', n: 'grise' }, { c: '#a87c5a', n: 'brune' },
-    { c: '#c2a3dc', n: 'lilas' }, { c: '#a2a855', n: 'olive' }, { c: '#c99a48', n: 'ocre' }
+    { c: '#4cc46e', n: 'verte' }, { c: '#4f9fe8', n: 'bleue' }, { c: '#f5c13a', n: 'jaune' },
+    { c: '#9b80e6', n: 'violette' }, { c: '#f08cb2', n: 'rose' }, { c: '#22b5a4', n: 'turquoise' },
+    { c: '#f07f4a', n: 'orange' }, { c: '#9aa5ad', n: 'grise' }, { c: '#b07a50', n: 'brune' },
+    { c: '#c29ae8', n: 'lilas' }, { c: '#a0b03c', n: 'olive' }, { c: '#d99a2e', n: 'ocre' }
   ];
   const HERO = '#c4473a', GOLD = '#ecc56c';
   const DIST = ['', 'd\'une case', 'de deux cases', 'de trois cases', 'de quatre cases'];
@@ -287,7 +287,7 @@
   function boatBody(L, W, color, hero) {
     const e = W * 0.16;
     let s = '<path d="' + hullPath(L, W) + '" fill="' + color + '"/>';
-    s += '<path d="' + hullPath(L - 2 * e, W - 2 * e, e, e) + '" fill="#fff" opacity="' + (hero ? '.16' : '.22') + '"/>';
+    s += '<path d="' + hullPath(L - 2 * e, W - 2 * e, e, e) + '" fill="#fff" opacity="' + (hero ? '.12' : '.12') + '"/>';
     s += '<rect x="' + (W * 0.42).toFixed(2) + '" y="0" width="' + (W * 0.2).toFixed(2) + '" height="' + W.toFixed(2) + '" fill="' + (hero ? GOLD : '#000') + '" opacity="' + (hero ? '1' : '.13') + '"/>';
     if (hero) {
       // le navire d'Ulysse : une ligne d'or le long du pont et l'œil peint à la proue

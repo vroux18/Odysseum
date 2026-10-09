@@ -188,8 +188,10 @@
       m.className = 'edge-mark';
       const ra = Math.floor(e.a / n), ca = e.a % n;
       const horizontal = e.b === e.a + 1;
-      m.style.left = ((horizontal ? ca + 1 : ca + 0.5) / n) * 100 + '%';
-      m.style.top = ((horizontal ? ra + 0.5 : ra + 1) / n) * 100 + '%';
+      // position sur la jointure en tenant compte de l'écart entre cases (--gap) : x/n de la largeur + gap × (x/n − ½)
+      const at = (x) => 'calc(' + (x / n) * 100 + '% + var(--gap, 0px) * ' + (x / n - 0.5) + ')';
+      m.style.left = at(horizontal ? ca + 1 : ca + 0.5);
+      m.style.top = at(horizontal ? ra + 0.5 : ra + 1);
       m.innerHTML = e.same ? '<svg viewBox="0 0 12 12"><path d="M3 4.6h6M3 7.4h6"/></svg>' : '<svg viewBox="0 0 12 12"><path d="M3.8 3.8l4.4 4.4M8.2 3.8 3.8 8.2"/></svg>'; // = même symbole, × symbole inverse
       m.classList.add(e.same ? 'same' : 'diff');
       wrap.appendChild(m);
@@ -230,10 +232,12 @@
       return { bad, badEdges, zone };
     }
 
+    // erreurs affichées seulement après une courte pause (pas de rouge pendant qu'on pose)
+    let showErr = true, errTimer = 0;
     function render() {
-      const { bad, badEdges, zone } = errors();
+      const err = errors();
+      const bad = showErr ? err.bad : new Set(), badEdges = showErr ? err.badEdges : new Set();
       cells.forEach((d, i) => {
-        d.classList.toggle('zone', zone.has(i));
         const k = String(state[i] || '');
         if (d.dataset.k !== k) { d.dataset.k = k; d.innerHTML = state[i] === SUN ? SUN_SVG : state[i] === MOON ? MOON_SVG : ''; } // seul le symbole qui change s'anime
         d.classList.toggle('sun', state[i] === SUN);
@@ -260,10 +264,16 @@
       history.push(state.slice());
       state[i] = (state[i] + 1) % 3;
       C.sfx.tap();
+      showErr = false;
+      clearTimeout(errTimer);
       render();
       api.onChange();
-      if (errors().bad.has(i)) C.sfx.error();
       check();
+      errTimer = setTimeout(() => {
+        showErr = true;
+        render();
+        if (errors().bad.size) C.sfx.error();
+      }, 900);
     });
 
     render();
@@ -357,7 +367,7 @@
         if (i === undefined) return false;
         return put(i, puzzle.solution[i], 'Coup de pouce : aucune règle simple ne s\'applique encore, alors je te donne cette case. Ici, c\'est ' + un(puzzle.solution[i]) + '.', []);
       },
-      destroy() {}
+      destroy() { clearTimeout(errTimer); }
     };
   }
 

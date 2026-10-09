@@ -6,9 +6,9 @@
   const C = window.Carnet;
 
   const SYMBOLS = [
-    { ch: '●', color: '#e59a9a' }, { ch: '▲', color: '#7fa9cc' }, { ch: '■', color: '#e2bf74' },
-    { ch: '◆', color: '#8fbf8a' }, { ch: '★', color: '#b39ddb' }, { ch: '♥', color: '#eda77c' },
-    { ch: '✚', color: '#6fb5ad' }
+    { ch: '●', color: '#f27a72' }, { ch: '▲', color: '#4f9fe8' }, { ch: '■', color: '#f5b931' },
+    { ch: '◆', color: '#3fbf6a' }, { ch: '★', color: '#9b80e6' }, { ch: '♥', color: '#f08a4a' },
+    { ch: '✚', color: '#22b5a4' }
   ];
 
   function generate(rng, p) {

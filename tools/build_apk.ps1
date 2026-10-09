@@ -18,6 +18,9 @@ Copy-Item (Join-Path $root 'tools\debug.keystore') "$env:USERPROFILE\.android\de
 Push-Location $root
 npx cap sync android
 Pop-Location
+# icônes et MainActivity (écran fluide : fréquence d'affichage maximale, 120 Hz…)
+Copy-Item (Join-Path $root 'resources\android\res\*') (Join-Path $root 'android\app\src\main\res') -Recurse -Force
+Copy-Item (Join-Path $root 'resources\android\java\*') (Join-Path $root 'android\app\src\main\java') -Recurse -Force
 
 $android = Join-Path $root 'android'
 $p = Start-Process -FilePath "$android\gradlew.bat" -ArgumentList 'assembleDebug', '--no-daemon', '-q' `

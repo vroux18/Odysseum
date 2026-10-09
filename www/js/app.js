@@ -562,6 +562,7 @@
 
   // ----------------------------- Partie -----------------------------
   let session = null;
+  let forcedTheme = null; // thème imposé par le mini-jeu en cours (voir playStep)
 
   function startLevel(L) {
     const info = levelInfo(L);
@@ -1012,6 +1013,10 @@
     if (worldReady) C.world.stop();
     if (screens.play.hidden) playRun = { xp: Object.assign({}, C.store.xp), id: step.id }; // début de partie : bilan d'XP au bouton « Arrêter »
     show('play');
+    // thème de la partie : clair (cases claires sur le panneau crème du fond émeraude), sauf si le mini-jeu
+    // en impose un autre (Pixels se joue en sombre)
+    const playTheme = g.theme || 'light';
+    if (playTheme !== forcedTheme) { forcedTheme = playTheme; applyTheme(); }
     $('#play').style.setProperty('--game', ACCENT[g.id]);
     $('#play').classList.remove('done');
     $('#play').classList.toggle('mega', info.event != null || !!info.mega); // grande grille : cases plus serrées
@@ -1551,6 +1556,7 @@
   const screens = { home: $('#home'), play: $('#play') };
   function show(name) {
     Object.entries(screens).forEach(([k, el]) => { el.hidden = k !== name; });
+    if (name !== 'play' && forcedTheme) { forcedTheme = null; applyTheme(); } // (thème imposé par un mini-jeu : seulement pendant la partie)
     window.scrollTo(0, 0);
   }
 
@@ -2518,6 +2524,7 @@
   const hourNow = () => { const d = new Date(); return d.getHours() + d.getMinutes() / 60; };
   const osDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
   function resolvedTheme() {
+    if (forcedTheme) return forcedTheme;
     const s = C.store.settings.theme || 'auto';
     return s === 'auto' ? (osDark && osDark.matches ? 'dark' : 'light') : s;
   }

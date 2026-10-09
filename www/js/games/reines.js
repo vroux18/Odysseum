@@ -7,9 +7,10 @@
   // voiles pastel très légers
   // pastels mats, bien distincts les uns des autres (esprit « Rois » d'Almanac)
   // céramique grecque : terre cuite, bleu égéen, or, olive, vert de mer, lie-de-vin, marbre…
-  const REGION_COLORS = ['#e08a62', '#7fa8cf', '#e3b65a', '#a8b46a', '#6cb8ae',
-    '#c97b85', '#ece6d6', '#a39dcb', '#d4b48a', '#9cc4d8'];
-  const EXTRA_COLORS = ['#c58fd0', '#8fc79a']; // pourpre clair, vert d'eau (grandes grilles)
+  // zones franches (charte Émeraude) : terre cuite, ciel, miel, prairie, lagon, rose, crème, lavande, sable, azur
+  const REGION_COLORS = ['#f59a72', '#78b0ee', '#f5c95a', '#8fd17a', '#58c9b9',
+    '#f290b2', '#f3ead6', '#b09cf0', '#e6b47c', '#8dcdf2'];
+  const EXTRA_COLORS = ['#d39ae8', '#7edb9c']; // pourpre clair, vert d'eau (grandes grilles)
   // couronne pleine, bien lisible sur toutes les couleurs
   const CROWN = '<svg class="crown" viewBox="0 0 24 24"><path d="M3 8.5 7.2 12 12 5l4.8 7L21 8.5 19.2 18H4.8z" fill="#15191e" stroke="#15191e" stroke-width="1.2" stroke-linejoin="round"/></svg>';
 

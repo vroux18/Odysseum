@@ -27,9 +27,9 @@
     radial-gradient(circle at 74% 12%, rgba(255, 255, 255, .4) 0 1px, transparent 1.6px),
     radial-gradient(circle at 88% 68%, rgba(255, 255, 255, .35) 0 1px, transparent 1.6px),
     radial-gradient(circle at 34% 86%, rgba(255, 255, 255, .35) 0 1px, transparent 1.6px),
-    linear-gradient(165deg, #4b4cab 0%, #6b58c6 100%);
+    linear-gradient(165deg, #0a3d2d 0%, #155c45 100%);
   border: 3px solid var(--k-rim, #fff);
-  box-shadow: 0 6px 0 #3a3186, var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14));
+  box-shadow: 0 6px 0 #052b1f, var(--k-drop-sm, 0 4px 10px rgba(80, 60, 140, .14));
 }
 .lum-grid {
   position: relative; z-index: 1;
@@ -100,7 +100,7 @@
 @keyframes lum-nope { 20% { transform: translateX(-4px); } 45% { transform: translateX(4px); } 70% { transform: translateX(-2px); } 100% { transform: none; } }
 @keyframes lum-draw { to { stroke-dashoffset: 0; } }
 @keyframes lum-twinkle { 0% { transform: scale(1); } 45% { transform: scale(1.3) rotate(18deg); } 100% { transform: scale(1); } }
-@keyframes lum-glow { 40% { box-shadow: 0 6px 0 #3a3186, 0 0 34px rgba(255, 214, 80, .55); } }
+@keyframes lum-glow { 40% { box-shadow: 0 6px 0 #052b1f, 0 0 34px rgba(255, 214, 80, .55); } }
 @keyframes lum-pop { 0% { transform: scale(.4); } 60% { transform: scale(1.25); } 100% { transform: none; } }
 
 /* thème sombre : ciel plus profond, bord nuit */
@@ -110,7 +110,7 @@
     radial-gradient(circle at 74% 12%, rgba(255, 255, 255, .3) 0 1px, transparent 1.6px),
     radial-gradient(circle at 88% 68%, rgba(255, 255, 255, .3) 0 1px, transparent 1.6px),
     radial-gradient(circle at 34% 86%, rgba(255, 255, 255, .3) 0 1px, transparent 1.6px),
-    linear-gradient(165deg, #23275a 0%, #34306f 100%);
+    linear-gradient(165deg, #0a3d2d 0%, #155c45 100%);
   box-shadow: 0 6px 0 var(--k-edge, #0c0e1c), var(--k-drop-sm);
 }
 :root[data-theme="dark"] .lum.won .lum-sky { animation: none; }

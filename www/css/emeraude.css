@@ -1,0 +1,111 @@
+/* Émeraude : l'écran de partie (commun à tous les mini-jeux).
+   Fond vert émeraude profond, plateau posé sur un panneau crème, boutons crème en léger relief,
+   indice doré. Pendant la partie le thème clair est imposé (cases claires sur le panneau),
+   sauf Pixels qui garde son écran sombre, recoloré en vert. Chargée en dernier. */
+:root { --em-bg: #0e5c43; --em-bg-deep: #08402f; --em-lip: #052b1f; --em-ink: #f3efe6; --em-soft: #bfe3d1;
+  --em-panel: #f6f1e7; --em-btn: #f3efe6; --em-btn-ink: #3d3a4f; --em-gold: #f7c948; --em-gold-lip: #c48f12;
+  --em-go: #23b874; --em-go-deep: #0b7a48; --em-go-lip: #075232; }
+
+/* fond : toute la largeur de l'écran, pas seulement la colonne du jeu */
+body:has(#play:not([hidden])) { background: var(--em-bg-deep) !important; }
+#play { background: linear-gradient(180deg, var(--em-bg) 0%, var(--em-bg-deep) 100%) !important; box-shadow: 0 0 0 100vmax var(--em-bg-deep); }
+#play::after { display: none !important; }
+
+/* en-tête */
+#play .topbar .ghost-icon { background: var(--em-btn) !important; color: var(--em-btn-ink) !important; border: 0 !important; border-radius: 50% !important;
+  box-shadow: 0 3px 0 var(--em-lip) !important; --duo: var(--em-go); --duo-o: .8; }
+#play .play-name { color: var(--em-ink) !important; }
+#play .play-level { background: rgba(0, 0, 0, .22) !important; color: var(--em-soft) !important; box-shadow: none !important; text-shadow: none !important; font-weight: 600 !important; }
+#play .play-icon { border-color: var(--em-btn) !important; }
+#play .play-timer { color: var(--em-soft) !important; }
+#play .steps i { background: rgba(255, 255, 255, .18) !important; box-shadow: none !important; }
+#play .steps i.past { background: color-mix(in srgb, var(--em-gold) 55%, transparent) !important; }
+#play .steps i.now { background: var(--em-gold) !important; box-shadow: 0 2px 0 var(--em-gold-lip) !important; }
+
+/* plateau : panneau crème autour de la grille (ombre étendue : ne change pas la mise en page) */
+#play .board > .cell-grid, #play .board > .board-canvas, #play .board > .rh {
+  box-shadow: 0 0 0 10px var(--em-panel), 0 16px 0 0 var(--em-lip) !important; border-radius: 16px; background-color: var(--em-panel); }
+
+/* outils (remplir / croix…) */
+#play .tools { background: rgba(0, 0, 0, .2) !important; border: 0 !important; box-shadow: none !important; }
+#play .tools .tool { color: var(--em-soft) !important; }
+#play .tools .tool.on { background: var(--em-btn) !important; color: var(--em-btn-ink) !important; --duo: var(--em-go) !important; box-shadow: 0 3px 0 var(--em-lip) !important; }
+
+/* actions du bas : boutons crème en relief, indice doré */
+#play .actions .ghost-icon { background: var(--em-btn) !important; color: var(--em-btn-ink) !important; border: 0 !important; border-radius: 20px !important;
+  box-shadow: 0 4px 0 var(--em-lip) !important; opacity: 1 !important; filter: none !important; --duo: var(--em-go) !important; --duo-o: .7 !important; }
+#play .actions .ghost-icon:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--em-lip) !important; }
+#play #btn-explain { color: #2f6fbf !important; }
+#play #btn-hint { background: var(--em-gold) !important; color: #5a3d00 !important; box-shadow: 0 4px 0 var(--em-gold-lip) !important; --duo: #fff6d6 !important; --duo-o: .9 !important; }
+#play #btn-hint .hint-left { background: var(--em-btn) !important; color: var(--em-btn-ink) !important; border: 2px solid var(--em-gold) !important; box-shadow: none !important; }
+#play #btn-hint.empty { background: var(--em-btn) !important; box-shadow: 0 4px 0 var(--em-lip) !important; }
+
+/* bulle d'astuce et bouton suivant */
+#play .hint-tip { background: var(--em-btn) !important; border-color: var(--em-gold) !important; color: var(--em-btn-ink) !important; box-shadow: 0 4px 0 var(--em-lip) !important; }
+#play .next-btn { background: linear-gradient(180deg, var(--em-go), var(--em-go-deep)) !important; color: #fff !important; border: 3px solid #f4f9f0 !important;
+  box-shadow: 0 5px 0 var(--em-go-lip) !important; --duo: #fff !important; }
+#play .autosolve { color: var(--em-soft) !important; border-color: rgba(255, 255, 255, .25) !important; }
+
+/* Pixels : écran sombre sur panneau vert profond */
+#play .board > .nono { background: #0a3d2d; border-radius: 16px; box-shadow: 0 0 0 12px #0a3d2d, 0 18px 0 0 #042118 !important; }
+
+/* Lumières : ciel vert profond, sans liseré blanc */
+#play .lum-sky { border-color: #1d7356 !important; }
+/* toutes les grilles : de la marge pour le panneau crème (il déborde de 10 px) */
+#play .board > .cell-grid:not(.astres) { max-width: min(480px, calc(100% - 24px), calc(100dvh - 290px)) !important; }
+
+/* Tuyaux : l'eau est bleue (lue par le jeu dans --water) */
+#play { --water: #3f9be6; }
+/* La Passe : mer turquoise franche */
+#play .rh { --rh-sea: #7fd0dc; --rh-sea-deep: #5cbfd0; --rh-spot: rgba(255, 255, 255, .3); }
+/* Coffre : les essais sur un panneau crème */
+#play .coffre-rows { background: var(--em-panel); border-radius: 22px; padding: 12px; box-sizing: border-box; box-shadow: 0 6px 0 var(--em-lip) !important; }
+#play .coffre-row.current { background: #ffffff !important; box-shadow: 0 0 0 2px var(--em-gold) !important; }
+#play .rh-boat:not(.hero) svg { filter: saturate(.9) drop-shadow(0 2px 2px var(--rh-shadow)) !important; opacity: 1 !important; }
+
+/* =====================================================================
+   Écrans de l'app (le monde 3D reste tel quel)
+   ===================================================================== */
+/* bouton Jouer : pastille émeraude, bord foncé dessous */
+#home .go, .go:not(.boss) { background: linear-gradient(180deg, var(--em-go), var(--em-go-deep)) !important;
+  box-shadow: 0 7px 0 var(--em-go-lip), 0 12px 24px rgba(5, 60, 35, .35), inset 0 3px 0 rgba(255, 255, 255, .3) !important; }
+.go:not(.boss):active { box-shadow: 0 3px 0 var(--em-go-lip), 0 6px 12px rgba(5, 60, 35, .3) !important; }
+/* icônes de l'accueil : teinte émeraude */
+#home .ghost-icon { --duo: var(--em-go) !important; }
+/* bouton suivant partout (fin de niveau, tutoriel, île terminée) */
+.next-btn { background: linear-gradient(180deg, var(--em-go), var(--em-go-deep)) !important; color: #fff !important; --duo: #fff !important;
+  box-shadow: 0 6px 0 var(--em-go-lip), 0 10px 20px rgba(5, 60, 35, .3) !important; }
+
+/* fiche Mini-jeux : bandeau émeraude en haut, fond menthe clair */
+#library .sheet { background: linear-gradient(180deg, var(--em-bg) 0, var(--em-bg) 112px, #e6f3ea 112px, #f6f1e7 100%) !important; }
+#library .sheet-head h2 { color: #fff !important; opacity: 1 !important; text-shadow: none !important; }
+#library .sheet-head .sheet-glyph { color: var(--em-gold) !important; --duo: var(--em-gold) !important; }
+#library .sheet-close { background: var(--em-btn) !important; }
+
+/* fin de niveau : lueur dorée vers le vert, titre en vert profond */
+#level-done .sheet { background: radial-gradient(120% 70% at 50% 0%, #fff4c8 0%, #f6f1e7 45%, #e3f2e8 100%) !important; }
+#level-done .ld-title { color: var(--em-bg-deep) !important; }
+.level-done { background: rgba(5, 43, 31, .55) !important; }
+#library .sheet-head { background: var(--em-bg) !important; box-shadow: none !important; border-radius: 0 !important; }
+
+/* =====================================================================
+   Composants communs (réglages, profil, voyage, niveaux, tenue)
+   ===================================================================== */
+/* sélecteurs segmentés et interrupteurs : émeraude */
+.switch-mode button.on { background: var(--em-go-deep) !important; color: #fff !important; box-shadow: 0 3px 0 var(--em-go-lip) !important; text-shadow: none !important; }
+.toggle input:checked + i { background: var(--em-go) !important; box-shadow: inset 0 -3px 0 var(--em-go-deep) !important; }
+.toggle input:checked + i::after { box-shadow: 0 2px 0 var(--em-go-deep) !important; }
+.toggle > span svg.ic, .mix svg.ic { background: var(--em-bg) !important; box-shadow: 0 2px 0 var(--em-lip) !important; }
+/* étiquettes de section (« Accessibilité », « L'Odyssée »…) */
+.sheet-label { background: var(--em-bg) !important; color: #fff !important; box-shadow: 0 3px 0 var(--em-lip) !important; }
+/* fiche Réglages : même bandeau émeraude que la fiche Mini-jeux */
+#settings .sheet-head { background: var(--em-bg) !important; box-shadow: none !important; border-radius: 18px !important; margin-bottom: 8px; padding-block: 14px !important; }
+#settings .sheet-head h2 { color: #fff !important; }
+#settings .sheet-head .sheet-glyph { color: var(--em-gold) !important; --duo: var(--em-gold) !important; }
+/* tenue : bouton « C'est parfait » émeraude */
+.cr-done { background: linear-gradient(180deg, var(--em-go), var(--em-go-deep)) !important; box-shadow: 0 5px 0 var(--em-go-lip), inset 0 3px 0 rgba(255, 255, 255, .25) !important; }
+.cr-done:active { box-shadow: 0 2px 0 var(--em-go-lip) !important; }
+/* profil : bouton Classement */
+.pc-rank-go { background: linear-gradient(180deg, var(--em-go), var(--em-go-deep)) !important; box-shadow: 0 3px 0 var(--em-go-lip) !important; color: #fff !important; }
+/* voyage : L'Odyssée (saga 0) prend l'émeraude au lieu du bleu par défaut */
+.vy-saga:not([data-saga="1"]):not([data-saga="2"]), [data-saga="0"] { --saga: #0b7a48; --saga2: #f7c948; }
