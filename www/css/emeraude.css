@@ -87,3 +87,23 @@ body:has(#play:not([hidden])) { background: var(--em-bg-deep) !important; }
 #level-done .ld-title { color: var(--em-bg-deep) !important; }
 .level-done { background: rgba(5, 43, 31, .55) !important; }
 #library .sheet-head { background: var(--em-bg) !important; box-shadow: none !important; border-radius: 0 !important; }
+
+/* =====================================================================
+   Composants communs (réglages, profil, voyage, niveaux, tenue)
+   ===================================================================== */
+/* sélecteurs segmentés et interrupteurs : émeraude */
+.switch-mode button.on { background: var(--em-go-deep) !important; color: #fff !important; box-shadow: 0 3px 0 var(--em-go-lip) !important; text-shadow: none !important; }
+.toggle input:checked + i { background: var(--em-go) !important; box-shadow: inset 0 -3px 0 var(--em-go-deep) !important; }
+.toggle input:checked + i::after { box-shadow: 0 2px 0 var(--em-go-deep) !important; }
+.toggle > span svg.ic, .mix svg.ic { background: var(--em-bg) !important; box-shadow: 0 2px 0 var(--em-lip) !important; }
+/* étiquettes de section (« Accessibilité », « L'Odyssée »…) */
+.sheet-label { background: var(--em-bg) !important; color: #fff !important; box-shadow: 0 3px 0 var(--em-lip) !important; }
+/* fiche Réglages : même bandeau émeraude que la fiche Mini-jeux */
+#settings .sheet-head { background: var(--em-bg) !important; box-shadow: none !important; border-radius: 18px !important; margin-bottom: 8px; padding-block: 14px !important; }
+#settings .sheet-head h2 { color: #fff !important; }
+#settings .sheet-head .sheet-glyph { color: var(--em-gold) !important; --duo: var(--em-gold) !important; }
+/* tenue : bouton « C'est parfait » émeraude */
+.cr-done { background: linear-gradient(180deg, var(--em-go), var(--em-go-deep)) !important; box-shadow: 0 5px 0 var(--em-go-lip), inset 0 3px 0 rgba(255, 255, 255, .25) !important; }
+.cr-done:active { box-shadow: 0 2px 0 var(--em-go-lip) !important; }
+/* profil : bouton Classement */
+.pc-rank-go { background: linear-gradient(180deg, var(--em-go), var(--em-go-deep)) !important; box-shadow: 0 3px 0 var(--em-go-lip) !important; color: #fff !important; }
