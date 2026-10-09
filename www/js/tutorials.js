@@ -108,15 +108,39 @@
     }
   };
 
+  // Pixels : dessins dans les couleurs du jeu (écran sombre, pixels verts, croix bleu gris)
+  const PX = { bg: '#1b2036', off: '#2a3152', on: '#8fe05a', x: '#8a95c4', ink: '#ecebff', ghost: '#f3c552' };
+  const pxBack = (y, h) => '<rect x="4" y="' + y + '" width="112" height="' + h + '" rx="12" fill="' + PX.bg + '"/>';
+  // une ligne de cases : f pleine, e vide, x barrée, g contour doré (place possible d'un bloc)
+  function pxRow(y, clue, cells, s) {
+    s = s || 13;
+    const x0 = 116 - 8 - cells.length * (s + 2);
+    let out = clue ? '<text x="' + (x0 - 5) + '" y="' + (y + s * 0.74) + '" font-size="' + (s * 0.78) + '" font-weight="600" fill="' + PX.ink + '" text-anchor="end" font-family="Jost, sans-serif">' + clue + '</text>' : '';
+    cells.split('').forEach((k, i) => {
+      const x = x0 + i * (s + 2);
+      out += '<rect x="' + x + '" y="' + y + '" width="' + s + '" height="' + s + '" rx="3" fill="' + (k === 'f' ? PX.on : PX.off) + '"/>';
+      if (k === 'x') out += '<path d="M' + (x + s * 0.3) + ' ' + (y + s * 0.3) + 'l' + s * 0.4 + ' ' + s * 0.4 + 'M' + (x + s * 0.7) + ' ' + (y + s * 0.3) + 'l' + -s * 0.4 + ' ' + s * 0.4 + '" stroke="' + PX.x + '" stroke-width="1.6" stroke-linecap="round"/>';
+      if (k === 'g') out += '<rect x="' + (x + 1) + '" y="' + (y + 1) + '" width="' + (s - 2) + '" height="' + (s - 2) + '" rx="2.5" fill="none" stroke="' + PX.ghost + '" stroke-width="1.6" stroke-dasharray="2.5 1.8"/>';
+    });
+    return out;
+  }
+  const pxArt = (body) => svg('<g stroke="none">' + body + '</g>'); // (le svg trace tout au trait par défaut)
+  const pxNote = (y, t) => '<text x="60" y="' + y + '" font-size="8" fill="' + PX.x + '" text-anchor="middle" font-family="Jost, sans-serif">' + t + '</text>';
   T.pixels = {
     steps: [
-      { art: svg('<text x="20" y="62" font-size="11" fill="var(--muted)" text-anchor="middle">3 1</text>' +
-          [0, 1, 2, 3, 4].map((c) => '<rect x="' + (32 + c * 16) + '" y="50" width="15" height="15" rx="2" fill="' + (c < 3 || c === 4 ? 'var(--game)' : 'var(--soft)') + '"/>').join('')),
-        text: 'Les nombres indiquent les <b>blocs de cases pleines</b> d\'une ligne ou d\'une colonne, dans l\'ordre.' },
-      { art: svg('<text x="20" y="62" font-size="11" fill="var(--muted)" text-anchor="middle">3 1</text>' +
-          [0, 1, 2, 3, 4].map((c) => '<rect x="' + (32 + c * 16) + '" y="50" width="15" height="15" rx="2" fill="' + (c === 3 ? 'var(--soft)' : 'var(--game)') + '"/>').join('') +
-          '<path d="M' + (32 + 3 * 16 + 4) + ' 54l7 7M' + (32 + 3 * 16 + 11) + ' 54l-7 7" stroke="var(--muted)" stroke-width="1.8" stroke-linecap="round"/>'),
-        text: 'Entre deux blocs, au moins une case vide. Outil <b>■</b> pour remplir, outil <b>×</b> pour barrer une case vide.' }
+      { art: pxArt(pxBack(34, 52) + pxRow(46, '3 1', 'fffef', 14) + pxNote(78, 'bloc de 3 · vide · bloc de 1')),
+        text: 'Chaque nombre est un <b>bloc de cases pleines collées</b>. « 3 1 » : un bloc de 3, puis un bloc de 1, dans cet ordre, avec <b>au moins une case vide</b> entre les deux.' },
+      { art: pxArt(pxBack(14, 92) + pxRow(24, '4', 'ggggee', 13) + pxNote(48, 'collé à gauche…') + pxRow(54, '4', 'eegggg', 13) + pxNote(78, '…ou à droite') +
+          pxRow(84, '4', 'eeffee', 13)),
+        text: '<b>L\'astuce clé</b> : un grand bloc couvre toujours le milieu. « 4 » sur 6 cases : collé à gauche ou à droite, il passe par les <b>2 cases du centre</b>. Remplis-les sans hésiter.' },
+      { art: pxArt(pxBack(26, 68) + pxRow(36, '0', 'xxxxxx', 13) + pxRow(56, '1 1', 'xfxxfx', 13) + pxNote(86, 'sûrement vides : barrées')),
+        text: 'Une case sûrement vide ? Barre-la avec l\'outil <b>×</b>. Une ligne « 0 » est toute vide ; une ligne dont tous les blocs sont posés aussi.' },
+      { art: pxArt(pxBack(6, 108) +
+          ['1 1', '2', '3', '1'].map((c, k) => { const x = 48 + k * 15 + 6.5, col = k === 2 ? PX.on : PX.ink;
+            return c.split(' ').reverse().map((v, j) => '<text x="' + x + '" y="' + (33 - j * 9) + '" font-size="9" font-weight="600" fill="' + col + '" text-anchor="middle" font-family="Jost, sans-serif">' + v + '</text>').join(''); }).join('') +
+          '<rect x="76" y="37" width="17" height="66" rx="4" fill="#fff" opacity=".08"/>' +
+          pxRow(40, '2', 'ffxe', 13) + pxRow(55, '3', 'xfff', 13) + pxRow(70, '1 1', 'fefx', 13) + pxRow(85, '1', 'eefe', 13)),
+        text: 'Chaque case trouvée sert <b>deux fois</b> : à sa ligne et à sa colonne. Passe de l\'une à l\'autre ; la ligne que tu touches s\'éclaire avec ses nombres. À la fin, un petit dessin apparaît.' }
     ],
     variants: {
       miroir: { art: svg(grid(4) + fillCell(4, 1, 0, 'var(--game)') + fillCell(4, 1, 3, 'var(--game)', 0.5) + '<line x1="60" y1="8" x2="60" y2="112" stroke="var(--muted)" stroke-dasharray="4 3"/>'),

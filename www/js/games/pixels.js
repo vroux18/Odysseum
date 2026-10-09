@@ -189,8 +189,20 @@
     function check() {
       for (let i = 0; i < n * n; i++) if ((state[i] === 1 ? 1 : 0) !== puzzle.solution[i]) return;
       won = true;
+      focus(-1);
       wrap.classList.add('solved');
       api.onWin();
+    }
+
+    // ligne et colonne sous le doigt : cases et nombres éclairés (on voit quels nombres s'appliquent)
+    let curRC = null;
+    function focus(i) {
+      const rc = i < 0 ? null : [Math.floor(i / n), i % n];
+      if (curRC && rc && curRC[0] === rc[0] && curRC[1] === rc[1]) return;
+      curRC = rc;
+      cells.forEach((d, j) => d.classList.toggle('cur', !!rc && (Math.floor(j / n) === rc[0] || j % n === rc[1])));
+      rowEls.forEach((e, r) => e.classList.toggle('cur', !!rc && r === rc[0]));
+      colEls.forEach((e, c) => e.classList.toggle('cur', !!rc && (c === rc[1] || (mirror && c === n - 1 - rc[1]))));
     }
 
     let paint = null;
@@ -207,6 +219,7 @@
       const mode = api.tool ? api.tool() : 'fill';
       const target = mode === 'fill' ? (state[i] === 1 ? 0 : 1) : (state[i] === 2 ? 0 : 2);
       paint = { target, axis: null, start: i };
+      focus(i);
       state[i] = target;
       if (mirror) state[twin(i)] = target;
       target === 1 ? C.sfx.place() : C.sfx.tap();
@@ -221,6 +234,7 @@
       const r = Math.floor(i / n), c = i % n;
       if (!paint.axis) paint.axis = r === sr ? 'row' : c === sc ? 'col' : null;
       if ((paint.axis === 'row' && r !== sr) || (paint.axis === 'col' && c !== sc) || !paint.axis) return;
+      focus(i);
       state[i] = paint.target;
       if (mirror) state[twin(i)] = paint.target;
       render();
@@ -234,7 +248,7 @@
     return {
       tools: [{ id: 'fill', label: 'Remplir' }, { id: 'cross', label: 'Croix' }],
       // 💬 la méthode : les grands nombres d'abord (chevauchement), puis croiser lignes et colonnes
-      method: 'Commence par les lignes faciles : un 0 est toute vide, et un grand nombre couvre toujours le milieu de sa ligne. Marque d\'une croix les cases vides, puis croise lignes et colonnes.' +
+      method: 'Commence par les grands nombres : un bloc presque aussi long que la ligne couvre toujours son milieu (« 4 » sur 6 cases : les 2 du centre sont pleines). Une ligne « 0 » est toute vide. Barre d\'une croix les cases sûrement vides, puis croise lignes et colonnes : chaque case trouvée aide aussi l\'autre sens.' +
         (mirror ? ' Ici, chaque case se recopie en miroir.' : ''),
       status() {
         const done = rowEls.filter((e) => e.classList.contains('ok')).length;
@@ -327,6 +341,7 @@
     name: 'Pixels',
     tagline: 'Révèle le sprite caché',
     accent: '#ff5d8f',
+    theme: 'dark', // se joue toujours en sombre (écran de pixels)
     icon: '<svg viewBox="0 0 24 24" shape-rendering="crispEdges"><path d="M7 3h2v2H7zM15 3h2v2h-2zM5 5h14v2H5zM3 7h4v2H3zM9 7h6v2H9zM17 7h4v2h-4zM3 9h18v4H3zM5 13h2v2H5zM17 13h2v2h-2zM7 15h4v2H7zM13 15h4v2h-4z" fill="currentColor"/></svg>',
     variants: [
       { id: 'classic', name: 'Classique', desc: 'Tous les indices, sprites libres.' },
@@ -334,10 +349,11 @@
     ],
     rules: {
       classic: [
-        'Les nombres donnent, dans l\'ordre, la taille des <b>blocs de cases pleines</b> de chaque ligne et colonne.',
-        'Entre deux blocs, il y a au moins une case vide.',
-        'Outil <b>■</b> pour remplir, outil <b>×</b> pour barrer une case vide. Touche ou glisse en ligne droite ; retouche pour effacer.',
-        'Un petit dessin apparaît à la fin !'
+        'Chaque nombre est un <b>bloc de cases pleines collées</b>, dans l\'ordre : « 3 1 » = un bloc de 3, puis un bloc de 1.',
+        'Entre deux blocs, <b>au moins une case vide</b>.',
+        '<b>L\'astuce</b> : un grand bloc couvre toujours le milieu de sa ligne. « 4 » sur 6 cases : les 2 cases du centre sont pleines.',
+        'Outil <b>■</b> pour remplir, outil <b>×</b> pour barrer une case sûrement vide. Touche ou glisse en ligne droite ; retouche pour effacer.',
+        'Chaque case trouvée aide sa ligne <b>et</b> sa colonne. À la fin, un petit dessin apparaît.'
       ],
       miroir: [
         'Le dessin est <b>symétrique</b> : chaque case posée se recopie de l\'autre côté du miroir.',
