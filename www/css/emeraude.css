@@ -53,3 +53,12 @@ body:has(#play:not([hidden])) { background: var(--em-bg-deep) !important; }
 #play .lum-sky { border-color: #1d7356 !important; }
 /* toutes les grilles : de la marge pour le panneau crème (il déborde de 10 px) */
 #play .board > .cell-grid:not(.astres) { max-width: min(480px, calc(100% - 24px), calc(100dvh - 290px)) !important; }
+
+/* Tuyaux : l'eau est bleue (lue par le jeu dans --water) */
+#play { --water: #3f9be6; }
+/* La Passe : mer turquoise franche */
+#play .rh { --rh-sea: #7fd0dc; --rh-sea-deep: #5cbfd0; --rh-spot: rgba(255, 255, 255, .3); }
+/* Coffre : les essais sur un panneau crème */
+#play .coffre-rows { background: var(--em-panel); border-radius: 22px; padding: 12px; box-sizing: border-box; box-shadow: 0 6px 0 var(--em-lip) !important; }
+#play .coffre-row.current { background: #ffffff !important; box-shadow: 0 0 0 2px var(--em-gold) !important; }
+#play .rh-boat:not(.hero) svg { filter: saturate(.9) drop-shadow(0 2px 2px var(--rh-shadow)) !important; opacity: 1 !important; }

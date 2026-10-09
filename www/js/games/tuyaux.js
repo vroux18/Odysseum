@@ -183,7 +183,7 @@
 
     function draw() {
       const frameNow = performance.now();
-      const accent = css('--game') || '#d18fc4';
+      const accent = css('--water') || css('--game') || '#d18fc4'; // (écran Émeraude : eau bleue)
       const outline = css('--ink') || '#d8d4cc'; // trait fin et clair, comme un dessin au trait
       const bg = css('--bg') || '#161b22';
       const on = powered();
